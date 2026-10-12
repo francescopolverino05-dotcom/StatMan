@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StatMan — World Cup 2018 season</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="page page--season">
+    <nav class="topnav">
+      <a class="topnav__brand" href="/">StatMan</a>
+      <div class="topnav__links">
+        <a href="/">Match</a>
+        <a class="is-active" href="/season">Season</a>
+        <a href="/season/players">Players</a>
+        <a href="/api/docs">API</a>
+      </div>
+    </nav>
+
+    <header class="page-hero">
+      <p class="eyebrow">Open competition</p>
+      <h1>FIFA World Cup 2018</h1>
+      <p class="lede">
+        Load every open match once, then browse the tournament table, team sheets,
+        and player leaderboards from stored SPADL stats.
+      </p>
+      <div class="cta">
+        <button id="build-btn" class="btn btn--primary" type="button">
+          Build / refresh season
+        </button>
+        <a class="btn btn--ghost-dark" href="/season/players">Player leaderboards</a>
+      </div>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="section__head">
+          <h2>Tournament table</h2>
+          <p>Points from results; xG, PPDA, possession and progressive passes from stored matches.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Team</th>
+                <th>P</th>
+                <th>W</th>
+                <th>D</th>
+                <th>L</th>
+                <th>GF</th>
+                <th>GA</th>
+                <th>Pts</th>
+                <th>xG</th>
+                <th>xGA</th>
+                <th>Poss %</th>
+                <th>PPDA</th>
+                <th>Prog</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Event data from
+        <a href="https://github.com/statsbomb/open-data">StatsBomb open data</a>.
+        Stored under <code>.data/seasons/</code> after build.
+      </p>
+    </footer>
+    <script src="/static/season.js" type="module"></script>
+  </body>
+</html>

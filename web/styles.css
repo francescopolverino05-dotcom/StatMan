@@ -428,6 +428,107 @@ tbody tr:hover {
   }
 }
 
+/* —— Season / team / players pages —— */
+.topnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: min(100% - 2.5rem, var(--max));
+  margin: 0 auto;
+  padding: 1.1rem 0;
+}
+
+.topnav__brand {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: -0.03em;
+  color: var(--turf-deep);
+  text-decoration: none;
+}
+
+.topnav__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  font-weight: 600;
+}
+
+.topnav__links a {
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.topnav__links a.is-active,
+.topnav__links a:hover {
+  color: var(--turf-deep);
+}
+
+.page-hero {
+  width: min(100% - 2.5rem, var(--max));
+  margin: 0.5rem auto 0;
+  padding: 1.5rem 0 0.5rem;
+}
+
+.page-hero .eyebrow {
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.page-hero .eyebrow a {
+  color: inherit;
+}
+
+.page-hero h1 {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 3rem);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.page-hero .lede {
+  color: var(--muted);
+  max-width: 48ch;
+}
+
+.btn--ghost-dark {
+  background: transparent;
+  color: var(--turf-deep);
+  box-shadow: inset 0 0 0 1.5px rgba(15, 61, 34, 0.35);
+}
+
+.match-bar--sort {
+  margin-top: 1.25rem;
+  align-items: center;
+  grid-template-columns: auto 1fr auto;
+}
+
+.match-bar--sort label {
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.stat-list--wide {
+  margin-top: 1.25rem;
+  max-width: 28rem;
+}
+
+.table-wrap a {
+  color: var(--turf-deep);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.table-wrap a:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 800px) {
   .hero__inner {
     margin-bottom: 8vh;
@@ -435,6 +536,10 @@ tbody tr:hover {
   }
 
   .match-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .match-bar--sort {
     grid-template-columns: 1fr;
   }
 

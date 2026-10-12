@@ -5,7 +5,8 @@ Football match stats for the StatMan site: expected goals, PPDA, possession, sho
 ## What’s here
 
 - [docs/football-stats-repos.md](docs/football-stats-repos.md) — GitHub repos that collect or compute these stats
-- `statman/` — small backend that loads **one StatsBomb open-data match**, converts it to SPADL via [socceraction](https://github.com/ML-KULeuven/socceraction), and returns JSON
+- `statman/` — backend that loads StatsBomb open-data matches, converts them to SPADL via [socceraction](https://github.com/ML-KULeuven/socceraction), and returns JSON
+- `web/` — match UI + **season view** (tournament table, team sheets, player leaderboards)
 
 Default demo match: **Belgium 2–0 England**, FIFA World Cup 2018 third place (`game_id=8657`).
 
@@ -20,6 +21,12 @@ pip install -r requirements.txt
 python -m statman
 python -m statman 8657
 
+# Build / inspect a full open competition (World Cup 2018 = 64 matches)
+python -m statman season build            # store under .data/seasons/
+python -m statman season build --limit 5  # smoke subset
+python -m statman season table
+python -m statman season players --sort xg
+
 # HTTP API + web UI
 uvicorn statman.api:app --reload --host 0.0.0.0 --port 8000
 
@@ -29,10 +36,14 @@ pytest
 
 Then open:
 
-- http://127.0.0.1:8000/ — StatMan UI
+- http://127.0.0.1:8000/ — match UI
+- http://127.0.0.1:8000/season — tournament table (build first)
+- http://127.0.0.1:8000/season/players — player leaderboards
 - http://127.0.0.1:8000/api/docs — interactive API docs
-- http://127.0.0.1:8000/api/matches/8657/stats — JSON for the demo match
-- http://127.0.0.1:8000/api/games/demo — World Cup 2018 open matches
+- `POST /api/seasons/43/3/build` — start World Cup 2018 store
+- `GET /api/seasons/43/3/table` — aggregated table JSON
+
+Per-match payloads are cached in `.data/seasons/c43_s3/matches/`. Re-running build skips matches that are already stored unless you pass `--force` / `force=true`.
 
 ## Stat definitions (short)
 

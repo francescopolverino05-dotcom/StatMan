@@ -5,6 +5,7 @@ soccerdata/
 
 # Python
 .venv/
+.venv-statman/
 venv/
 __pycache__/
 *.py[cod]
