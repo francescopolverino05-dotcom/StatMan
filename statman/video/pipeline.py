@@ -11,7 +11,7 @@ from statman.video import store
 from statman.video.detector import yolo_status
 from statman.video.probe import probe_video
 from statman.video.spotter import SpotConfig, spot_actions
-from statman.video.stats_from_events import stats_from_video_events
+from statman.video.stats_from_events import FILM_NOTE, stats_from_video_events
 
 # Full-match broadcasts are large (often 1–3 GB at 720p).
 DEFAULT_MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024
@@ -22,10 +22,8 @@ DEFAULT_CHUNK_BYTES = 8 * 1024 * 1024
 _BUILD_LOCK = threading.Lock()
 _ACTIVE = False
 
-APPROX_WARNING = (
-    "This is approximate. Video tags are not Opta/StatsBomb event data — "
-    "do not trust counts, xG, PPDA, or possession from this path."
-)
+# Film-tag jobs carry a short note; sheet metrics live on / and /import.
+APPROX_WARNING = FILM_NOTE
 
 
 def init_chunked_upload(

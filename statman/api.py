@@ -54,10 +54,10 @@ app = FastAPI(
         "Season endpoints aggregate a full competition into a tournament table, "
         "team match sheets, and player leaderboards. Pitch maps (mplsoccer) cover "
         "shots with xG, progressive passes, and tackle/interception locations. "
-        "Video endpoints accept a full-match broadcast upload and return "
-        "approximate SoccerNet-style film tags (YOLO person/ball when available; "
-        "not a stats sheet). Event-data import prefers StatsBomb JSON for the locked "
-        "match catalog; Opta F24 is accepted but only partially fills the sheet."
+        "Video endpoints return SoccerNet-style film tags from a broadcast "
+        "(YOLO person/ball when available). The locked match sheet — xG, PPDA, "
+        "pass accuracy, progressive passes, aerials — comes from StatsBomb open-data "
+        "or event import; Opta F24 only partially fills that sheet."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",

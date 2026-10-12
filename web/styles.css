@@ -688,6 +688,24 @@ tbody tr:hover {
   color: var(--turf-deep);
 }
 
+.banner--info {
+  background: rgba(15, 61, 34, 0.08);
+  color: var(--ink);
+}
+
+.banner--info a {
+  color: var(--turf-deep);
+  font-weight: 600;
+}
+
+.film-sheet-cta {
+  margin: 1rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .banner--sticky {
   margin: 0 auto 1.5rem;
   max-width: var(--max);

@@ -94,14 +94,22 @@ def test_stats_payload_marks_full_match_scope():
         detector={"backend": "yolo", "available": True},
     )
     assert stats["source"]["scope"] == "full_match"
+    assert stats["source"]["kind"] == "film_tags"
     assert stats["source"]["approximate"] is True
-    assert "approximate" in stats["source"]["warning"].lower()
+    assert "film action tags" in stats["source"]["note"].lower()
+    assert "do not trust" not in stats["source"]["note"].lower()
+    assert "match sheet" in stats["source"]["note"].lower()
+    assert stats["source"]["sheet"]["path"] == "/import"
     assert stats["source"]["method"].startswith("yolo")
     assert stats["match"]["duration_min"] == 90.0
     assert stats["totals"]["shots"] == 2
     assert stats["totals"]["goals"] == 1
-    assert stats["totals"]["xg"] is None
-    assert stats["totals"]["ppda"] is None
+    # Sheet metrics must not appear as nulls on the film-tag payload.
+    assert "xg" not in stats["totals"]
+    assert "ppda" not in stats["totals"]
+    assert "pass_accuracy" not in stats["totals"]
+    assert "progressive_passes" not in stats["totals"]
+    assert "aerials_won" not in stats["totals"]
 
 
 def test_upload_and_process_job(short_match_video: Path, monkeypatch, tmp_path):

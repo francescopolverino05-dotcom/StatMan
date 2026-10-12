@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>StatMan — upload a full match</title>
+    <title>StatMan — film tags from a full match</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,27 +19,27 @@
         <a href="/">Match</a>
         <a href="/season">Season</a>
         <a href="/season/players">Players</a>
-        <a class="is-active" href="/video">Full match video</a>
+        <a class="is-active" href="/video">Film tags</a>
         <a href="/import">Event import</a>
         <a href="/api/docs">API</a>
       </div>
     </nav>
 
     <header class="page-hero">
-      <p class="eyebrow">Film ingest · approximate</p>
-      <h1>Upload a full match</h1>
+      <p class="eyebrow">Film ingest · SoccerNet tags</p>
+      <h1>Tag a full match from film</h1>
       <p class="lede">
-        Drop a complete 90–120 minute broadcast. StatMan samples the whole timeline
-        with a YOLO person/ball model (OpenCV fallback) and tags SoccerNet-style actions.
-        Counts are approximate film tags — not a stats sheet. For provider-grade numbers,
-        <a href="/import">import StatsBomb JSON</a>.
+        Drop a complete 90–120 minute broadcast. StatMan samples the timeline with YOLO
+        (person + ball; OpenCV fallback) and returns SoccerNet-style action tags —
+        goals, shots, passes, tackles, and the rest as a film timeline.
       </p>
     </header>
 
     <main>
-      <p class="banner banner--warn banner--sticky" id="approx-banner">
-        This is approximate film tagging — do not trust the counts. YOLO finds people/ball;
-        action labels stay heuristic. For real match stats use
+      <p class="banner banner--info banner--sticky" id="film-banner">
+        Film tags live here. The locked match sheet — xG, PPDA, pass accuracy, progressive
+        passes, aerial duels — is on
+        <a href="/">open-data Match</a> or
         <a href="/import">StatsBomb event import</a>.
       </p>
 
@@ -71,7 +71,7 @@
               </select>
             </label>
             <button id="upload-btn" class="btn btn--primary" type="submit">
-              Upload &amp; spot full match
+              Upload &amp; tag full match
             </button>
             <button id="cancel-btn" class="btn btn--ghost" type="button" hidden>
               Cancel upload / job
@@ -88,14 +88,18 @@
 
       <section id="results" class="section" hidden>
         <div class="section__head">
-          <h2 id="result-title">Results</h2>
+          <h2 id="result-title">Film tags</h2>
           <p id="result-meta"></p>
         </div>
-        <p id="quality-banner" class="banner banner--warn"></p>
+        <p id="quality-banner" class="banner banner--info"></p>
+        <div class="film-sheet-cta">
+          <a class="btn btn--primary" href="/import">Get the match sheet (StatsBomb)</a>
+          <a class="btn btn--ghost" href="/">Open-data Match view</a>
+        </div>
         <div id="totals" class="stat-grid"></div>
         <div class="section__head" style="margin-top: 2rem">
           <h2>Label counts</h2>
-          <p>Approximate SoccerNet ball-action classes — treat as rough film tags only.</p>
+          <p>SoccerNet ball-action classes spotted on this broadcast.</p>
         </div>
         <div class="table-wrap">
           <table id="label-table">
@@ -129,7 +133,7 @@
 
       <section class="section">
         <div class="section__head">
-          <h2>Recent uploads</h2>
+          <h2>Recent film jobs</h2>
           <p>Jobs stored on this machine under <code>.data/videos/</code>.</p>
         </div>
         <div class="table-wrap">
@@ -152,9 +156,9 @@
 
     <footer class="footer">
       <p>
-        Video spotting is approximate. For provider-grade xG, PPDA, aerials and progressive
-        passes, <a href="/import">import StatsBomb / Opta JSON</a> or use the open-data match
-        and season views.
+        Need xG, PPDA, pass accuracy, progressive passes, or aerial duels?
+        Use the <a href="/">Match</a> sheet or
+        <a href="/import">import StatsBomb JSON</a> — those metrics are event-derived, not film tags.
       </p>
     </footer>
 

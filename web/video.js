@@ -111,7 +111,7 @@ async function refreshJobs() {
       <td><code>${j.job_id}</code></td>
       <td>${j.filename || "—"}</td>
       <td>${fmtDuration(j.duration_sec)}</td>
-      <td>${j.status}${j.approximate ? " · approx" : ""}</td>
+      <td>${j.status}${j.approximate ? " · film" : ""}</td>
       <td>${j.event_count ?? "—"}</td>
       <td>${j.status === "running" || j.status === "queued" || j.status === "uploading" ? fmtEta(j.eta_sec) : "—"}</td>
     </tr>`
@@ -127,20 +127,23 @@ function renderStats(job) {
   if (!stats) return;
   results.hidden = false;
   const match = stats.match || {};
-  resultTitle.textContent = match.filename || job.filename || "Full match";
+  resultTitle.textContent = match.filename || job.filename || "Film tags";
   resultMeta.textContent = [
     match.duration_min != null ? `${match.duration_min} minutes` : null,
     match.width && match.height ? `${match.width}×${match.height}` : null,
     stats.source?.method,
-    "approximate",
+    "film tags",
   ]
     .filter(Boolean)
     .join(" · ");
 
-  qualityBanner.textContent =
+  qualityBanner.innerHTML =
+    stats.source?.note ||
     stats.source?.warning ||
     job.warning ||
-    "This is approximate. Do not trust these counts.";
+    'Film action tags from this broadcast. For the match sheet (xG, PPDA, pass accuracy, progressive passes, aerials), <a href="/import">import StatsBomb JSON</a> or open the <a href="/">Match</a> view.';
+  qualityBanner.classList.remove("banner--warn");
+  qualityBanner.classList.add("banner--info");
   const t = stats.totals || {};
   const cells = [
     ["Events", t.events],
@@ -200,7 +203,7 @@ function showProgress(job) {
   progressText.textContent =
     `${p.stage || "…"} · ${p.pct ?? 0}% · ${clock}` +
     (p.events_so_far != null ? ` · ${p.events_so_far} events` : "") +
-    " · approximate";
+    " · film tags";
   etaText.textContent =
     p.eta_sec != null
       ? `${fmtEta(p.eta_sec)} · elapsed ${fmtDuration(p.elapsed_sec || 0)}`
@@ -222,7 +225,7 @@ async function openJob(jobId) {
       progressWrap.hidden = true;
       setCancelVisible(false);
       renderStats(job);
-      setStatus(`Loaded full-match job ${jobId} (approximate).`);
+      setStatus(`Loaded film tags for job ${jobId}.`);
       stopPoll();
     } else if (job.status === "error") {
       showProgress(job);
@@ -241,7 +244,7 @@ async function openJob(jobId) {
     } else {
       showProgress(job);
       setCancelVisible(true);
-      setStatus(`Spotting full match… (${job.status}) — approximate`, { loading: true });
+      setStatus(`Tagging full match… (${job.status})`, { loading: true });
       startPoll(jobId);
     }
   } catch (err) {
@@ -413,7 +416,7 @@ async function uploadFileChunked(file, fps) {
     );
     resumeState = null;
     activeJobId = job.job_id;
-    setStatus(`Uploaded. Spotting full match ${job.job_id} (approximate)…`, { loading: true });
+    setStatus(`Uploaded. Tagging full match ${job.job_id}…`, { loading: true });
     await refreshJobs();
     startPoll(job.job_id);
     openJob(job.job_id);
@@ -444,7 +447,7 @@ async function uploadFileChunked(file, fps) {
     uploadBtn.disabled = false;
     uploadAbort = null;
     if (!resumeState) {
-      uploadBtn.textContent = "Upload & spot full match";
+      uploadBtn.textContent = "Upload & tag full match";
     }
   }
 }
@@ -459,7 +462,7 @@ cancelBtn.addEventListener("click", async () => {
       resumeState = null;
       setStatus("Upload cancelled.");
       setCancelVisible(false);
-      uploadBtn.textContent = "Upload & spot full match";
+      uploadBtn.textContent = "Upload & tag full match";
       await refreshJobs();
       return;
     }
