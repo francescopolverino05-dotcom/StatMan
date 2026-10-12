@@ -519,6 +519,36 @@ tbody tr:hover {
   max-width: 28rem;
 }
 
+.map-filters {
+  margin: 1.25rem 0 0;
+  max-width: 20rem;
+}
+
+.map-grid {
+  margin-top: 1.5rem;
+  display: grid;
+  gap: 1.75rem;
+}
+
+.map-card {
+  margin: 0;
+}
+
+.map-card figcaption {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
+.map-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--paper-deep);
+  border-top: 1px solid var(--line);
+}
+
 .table-wrap a {
   color: var(--turf-deep);
   font-weight: 600;

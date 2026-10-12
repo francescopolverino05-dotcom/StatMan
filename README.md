@@ -36,10 +36,13 @@ pytest
 
 Then open:
 
-- http://127.0.0.1:8000/ — match UI
+- http://127.0.0.1:8000/ — match UI (tables + pitch maps)
 - http://127.0.0.1:8000/season — tournament table (build first)
 - http://127.0.0.1:8000/season/players — player leaderboards
 - http://127.0.0.1:8000/api/docs — interactive API docs
+- `GET /api/matches/8657/maps/shots.png` — shot map (xG)
+- `GET /api/matches/8657/maps/progressive.png` — progressive passes
+- `GET /api/matches/8657/maps/defence.png` — tackles & interceptions
 - `POST /api/seasons/43/3/build` — start World Cup 2018 store
 - `GET /api/seasons/43/3/table` — aggregated table JSON
 

@@ -55,6 +55,36 @@
         <div id="team-board" class="team-board"></div>
       </section>
 
+      <section id="maps" class="section section--maps" hidden>
+        <div class="section__head">
+          <h2>Pitch maps</h2>
+          <p>
+            SPADL / StatsBomb coordinates via mplsoccer — shots sized by xG,
+            progressive-pass arrows, tackle and interception locations.
+          </p>
+        </div>
+        <div class="map-filters">
+          <label class="sr-only" for="map-team">Team filter</label>
+          <select id="map-team">
+            <option value="">Both teams</option>
+          </select>
+        </div>
+        <div class="map-grid">
+          <figure class="map-card">
+            <figcaption>Shots · xG</figcaption>
+            <img id="map-shots" alt="Shot map with xG" />
+          </figure>
+          <figure class="map-card">
+            <figcaption>Progressive passes</figcaption>
+            <img id="map-progressive" alt="Progressive pass map" />
+          </figure>
+          <figure class="map-card">
+            <figcaption>Tackles &amp; interceptions</figcaption>
+            <img id="map-defence" alt="Defence location map" />
+          </figure>
+        </div>
+      </section>
+
       <section id="players" class="section section--players" hidden>
         <div class="section__head">
           <h2>Player sheet</h2>

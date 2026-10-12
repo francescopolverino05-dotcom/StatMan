@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from statman.compute import compute_match_stats
@@ -18,6 +18,7 @@ from statman.load import (
     list_demo_games,
     load_match,
 )
+from statman.maps import map_events_for_game, render_map_png
 from statman.season import (
     build_status,
     player_leaderboard,
@@ -31,13 +32,14 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 app = FastAPI(
     title="StatMan match stats",
-    version="0.2.0",
+    version="0.3.0",
     description=(
         "Loads StatsBomb open-data matches, converts events to SPADL "
         "(socceraction), and returns possession, xG, passes, progressive passes, "
         "PPDA, tackles, interceptions, clearances, and aerials as JSON. "
         "Season endpoints aggregate a full competition into a tournament table, "
-        "team match sheets, and player leaderboards."
+        "team match sheets, and player leaderboards. Pitch maps (mplsoccer) cover "
+        "shots with xG, progressive passes, and tackle/interception locations."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -56,6 +58,8 @@ def api_root() -> dict[str, Any]:
             "health": "/api/health",
             "demo_games": "/api/games/demo",
             "match_stats": f"/api/matches/{{game_id}}/stats  (default game_id={DEFAULT_GAME_ID})",
+            "match_maps": "/api/matches/{game_id}/maps",
+            "match_map_png": "/api/matches/{game_id}/maps/{kind}.png  (shots|progressive|defence)",
             "season_overview": "/api/seasons/{competition_id}/{season_id}",
             "season_build": "/api/seasons/{competition_id}/{season_id}/build",
             "season_table": "/api/seasons/{competition_id}/{season_id}/table",
@@ -97,6 +101,41 @@ def match_stats(game_id: int) -> dict[str, Any]:
 def default_match_stats() -> dict[str, Any]:
     """Convenience: Belgium–England World Cup 2018 (game 8657)."""
     return match_stats(DEFAULT_GAME_ID)
+
+
+@app.get("/api/matches/{game_id}/maps")
+def match_maps(game_id: int) -> dict[str, Any]:
+    """JSON coordinates for shot / progressive-pass / defence pitch maps."""
+
+    try:
+        return map_events_for_game(game_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Failed to build map events: {exc}") from exc
+
+
+@app.get("/api/matches/{game_id}/maps/{kind}.png")
+def match_map_png(
+    game_id: int,
+    kind: str,
+    team_id: int | None = Query(None),
+) -> Response:
+    """PNG pitch map: ``shots``, ``progressive``, or ``defence``."""
+
+    allowed: set[str] = {"shots", "progressive", "defence"}
+    if kind not in allowed:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown map kind '{kind}'. Use one of: {sorted(allowed)}",
+        )
+    try:
+        png = render_map_png(game_id, kind=kind, team_id=team_id)  # type: ignore[arg-type]
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Failed to render map: {exc}") from exc
+    return Response(content=png, media_type="image/png")
 
 
 @app.get("/api/seasons/{competition_id}/{season_id}")

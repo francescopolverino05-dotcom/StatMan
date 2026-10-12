@@ -2,14 +2,20 @@ const select = document.getElementById("game-select");
 const loadBtn = document.getElementById("load-btn");
 const statusEl = document.getElementById("status");
 const boardSection = document.getElementById("board");
+const mapsSection = document.getElementById("maps");
 const playersSection = document.getElementById("players");
 const teamBoard = document.getElementById("team-board");
 const playerBody = document.querySelector("#player-table tbody");
 const scoreline = document.getElementById("scoreline");
 const matchMeta = document.getElementById("match-meta");
 const defsEl = document.getElementById("definitions");
+const mapTeam = document.getElementById("map-team");
+const mapShots = document.getElementById("map-shots");
+const mapProg = document.getElementById("map-progressive");
+const mapDef = document.getElementById("map-defence");
 
 const DEFAULT_GAME_ID = 8657;
+let currentGameId = DEFAULT_GAME_ID;
 
 function setStatus(text, { error = false, loading = false } = {}) {
   statusEl.textContent = text;
@@ -71,6 +77,26 @@ function teamColumn(team, sideLabel) {
   `;
 }
 
+function setMaps(gameId, match) {
+  currentGameId = gameId;
+  mapTeam.innerHTML = `
+    <option value="">Both teams</option>
+    <option value="${match.home_team_id}">${match.home_team}</option>
+    <option value="${match.away_team_id}">${match.away_team}</option>
+  `;
+  refreshMaps();
+  mapsSection.hidden = false;
+}
+
+function refreshMaps() {
+  const teamQ = mapTeam.value ? `?team_id=${encodeURIComponent(mapTeam.value)}` : "";
+  const bust = `&t=${Date.now()}`;
+  const q = teamQ ? `${teamQ}${bust}` : `?t=${Date.now()}`;
+  mapShots.src = `/api/matches/${currentGameId}/maps/shots.png${q}`;
+  mapProg.src = `/api/matches/${currentGameId}/maps/progressive.png${q}`;
+  mapDef.src = `/api/matches/${currentGameId}/maps/defence.png${q}`;
+}
+
 function renderMatch(data) {
   const { match, teams, players, definitions, source } = data;
   const home = teams.find((t) => t.team_id === match.home_team_id) || teams[0];
@@ -115,6 +141,8 @@ function renderMatch(data) {
     )
     .join("");
 
+  setMaps(match.game_id, match);
+
   boardSection.hidden = false;
   playersSection.hidden = false;
   boardSection.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -157,5 +185,6 @@ async function loadStats() {
 
 loadBtn.addEventListener("click", loadStats);
 select.addEventListener("change", () => setStatus("Ready to compute."));
+mapTeam.addEventListener("change", refreshMaps);
 
 loadGames();
