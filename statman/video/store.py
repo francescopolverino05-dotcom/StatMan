@@ -46,41 +46,70 @@ def upload_path(job_id: str, filename: str) -> Path:
     return ensure_root() / "uploads" / f"{job_id}_{safe}"
 
 
+def _atomic_write_json(path: Path, payload: Any) -> None:
+    """Write JSON via a temp file + replace so readers never see a partial file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    tmp.replace(path)
+
+
 def write_job(job_id: str, meta: dict[str, Any]) -> None:
     path = job_meta_path(job_id)
     with _LOCK:
-        path.write_text(json.dumps(meta, indent=2, sort_keys=True), encoding="utf-8")
+        _atomic_write_json(path, meta)
 
 
 def read_job(job_id: str) -> dict[str, Any] | None:
     path = job_meta_path(job_id)
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    with _LOCK:
+        text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
 
 
 def write_events(job_id: str, events: list[dict[str, Any]]) -> None:
     with _LOCK:
-        job_events_path(job_id).write_text(json.dumps(events, indent=2), encoding="utf-8")
+        _atomic_write_json(job_events_path(job_id), events)
 
 
 def read_events(job_id: str) -> list[dict[str, Any]] | None:
     path = job_events_path(job_id)
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    with _LOCK:
+        text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
 
 
 def write_stats(job_id: str, stats: dict[str, Any]) -> None:
     with _LOCK:
-        job_stats_path(job_id).write_text(json.dumps(stats, indent=2), encoding="utf-8")
+        _atomic_write_json(job_stats_path(job_id), stats)
 
 
 def read_stats(job_id: str) -> dict[str, Any] | None:
     path = job_stats_path(job_id)
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    with _LOCK:
+        text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
 
 
 def list_job_ids() -> list[str]:
