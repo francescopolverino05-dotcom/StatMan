@@ -11,6 +11,7 @@ def stats_from_video_events(
     job_id: str,
     probe: dict[str, Any],
     events: list[dict[str, Any]],
+    detector: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     counts = Counter(e["label"] for e in events)
     passes = (
@@ -31,6 +32,10 @@ def stats_from_video_events(
     # Video pipeline does not identify teams or true possession chains.
     duration = float(probe.get("duration_sec") or 0.0)
     per90 = (90.0 / duration) if duration > 1 else None
+    backends = {e.get("detector") for e in events if e.get("detector")}
+    if detector and detector.get("backend"):
+        backends.add(detector["backend"])
+    method = "yolo-person-ball-spotter-v1" if "yolo" in backends else "opencv-hog-motion-spotter-v0"
 
     def rate(n: int) -> float | None:
         if per90 is None:
@@ -41,12 +46,16 @@ def stats_from_video_events(
         "source": {
             "provider": "uploaded-video",
             "quality": "approximate",
-            "method": "opencv-hog-motion-spotter-v0",
+            "approximate": True,
+            "method": method,
+            "detector": detector or {"backend": "opencv-hog"},
             "taxonomy": "SoccerNet Ball Action Spotting (12 classes)",
             "warning": (
-                "Full-match video spotting is approximate — not Opta/StatsBomb event data. "
-                "Do not treat xG, PPDA, pass accuracy, progressive passes, or aerial duels "
-                "as provider-grade. Team identity is not resolved from the broadcast alone."
+                "This is approximate. Full-match video spotting is not Opta/StatsBomb "
+                "event data — do not trust these counts. xG, PPDA, pass accuracy, "
+                "progressive passes, and aerial duels are not provider-grade. "
+                "Team identity is not resolved from the broadcast alone. "
+                "For real match stats, import StatsBomb/Opta JSON via /import."
             ),
             "job_id": job_id,
             "scope": "full_match",

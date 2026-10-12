@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StatMan — import event data</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="page page--import">
+    <nav class="topnav">
+      <a class="topnav__brand" href="/">StatMan</a>
+      <div class="topnav__links">
+        <a href="/">Match</a>
+        <a href="/season">Season</a>
+        <a href="/season/players">Players</a>
+        <a href="/video">Full match video</a>
+        <a class="is-active" href="/import">Event import</a>
+        <a href="/api/docs">API</a>
+      </div>
+    </nav>
+
+    <header class="page-hero">
+      <p class="eyebrow">Provider event data</p>
+      <h1>Import a match you have</h1>
+      <p class="lede">
+        Upload StatsBomb events JSON (and optional lineups / match metadata) or Opta F24 JSON.
+        StatMan converts to SPADL and returns possession, xG, PPDA, progressive passes, and the rest —
+        the same path as open data, for a game you already collected.
+      </p>
+    </header>
+
+    <main>
+      <p class="banner banner--ok">
+        This path uses real event data. Prefer it over video spotting when you have StatsBomb or Opta JSON.
+      </p>
+
+      <section class="section">
+        <div class="section__head">
+          <h2>Event file</h2>
+          <p>
+            StatsBomb open-data <code>events/{match_id}.json</code>, or Opta / StatsPerform F24 JSON.
+            Lineups recommended for StatsBomb; match JSON optional.
+          </p>
+        </div>
+        <form id="import-form" class="upload-form">
+          <label class="file-drop" for="events-input">
+            <input id="events-input" name="events" type="file" accept=".json,application/json" required />
+            <span id="events-label">Choose events JSON…</span>
+          </label>
+          <div class="match-bar match-bar--stack">
+            <label class="field">
+              <span>Lineups (optional)</span>
+              <input id="lineups-input" name="lineups" type="file" accept=".json,application/json" />
+            </label>
+            <label class="field">
+              <span>Match meta (optional)</span>
+              <input id="match-input" name="match" type="file" accept=".json,application/json" />
+            </label>
+            <label class="field">
+              <span>Game id (optional)</span>
+              <input id="game-id" name="game_id" type="number" placeholder="e.g. 8657" />
+            </label>
+            <label class="field">
+              <span>Home team id (optional)</span>
+              <input id="home-team-id" name="home_team_id" type="number" placeholder="StatsBomb / Opta id" />
+            </label>
+          </div>
+          <button class="btn btn--primary" type="submit">Import &amp; compute stats</button>
+        </form>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="results" class="section" hidden>
+        <div class="section__head">
+          <h2 id="result-title">Imported match</h2>
+          <p id="result-meta"></p>
+        </div>
+        <div id="team-grid" class="team-compare"></div>
+        <div class="section__head" style="margin-top: 2rem">
+          <h2>Top players</h2>
+          <p>By xG, then pass volume.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="player-table">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Team</th>
+                <th>xG</th>
+                <th>Shots</th>
+                <th>Passes</th>
+                <th>Prog.</th>
+                <th>Tackles</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section__head">
+          <h2>Recent imports</h2>
+          <p>Stored under <code>.data/imports/</code>.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="imports-table">
+            <thead>
+              <tr>
+                <th>Import</th>
+                <th>Format</th>
+                <th>Match</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Video spotting stays approximate on purpose. Bridge video tags → pitch maps only after
+        you trust the event import path for the games you care about.
+      </p>
+    </footer>
+
+    <script src="/static/import.js" type="module"></script>
+  </body>
+</html>

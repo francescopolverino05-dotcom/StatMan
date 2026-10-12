@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ from statman.video.probe import probe_video
 from statman.video.spotter import SpotConfig, spot_actions
 from statman.video.stats_from_events import stats_from_video_events
 from statman.video import store
-from statman.video.pipeline import get_job, upload_video
+from statman.video.pipeline import cancel_job, get_job, upload_video
 
 
 @pytest.fixture(scope="module")
@@ -58,11 +59,19 @@ def test_probe_full_match_metadata(short_match_video: Path):
 def test_spot_actions_respects_duration_cap(short_match_video: Path):
     events = spot_actions(
         short_match_video,
-        SpotConfig(sample_fps=2.0, max_duration_sec=150 * 60, min_gap_sec=0.5),
+        SpotConfig(sample_fps=2.0, max_duration_sec=150 * 60, min_gap_sec=0.5, prefer_yolo=False),
     )
     assert isinstance(events, list)
     for e in events:
         assert "label" in e and "time_sec" in e
+
+
+def test_spot_actions_yolo_or_fallback(short_match_video: Path):
+    events = spot_actions(
+        short_match_video,
+        SpotConfig(sample_fps=1.0, prefer_yolo=True, min_gap_sec=0.5),
+    )
+    assert isinstance(events, list)
 
 
 def test_stats_payload_marks_full_match_scope():
@@ -70,12 +79,16 @@ def test_stats_payload_marks_full_match_scope():
         job_id="abc",
         probe={"filename": "match.mp4", "duration_sec": 5400, "width": 1280, "height": 720, "fps": 25},
         events=[
-            {"time_sec": 10, "label": "Pass", "confidence": 0.5, "people_count": 4},
-            {"time_sec": 20, "label": "Shot", "confidence": 0.4, "people_count": 5},
-            {"time_sec": 30, "label": "Goal", "confidence": 0.4, "people_count": 6},
+            {"time_sec": 10, "label": "Pass", "confidence": 0.5, "people_count": 4, "detector": "yolo"},
+            {"time_sec": 20, "label": "Shot", "confidence": 0.4, "people_count": 5, "detector": "yolo"},
+            {"time_sec": 30, "label": "Goal", "confidence": 0.4, "people_count": 6, "detector": "yolo"},
         ],
+        detector={"backend": "yolo", "available": True},
     )
     assert stats["source"]["scope"] == "full_match"
+    assert stats["source"]["approximate"] is True
+    assert "approximate" in stats["source"]["warning"].lower()
+    assert stats["source"]["method"].startswith("yolo")
     assert stats["match"]["duration_min"] == 90.0
     assert stats["totals"]["shots"] == 2
     assert stats["totals"]["goals"] == 1
@@ -90,6 +103,8 @@ def test_upload_and_process_job(short_match_video: Path, monkeypatch, tmp_path):
         meta = upload_video(fh, "wc_final_full.mp4")
     assert meta["scope"] == "full_match"
     assert meta["status"] == "queued"
+    assert meta["approximate"] is True
+    assert meta["warning"]
 
     # Run processing synchronously for the test.
     from statman.video import pipeline
@@ -99,4 +114,39 @@ def test_upload_and_process_job(short_match_video: Path, monkeypatch, tmp_path):
     assert job is not None
     assert job["status"] == "done"
     assert job["stats"]["source"]["scope"] == "full_match"
+    assert job["progress"]["eta_sec"] == 0
     assert job["probe"]["duration_sec"] >= 7.5
+
+
+def test_cancel_queued_job(short_match_video: Path, monkeypatch, tmp_path):
+    monkeypatch.setattr(store, "ROOT", tmp_path / "videos")
+    store.ensure_root()
+    with short_match_video.open("rb") as fh:
+        meta = upload_video(fh, "cancel_me.mp4")
+    cancelled = cancel_job(meta["job_id"])
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["cancel_requested"] is True
+
+
+def test_cancel_during_process(short_match_video: Path, monkeypatch, tmp_path):
+    monkeypatch.setattr(store, "ROOT", tmp_path / "videos")
+    store.ensure_root()
+    with short_match_video.open("rb") as fh:
+        meta = upload_video(fh, "cancel_running.mp4")
+
+    from statman.video import pipeline
+
+    def _cancel_soon(t, dur, n):
+        if t > 0.5:
+            cancel_job(meta["job_id"])
+
+    # Patch spot_actions progress by wrapping _process cancel check via flag after start
+    job_id = meta["job_id"]
+    store.write_job(
+        job_id,
+        {**(store.read_job(job_id) or {}), "cancel_requested": True, "status": "cancelling"},
+    )
+    pipeline._process(job_id, sample_fps=2.0)
+    job = get_job(job_id)
+    assert job is not None
+    assert job["status"] == "cancelled"

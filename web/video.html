@@ -20,25 +20,35 @@
         <a href="/season">Season</a>
         <a href="/season/players">Players</a>
         <a class="is-active" href="/video">Full match video</a>
+        <a href="/import">Event import</a>
         <a href="/api/docs">API</a>
       </div>
     </nav>
 
     <header class="page-hero">
-      <p class="eyebrow">Film ingest</p>
+      <p class="eyebrow">Film ingest · approximate</p>
       <h1>Upload a full match</h1>
       <p class="lede">
         Drop a complete 90–120 minute broadcast. StatMan samples the whole timeline
-        and tags SoccerNet-style actions (passes, shots, tackles, headers…).
-        Approximate only — not Opta or StatsBomb.
+        with a YOLO person/ball model (OpenCV fallback) and tags SoccerNet-style actions.
+        Counts are approximate — not Opta or StatsBomb. For real stats from a game you have,
+        use <a href="/import">event-data import</a>.
       </p>
     </header>
 
     <main>
+      <p class="banner banner--warn banner--sticky" id="approx-banner">
+        This is approximate. Do not trust the counts. Video tags are film workflow only —
+        not provider-grade xG, PPDA, possession, or progressive passes.
+      </p>
+
       <section class="section">
         <div class="section__head">
           <h2>Full-game file</h2>
-          <p>MP4 / MKV / MOV up to 4&nbsp;GB. Processing runs in the background and can take a while on CPU.</p>
+          <p>
+            MP4 / MKV / MOV up to 4&nbsp;GB. Detector:
+            <code id="detector-status">checking…</code>
+          </p>
         </div>
         <form id="upload-form" class="upload-form">
           <label class="file-drop" for="file-input">
@@ -57,12 +67,16 @@
             <button id="upload-btn" class="btn btn--primary" type="submit">
               Upload &amp; spot full match
             </button>
+            <button id="cancel-btn" class="btn btn--ghost" type="button" hidden>
+              Cancel job
+            </button>
           </div>
         </form>
         <p id="status" class="status" role="status" aria-live="polite"></p>
         <div id="progress-wrap" class="progress-wrap" hidden>
           <div class="progress-bar"><div id="progress-fill" class="progress-bar__fill"></div></div>
           <p id="progress-text" class="progress-text"></p>
+          <p id="eta-text" class="progress-text progress-text--eta"></p>
         </div>
       </section>
 
@@ -75,7 +89,7 @@
         <div id="totals" class="stat-grid"></div>
         <div class="section__head" style="margin-top: 2rem">
           <h2>Label counts</h2>
-          <p>SoccerNet ball-action classes across the full match.</p>
+          <p>Approximate SoccerNet ball-action classes — treat as rough film tags only.</p>
         </div>
         <div class="table-wrap">
           <table id="label-table">
@@ -121,6 +135,7 @@
                 <th>Duration</th>
                 <th>Status</th>
                 <th>Events</th>
+                <th>ETA</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -132,7 +147,8 @@
     <footer class="footer">
       <p>
         Video spotting is approximate. For provider-grade xG, PPDA, aerials and progressive
-        passes, use the StatsBomb / SPADL match and season views.
+        passes, <a href="/import">import StatsBomb / Opta JSON</a> or use the open-data match
+        and season views.
       </p>
     </footer>
 

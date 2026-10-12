@@ -6,11 +6,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from statman.compute import compute_match_stats
+from statman.event_import import get_import, import_events_auto, list_imports
 from statman.load import (
     DEFAULT_COMPETITION_ID,
     DEFAULT_GAME_ID,
@@ -27,14 +28,15 @@ from statman.season import (
     team_page,
     tournament_table,
 )
-from statman.video import get_job, list_jobs, start_job, upload_video
+from statman.video import cancel_job, get_job, list_jobs, start_job, upload_video
+from statman.video.detector import yolo_status
 from statman.video.pipeline import DEFAULT_SAMPLE_FPS
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 app = FastAPI(
     title="StatMan match stats",
-    version="0.4.0",
+    version="0.5.0",
     description=(
         "Loads StatsBomb open-data matches, converts events to SPADL "
         "(socceraction), and returns possession, xG, passes, progressive passes, "
@@ -43,7 +45,9 @@ app = FastAPI(
         "team match sheets, and player leaderboards. Pitch maps (mplsoccer) cover "
         "shots with xG, progressive passes, and tackle/interception locations. "
         "Video endpoints accept a full-match broadcast upload and return "
-        "approximate SoccerNet-style action tags (not provider-grade)."
+        "approximate SoccerNet-style action tags (YOLO person/ball when available; "
+        "not provider-grade). Event-data import accepts StatsBomb/Opta JSON for "
+        "real match stats from a game you already have."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -59,6 +63,7 @@ def api_root() -> dict[str, Any]:
         "ui": "/",
         "season_ui": "/season",
         "video_ui": "/video",
+        "import_ui": "/import",
         "endpoints": {
             "health": "/api/health",
             "demo_games": "/api/games/demo",
@@ -72,6 +77,10 @@ def api_root() -> dict[str, Any]:
             "season_players": "/api/seasons/{competition_id}/{season_id}/players",
             "video_upload": "/api/video/jobs",
             "video_job": "/api/video/jobs/{job_id}",
+            "video_cancel": "/api/video/jobs/{job_id}/cancel",
+            "video_detector": "/api/video/detector",
+            "event_import": "/api/imports",
+            "event_import_job": "/api/imports/{import_id}",
         },
         "default_game_id": DEFAULT_GAME_ID,
         "default_competition_id": DEFAULT_COMPETITION_ID,
@@ -236,6 +245,16 @@ def ui_video() -> FileResponse:
     return _page("video.html")
 
 
+@app.get("/import")
+def ui_import() -> FileResponse:
+    return _page("import.html")
+
+
+@app.get("/api/video/detector")
+def api_video_detector() -> dict[str, Any]:
+    return yolo_status()
+
+
 @app.get("/api/video/jobs")
 def api_video_jobs(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
     jobs = list_jobs(limit=limit)
@@ -269,6 +288,17 @@ def api_video_start(
         return start_job(job_id, sample_fps=sample_fps)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/video/jobs/{job_id}/cancel")
+def api_video_cancel(job_id: str) -> dict[str, Any]:
+    """Cancel a queued or running full-match spotting job."""
+    try:
+        return cancel_job(job_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/api/video/jobs/{job_id}")
@@ -280,6 +310,49 @@ def api_video_job(
     if job is None:
         raise HTTPException(status_code=404, detail=f"Unknown job_id={job_id}")
     return job
+
+
+@app.get("/api/imports")
+def api_imports(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+    rows = list_imports(limit=limit)
+    return {"count": len(rows), "imports": rows}
+
+
+@app.post("/api/imports")
+async def api_import_events(
+    events: UploadFile = File(..., description="StatsBomb events JSON or Opta F24 JSON"),
+    lineups: UploadFile | None = File(None, description="Optional StatsBomb lineups JSON"),
+    match: UploadFile | None = File(None, description="Optional StatsBomb match JSON"),
+    game_id: int | None = Form(None),
+    home_team_id: int | None = Form(None),
+) -> dict[str, Any]:
+    """Import StatsBomb or Opta event JSON and return SPADL match stats."""
+    if not events.filename:
+        raise HTTPException(status_code=400, detail="Missing events filename")
+    try:
+        result = import_events_auto(
+            events.file,
+            events.filename,
+            lineups_file=lineups.file if lineups and lineups.filename else None,
+            lineups_filename=lineups.filename if lineups else None,
+            match_file=match.file if match and match.filename else None,
+            match_filename=match.filename if match else None,
+            game_id=game_id,
+            home_team_id=home_team_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Import failed: {exc}") from exc
+    return result
+
+
+@app.get("/api/imports/{import_id}")
+def api_import_get(import_id: str) -> dict[str, Any]:
+    stats = get_import(import_id)
+    if stats is None:
+        raise HTTPException(status_code=404, detail=f"Unknown import_id={import_id}")
+    return {"import_id": import_id, "stats": stats}
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
