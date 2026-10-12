@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from statman.event_metrics import team_event_catalog
 from statman.load import MatchBundle
 
 FIELD_LENGTH = 105.0
@@ -16,6 +17,67 @@ PROGRESSIVE_YARDS_M = 10 * 0.9144
 PENALTY_BOX_X = FIELD_LENGTH - 16.5
 # PPDA zone: opponent passes in their own 60% of the pitch.
 PPDA_OWN_ZONE_X = 0.6 * FIELD_LENGTH
+
+CATALOG_DEFINITIONS: dict[str, str] = {
+    "goals": "Shot events with outcome Goal (StatsBomb).",
+    "possession_pct": "Share of StatsBomb possession-chain duration by team (full match).",
+    "fouls_committed": "StatsBomb Foul Committed events.",
+    "fouls_won": "StatsBomb Foul Won events.",
+    "yellow_cards": "Yellow cards on Foul Committed or Bad Behaviour.",
+    "red_cards": "Red / second-yellow cards on Foul Committed or Bad Behaviour.",
+    "offsides": "Pass Offside outcomes + Offside events, split by period (1H / 2H / total).",
+    "corners": "Pass type Corner, split by period (1H / 2H / total).",
+    "free_kicks": "Pass type Free Kick (excludes goal kicks).",
+    "goal_kicks": "Pass type Goal Kick.",
+    "throw_ins": "Pass type Throw-in.",
+    "xg": "Sum of StatsBomb shot.statsbomb_xg on shot events.",
+    "shots": "StatsBomb Shot events (full match).",
+    "shots_on_target": "Shot outcomes Goal, Saved, Saved to Post.",
+    "shot_accuracy": "Shots on target / shots × 100.",
+    "blocked_shots": "Shot outcome Blocked.",
+    "missed_shots": "Shot outcomes Off T, Wayward, Post.",
+    "shots_inside_box": "Shots with location inside the StatsBomb penalty area.",
+    "shots_outside_box": "Shots with location outside the StatsBomb penalty area.",
+    "headed_shots": "Shots with body part Head.",
+    "key_passes": "Passes with shot_assist, goal_assist, or assisted_shot_id.",
+    "into_final_third": (
+        "Completed / attempted passes that start before x=80 and end at x≥80 "
+        "(StatsBomb pitch)."
+    ),
+    "into_box": (
+        "Completed / attempted passes that end inside the StatsBomb penalty box."
+    ),
+    "passes": (
+        "Open-play Pass events (excludes throw-in, corner, free kick, goal kick, kick-off)."
+    ),
+    "pass_accuracy": "Open-play passes completed / attempted × 100 (full match).",
+    "progressive_passes": (
+        "Open-play passes advancing ≥10 yards toward goal or into the box, "
+        "excluding starts in own 40% (StatsBomb coords). Completed / attempted."
+    ),
+    "crosses": "Pass.cross=true. Completed / total.",
+    "long_balls": "High Pass height or length ≥30 yards. Completed / total.",
+    "through_balls": (
+        "Pass.through_ball or technique Through Ball when the feed provides it "
+        "(often 0 on open data)."
+    ),
+    "interceptions": "StatsBomb Interception events.",
+    "recoveries": "StatsBomb Ball Recovery events.",
+    "high_recoveries": "Ball recoveries with location in the attacking final third (x≥80).",
+    "balls_lost": "Miscontrol + Dispossessed + Error events.",
+    "blocks": "StatsBomb Block events (defensive blocks).",
+    "clearances": "StatsBomb Clearance events.",
+    "gk_saves": "Goal Keeper events with type Shot Saved.",
+    "ground_duels": "Non-aerial Duel + 50/50 + Dribble. Won / total.",
+    "aerial_duels": (
+        "Aerial Lost duels plus aerial_won flags on pass/shot/clearance. Won / total."
+    ),
+    "ppda": (
+        "Opponent SPADL passes with start_x < 60% of pitch length, divided by this team's "
+        "tackles + interceptions + fouls in the same physical zone "
+        "(start_x > 40% in this team's SPADL frame). Full match. Lower = more intense press."
+    ),
+}
 
 
 def compute_match_stats(bundle: MatchBundle) -> dict[str, Any]:
@@ -42,28 +104,9 @@ def compute_match_stats(bundle: MatchBundle) -> dict[str, Any]:
             "provider": "StatsBomb",
             "dataset": "open-data",
             "attribution": "Data provided by StatsBomb. See https://github.com/statsbomb/open-data",
-            "schema": "SPADL via socceraction",
+            "schema": "SPADL via socceraction + StatsBomb event catalog",
         },
-        "definitions": {
-            "progressive_pass": (
-                "Completed pass that advances the ball at least 10 yards (9.14 m) toward "
-                "the opponent goal, or any completed pass into the penalty area. "
-                "Excludes incomplete passes."
-            ),
-            "ppda": (
-                "Opponent passes with start_x < 60% of pitch length, divided by this team's "
-                "tackles + interceptions + fouls in the same physical zone "
-                "(start_x > 40% in this team's SPADL frame). Lower = more intense press."
-            ),
-            "possession_pct": "Share of StatsBomb possession-chain duration by team.",
-            "xg": "Sum of StatsBomb shot.statsbomb_xg on raw shot events (open-data).",
-            "aerials": (
-                "Raw StatsBomb aerials before SPADL: losers are Duel/Aerial Lost; "
-                "winners are pass/shot/clearance events with aerial_won=true."
-            ),
-            "pass_accuracy": "Successful SPADL passes / attempted SPADL passes "
-            "(includes crosses, free kicks, corners, throw-ins).",
-        },
+        "definitions": dict(CATALOG_DEFINITIONS),
         "match": {
             "game_id": bundle.game_id,
             "competition": bundle.game.get("competition_name"),
@@ -96,39 +139,177 @@ def _team_stats(
     team_events: pd.DataFrame,
     all_events: pd.DataFrame,
 ) -> dict[str, Any]:
-    pass_mask = team_actions["type_name"].isin(_PASS_TYPES)
-    passes = team_actions[pass_mask]
-    pass_attempted = int(len(passes))
-    pass_completed = int((passes["result_name"] == "success").sum())
-    progressive = int(_progressive_passes(passes).shape[0])
-
-    shots = team_actions[team_actions["type_name"].isin(_SHOT_TYPES)]
-    goals = int((shots["result_name"] == "success").sum())
-
+    catalog = team_event_catalog(team_events)
     xg = _sum_xg(team_events)
-    aerials_won, aerials_lost = _aerials(team_events)
     possession_pct = _possession_pct(all_events, team_id)
     ppda = _ppda(team_actions, opp_actions)
 
-    return {
+    # Prefer event-stream shot/goal counts; fall back to SPADL if events lack shots.
+    goals = catalog["goals_raw"]
+    shots = catalog["shots_raw"]
+    if shots == 0 and not team_actions.empty:
+        spadl_shots = team_actions[team_actions["type_name"].isin(_SHOT_TYPES)]
+        shots = int(len(spadl_shots))
+        goals = int((spadl_shots["result_name"] == "success").sum())
+
+    interceptions = catalog["interceptions_raw"]
+    clearances = catalog["clearances_raw"]
+    if interceptions == 0 and not team_actions.empty:
+        interceptions = int((team_actions["type_name"] == "interception").sum())
+    if clearances == 0 and not team_actions.empty:
+        clearances = int((team_actions["type_name"] == "clearance").sum())
+
+    # Legacy-friendly progressive (completed only) + new attempted.
+    prog_completed = catalog["progressive_passes_completed"]
+    prog_attempted = catalog["progressive_passes_attempted"]
+
+    row = {
         "team_id": team_id,
         "team_name": team_name,
-        "possession_pct": possession_pct,
-        "xg": xg,
+        # Summary
         "goals": goals,
-        "shots": int(len(shots)),
-        "passes_attempted": pass_attempted,
-        "passes_completed": pass_completed,
-        "pass_accuracy": _ratio(pass_completed, pass_attempted),
-        "progressive_passes": progressive,
-        "tackles": int((team_actions["type_name"] == "tackle").sum()),
-        "interceptions": int((team_actions["type_name"] == "interception").sum()),
-        "clearances": int((team_actions["type_name"] == "clearance").sum()),
-        "fouls": int((team_actions["type_name"] == "foul").sum()),
-        "aerials_won": aerials_won,
-        "aerials_lost": aerials_lost,
-        "aerials_total": aerials_won + aerials_lost,
+        "possession_pct": possession_pct,
+        "fouls_committed": catalog["fouls_committed"],
+        "fouls_won": catalog["fouls_won"],
+        "fouls": catalog["fouls_committed"],  # backward compat
+        "yellow_cards": catalog["yellow_cards"],
+        "red_cards": catalog["red_cards"],
+        "offsides": catalog["offsides"],
+        "corners": catalog["corners"],
+        "free_kicks": catalog["free_kicks"],
+        "goal_kicks": catalog["goal_kicks"],
+        "throw_ins": catalog["throw_ins"],
+        # Attack
+        "xg": xg,
+        "shots": shots,
+        "shots_on_target": catalog["shots_on_target"],
+        "shot_accuracy": catalog["shot_accuracy"],
+        "blocked_shots": catalog["blocked_shots"],
+        "missed_shots": catalog["missed_shots"],
+        "shots_inside_box": catalog["shots_inside_box"],
+        "shots_outside_box": catalog["shots_outside_box"],
+        "headed_shots": catalog["headed_shots"],
+        "key_passes": catalog["key_passes"],
+        "into_final_third_completed": catalog["into_final_third_completed"],
+        "into_final_third_attempted": catalog["into_final_third_attempted"],
+        "into_box_completed": catalog["into_box_completed"],
+        "into_box_attempted": catalog["into_box_attempted"],
+        # Passes
+        "passes_attempted": catalog["open_passes_attempted"],
+        "passes_completed": catalog["open_passes_completed"],
+        "pass_accuracy": catalog["open_pass_accuracy"],
+        "progressive_passes": prog_completed,
+        "progressive_passes_completed": prog_completed,
+        "progressive_passes_attempted": prog_attempted,
+        "crosses_completed": catalog["crosses_completed"],
+        "crosses_total": catalog["crosses_total"],
+        "long_balls_completed": catalog["long_balls_completed"],
+        "long_balls_total": catalog["long_balls_total"],
+        "through_balls_completed": catalog["through_balls_completed"],
+        "through_balls_total": catalog["through_balls_total"],
+        # Defence
+        "interceptions": interceptions,
+        "recoveries": catalog["recoveries"],
+        "high_recoveries": catalog["high_recoveries"],
+        "balls_lost": catalog["balls_lost"],
+        "blocks": catalog["blocks"],
+        "clearances": clearances,
+        "gk_saves": catalog["gk_saves"],
+        "tackles": int((team_actions["type_name"] == "tackle").sum()) if not team_actions.empty else 0,
+        # Duels
+        "ground_duels_won": catalog["ground_duels_won"],
+        "ground_duels_total": catalog["ground_duels_total"],
+        "aerials_won": catalog["aerials_won"],
+        "aerials_lost": catalog["aerials_lost"],
+        "aerials_total": catalog["aerials_total"],
         "ppda": ppda,
+        "sections": _sections_view(
+            goals=goals,
+            possession_pct=possession_pct,
+            catalog=catalog,
+            xg=xg,
+            shots=shots,
+            prog_completed=prog_completed,
+            prog_attempted=prog_attempted,
+            interceptions=interceptions,
+            clearances=clearances,
+            ppda=ppda,
+        ),
+    }
+    return row
+
+
+def _sections_view(
+    *,
+    goals: int,
+    possession_pct: float | None,
+    catalog: dict[str, Any],
+    xg: float,
+    shots: int,
+    prog_completed: int,
+    prog_attempted: int,
+    interceptions: int,
+    clearances: int,
+    ppda: float | None,
+) -> dict[str, dict[str, Any]]:
+    """Grouped view for UIs that want Match / Attack / Passes / Defence blocks."""
+    return {
+        "match": {
+            "goals": goals,
+            "possession_pct": possession_pct,
+            "fouls_committed": catalog["fouls_committed"],
+            "fouls_won": catalog["fouls_won"],
+            "yellow_cards": catalog["yellow_cards"],
+            "red_cards": catalog["red_cards"],
+            "offsides": catalog["offsides"],
+            "corners": catalog["corners"],
+            "free_kicks": catalog["free_kicks"],
+            "goal_kicks": catalog["goal_kicks"],
+            "throw_ins": catalog["throw_ins"],
+        },
+        "attack": {
+            "xg": xg,
+            "shots": shots,
+            "shots_on_target": catalog["shots_on_target"],
+            "shot_accuracy": catalog["shot_accuracy"],
+            "blocked_shots": catalog["blocked_shots"],
+            "missed_shots": catalog["missed_shots"],
+            "shots_inside_box": catalog["shots_inside_box"],
+            "shots_outside_box": catalog["shots_outside_box"],
+            "headed_shots": catalog["headed_shots"],
+            "key_passes": catalog["key_passes"],
+            "into_final_third_completed": catalog["into_final_third_completed"],
+            "into_final_third_attempted": catalog["into_final_third_attempted"],
+            "into_box_completed": catalog["into_box_completed"],
+            "into_box_attempted": catalog["into_box_attempted"],
+        },
+        "passes": {
+            "passes_attempted": catalog["open_passes_attempted"],
+            "passes_completed": catalog["open_passes_completed"],
+            "pass_accuracy": catalog["open_pass_accuracy"],
+            "progressive_passes_completed": prog_completed,
+            "progressive_passes_attempted": prog_attempted,
+            "crosses_completed": catalog["crosses_completed"],
+            "crosses_total": catalog["crosses_total"],
+            "long_balls_completed": catalog["long_balls_completed"],
+            "long_balls_total": catalog["long_balls_total"],
+            "through_balls_completed": catalog["through_balls_completed"],
+            "through_balls_total": catalog["through_balls_total"],
+        },
+        "defence": {
+            "interceptions": interceptions,
+            "recoveries": catalog["recoveries"],
+            "high_recoveries": catalog["high_recoveries"],
+            "balls_lost": catalog["balls_lost"],
+            "blocks": catalog["blocks"],
+            "clearances": clearances,
+            "gk_saves": catalog["gk_saves"],
+            "ground_duels_won": catalog["ground_duels_won"],
+            "ground_duels_total": catalog["ground_duels_total"],
+            "aerials_won": catalog["aerials_won"],
+            "aerials_total": catalog["aerials_total"],
+            "ppda": ppda,
+        },
     }
 
 
@@ -138,38 +319,65 @@ def _player_stats(
     team_actions: pd.DataFrame,
     team_events: pd.DataFrame,
 ) -> list[dict[str, Any]]:
-    if team_actions.empty:
+    if team_actions.empty and (team_events is None or team_events.empty):
         return []
 
+    # Index players from events when available so GK-only contributors appear.
+    player_ids: set[int] = set()
+    if not team_actions.empty:
+        for pid in team_actions["player_id"].dropna().unique():
+            player_ids.add(int(pid))
+    if team_events is not None and not team_events.empty and "player_id" in team_events.columns:
+        for pid in team_events["player_id"].dropna().unique():
+            player_ids.add(int(pid))
+
     rows = []
-    for player_id, pact in team_actions.groupby("player_id"):
-        if pd.isna(player_id):
-            continue
-        name = pact["player_name"].dropna().iloc[0] if pact["player_name"].notna().any() else None
-        passes = pact[pact["type_name"].isin(_PASS_TYPES)]
-        attempted = int(len(passes))
-        completed = int((passes["result_name"] == "success").sum())
-        shots = pact[pact["type_name"].isin(_SHOT_TYPES)]
-        pev = team_events[team_events["player_id"] == player_id]
-        aerials_won, aerials_lost = _aerials(pev)
+    for player_id in player_ids:
+        pact = (
+            team_actions[team_actions["player_id"] == player_id]
+            if not team_actions.empty
+            else team_actions
+        )
+        pev = (
+            team_events[team_events["player_id"] == player_id]
+            if team_events is not None and not team_events.empty
+            else team_events
+        )
+        catalog = team_event_catalog(pev)
+        name = None
+        if not pact.empty and "player_name" in pact.columns and pact["player_name"].notna().any():
+            name = pact["player_name"].dropna().iloc[0]
+        elif pev is not None and not pev.empty and "player_name" in pev.columns:
+            if pev["player_name"].notna().any():
+                name = pev["player_name"].dropna().iloc[0]
+
         rows.append(
             {
                 "player_id": int(player_id),
                 "player_name": name,
                 "team_id": team_id,
                 "team_name": team_name,
-                "xg": _sum_xg(pev),
-                "goals": int((shots["result_name"] == "success").sum()),
-                "shots": int(len(shots)),
-                "passes_attempted": attempted,
-                "passes_completed": completed,
-                "pass_accuracy": _ratio(completed, attempted),
-                "progressive_passes": int(_progressive_passes(passes).shape[0]),
-                "tackles": int((pact["type_name"] == "tackle").sum()),
-                "interceptions": int((pact["type_name"] == "interception").sum()),
-                "clearances": int((pact["type_name"] == "clearance").sum()),
-                "aerials_won": aerials_won,
-                "aerials_lost": aerials_lost,
+                "xg": _sum_xg(pev) if pev is not None else 0.0,
+                "goals": catalog["goals_raw"],
+                "shots": catalog["shots_raw"],
+                "shots_on_target": catalog["shots_on_target"],
+                "key_passes": catalog["key_passes"],
+                "passes_attempted": catalog["open_passes_attempted"],
+                "passes_completed": catalog["open_passes_completed"],
+                "pass_accuracy": catalog["open_pass_accuracy"],
+                "progressive_passes": catalog["progressive_passes_completed"],
+                "progressive_passes_completed": catalog["progressive_passes_completed"],
+                "progressive_passes_attempted": catalog["progressive_passes_attempted"],
+                "tackles": int((pact["type_name"] == "tackle").sum()) if not pact.empty else 0,
+                "interceptions": catalog["interceptions_raw"],
+                "clearances": catalog["clearances_raw"],
+                "recoveries": catalog["recoveries"],
+                "blocks": catalog["blocks"],
+                "gk_saves": catalog["gk_saves"],
+                "aerials_won": catalog["aerials_won"],
+                "aerials_lost": catalog["aerials_lost"],
+                "ground_duels_won": catalog["ground_duels_won"],
+                "ground_duels_total": catalog["ground_duels_total"],
             }
         )
     rows.sort(key=lambda r: (-(r["xg"] or 0), -(r["passes_attempted"]), r["player_name"] or ""))
@@ -206,6 +414,8 @@ def _progressive_passes(passes: pd.DataFrame) -> pd.DataFrame:
 
 def _ppda(team_actions: pd.DataFrame, opp_actions: pd.DataFrame) -> float | None:
     """PPDA for `team_actions`' team. See definitions in compute_match_stats output."""
+    if team_actions.empty or opp_actions.empty:
+        return None
     opp_passes = opp_actions[
         opp_actions["type_name"].isin(_PASS_TYPES) & (opp_actions["start_x"] < PPDA_OWN_ZONE_X)
     ]
@@ -269,7 +479,7 @@ def _event_seconds(row: pd.Series) -> float:
 
 def _sum_xg(events: pd.DataFrame) -> float:
     """Sum StatsBomb xG from flattened columns or nested ``extra.shot.statsbomb_xg``."""
-    if events.empty:
+    if events is None or events.empty:
         return 0.0
 
     for candidate in ("shot_statsbomb_xg", "statsbomb_xg"):
@@ -292,38 +502,10 @@ def _sum_xg(events: pd.DataFrame) -> float:
 
 
 def _aerials(events: pd.DataFrame) -> tuple[int, int]:
-    """Count aerial duels from raw StatsBomb events (not available in SPADL).
+    """Backward-compatible wrapper around event_metrics aerials."""
+    from statman.event_metrics import _aerials as _ev_aerials
 
-    StatsBomb typically records the loser as a Duel with type ``Aerial Lost``,
-    and marks the winner with ``aerial_won: true`` on the following pass/shot/clearance.
-    """
-    if events.empty or "type_name" not in events.columns:
-        return 0, 0
-
-    won = 0
-    lost = 0
-    for _, row in events.iterrows():
-        extra = row.get("extra")
-        if not isinstance(extra, dict):
-            continue
-
-        duel = extra.get("duel")
-        if isinstance(duel, dict):
-            duel_type = str(duel.get("type", {}).get("name", ""))
-            if "aerial" in duel_type.lower():
-                if "won" in duel_type.lower():
-                    won += 1
-                else:
-                    lost += 1
-                continue
-
-        for key in ("pass", "shot", "clearance", "miscontrol", "ball_receipt"):
-            block = extra.get(key)
-            if isinstance(block, dict) and block.get("aerial_won") is True:
-                won += 1
-                break
-
-    return won, lost
+    return _ev_aerials(events)
 
 
 def _ratio(num: int, den: int) -> float | None:

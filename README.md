@@ -55,17 +55,18 @@ Then open:
 
 Per-match payloads are cached in `.data/seasons/c43_s3/matches/`. Re-running build skips matches that are already stored unless you pass `--force` / `force=true`.
 
-## Stat definitions (short)
+## Stat catalog (event path)
 
-| Field | Source |
+Team boards on `/` and `/import` collect the full match sheet from StatsBomb events (+ SPADL for PPDA):
+
+| Group | Fields |
 | --- | --- |
-| `xg` | Sum of StatsBomb `shot.statsbomb_xg` on raw shots |
-| `possession_pct` | Share of StatsBomb possession-chain duration |
-| `pass_accuracy` | Successful SPADL passes / attempted |
-| `progressive_passes` | Completed passes advancing ≥10 yards toward goal, or into the box (excludes defending 40%) |
-| `ppda` | Opponent passes in their own 60% ÷ this team’s tackles + interceptions + fouls in that zone |
-| `tackles` / `interceptions` / `clearances` | SPADL action types |
-| `aerials_*` | Raw StatsBomb aerial duels (SPADL drops these) |
+| Match | Goals, possession %, fouls committed/won, yellow/red cards, offsides & corners (1H/2H/total), free kicks, goal kicks, throw-ins |
+| Attack | xG, shots, SoT, shot accuracy %, blocked/missed, inside/outside box, headed shots, key passes, into final third & into box (completed/attempted) |
+| Passes | Open-play passes completed/attempted & accuracy, progressive (c/a), crosses, long balls, through balls |
+| Defence | Interceptions, recoveries, high recoveries, balls lost, blocks, clearances, GK saves, ground/aerial duels (won/total), PPDA |
+
+Definitions ship on every `/api/matches/{id}/stats` response. Through-balls stay `0` when the feed omits `through_ball` (common on open data).
 
 ### Full-match video (approximate)
 

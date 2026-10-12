@@ -1,4 +1,4 @@
-import { fetchJson, fmt } from "./common.js";
+import { fetchJson, fmt, renderTeamCatalogHtml } from "./common.js";
 
 const form = document.getElementById("import-form");
 const eventsInput = document.getElementById("events-input");
@@ -42,25 +42,18 @@ function renderStats(payload) {
     .filter(Boolean)
     .join(" · ");
 
-  teamGrid.innerHTML = (stats.teams || [])
-    .map(
-      (t) => `
-    <article class="team-card">
-      <h3>${t.team_name}</h3>
-      <dl class="kv">
-        <div><dt>Possession</dt><dd>${fmt(t.possession_pct, 1)}%</dd></div>
-        <div><dt>xG</dt><dd>${fmt(t.xg, 2)}</dd></div>
-        <div><dt>Shots</dt><dd>${fmt(t.shots, 0)}</dd></div>
-        <div><dt>Pass acc.</dt><dd>${t.pass_accuracy == null ? "—" : `${fmt(t.pass_accuracy)}%`}</dd></div>
-        <div><dt>Progressive</dt><dd>${fmt(t.progressive_passes, 0)}</dd></div>
-        <div><dt>PPDA</dt><dd>${fmt(t.ppda, 2)}</dd></div>
-        <div><dt>Tackles</dt><dd>${fmt(t.tackles, 0)}</dd></div>
-        <div><dt>Interceptions</dt><dd>${fmt(t.interceptions, 0)}</dd></div>
-        <div><dt>Aerials won</dt><dd>${fmt(t.aerials_won, 0)}</dd></div>
-      </dl>
-    </article>`
-    )
-    .join("");
+  const teams = stats.teams || [];
+  const home = teams.find((t) => t.team_id === match.home_team_id) || teams[0];
+  const away = teams.find((t) => t.team_id === match.away_team_id) || teams[1];
+  teamGrid.className = "team-board";
+  teamGrid.innerHTML = `
+    ${home ? renderTeamCatalogHtml(home, "Home") : ""}
+    <div class="score-stack">
+      <div class="score">${match.home_score ?? "—"}–${match.away_score ?? "—"}</div>
+      <div class="vs">imported</div>
+    </div>
+    ${away ? renderTeamCatalogHtml(away, "Away") : ""}
+  `;
 
   playerBody.innerHTML = (stats.players || [])
     .slice(0, 24)
@@ -71,9 +64,12 @@ function renderStats(payload) {
       <td>${p.team_name || "—"}</td>
       <td>${fmt(p.xg, 2)}</td>
       <td>${fmt(p.shots, 0)}</td>
+      <td>${fmt(p.shots_on_target, 0)}</td>
+      <td>${fmt(p.key_passes, 0)}</td>
       <td>${fmt(p.passes_attempted, 0)}</td>
       <td>${fmt(p.progressive_passes, 0)}</td>
-      <td>${fmt(p.tackles, 0)}</td>
+      <td>${fmt(p.interceptions, 0)}</td>
+      <td>${fmt(p.gk_saves, 0)}</td>
     </tr>`
     )
     .join("");
