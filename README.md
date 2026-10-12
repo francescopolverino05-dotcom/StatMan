@@ -20,8 +20,8 @@ pip install -r requirements.txt
 python -m statman
 python -m statman 8657
 
-# HTTP API
-uvicorn statman.api:app --reload --port 8000
+# HTTP API + web UI
+uvicorn statman.api:app --reload --host 0.0.0.0 --port 8000
 
 # Offline unit tests (no network)
 pytest
@@ -29,9 +29,10 @@ pytest
 
 Then open:
 
-- http://127.0.0.1:8000/docs
-- http://127.0.0.1:8000/matches/8657/stats
-- http://127.0.0.1:8000/games/demo
+- http://127.0.0.1:8000/ — StatMan UI
+- http://127.0.0.1:8000/api/docs — interactive API docs
+- http://127.0.0.1:8000/api/matches/8657/stats — JSON for the demo match
+- http://127.0.0.1:8000/api/games/demo — World Cup 2018 open matches
 
 ## Stat definitions (short)
 
