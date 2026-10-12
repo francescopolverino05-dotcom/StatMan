@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -27,19 +27,23 @@ from statman.season import (
     team_page,
     tournament_table,
 )
+from statman.video import get_job, list_jobs, start_job, upload_video
+from statman.video.pipeline import DEFAULT_SAMPLE_FPS
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 app = FastAPI(
     title="StatMan match stats",
-    version="0.3.0",
+    version="0.4.0",
     description=(
         "Loads StatsBomb open-data matches, converts events to SPADL "
         "(socceraction), and returns possession, xG, passes, progressive passes, "
         "PPDA, tackles, interceptions, clearances, and aerials as JSON. "
         "Season endpoints aggregate a full competition into a tournament table, "
         "team match sheets, and player leaderboards. Pitch maps (mplsoccer) cover "
-        "shots with xG, progressive passes, and tackle/interception locations."
+        "shots with xG, progressive passes, and tackle/interception locations. "
+        "Video endpoints accept a full-match broadcast upload and return "
+        "approximate SoccerNet-style action tags (not provider-grade)."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -54,6 +58,7 @@ def api_root() -> dict[str, Any]:
         "docs": "/api/docs",
         "ui": "/",
         "season_ui": "/season",
+        "video_ui": "/video",
         "endpoints": {
             "health": "/api/health",
             "demo_games": "/api/games/demo",
@@ -65,6 +70,8 @@ def api_root() -> dict[str, Any]:
             "season_table": "/api/seasons/{competition_id}/{season_id}/table",
             "season_team": "/api/seasons/{competition_id}/{season_id}/teams/{team_id}",
             "season_players": "/api/seasons/{competition_id}/{season_id}/players",
+            "video_upload": "/api/video/jobs",
+            "video_job": "/api/video/jobs/{job_id}",
         },
         "default_game_id": DEFAULT_GAME_ID,
         "default_competition_id": DEFAULT_COMPETITION_ID,
@@ -222,6 +229,57 @@ def ui_season_team() -> FileResponse:
 @app.get("/season/players")
 def ui_season_players() -> FileResponse:
     return _page("players.html")
+
+
+@app.get("/video")
+def ui_video() -> FileResponse:
+    return _page("video.html")
+
+
+@app.get("/api/video/jobs")
+def api_video_jobs(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+    jobs = list_jobs(limit=limit)
+    return {"count": len(jobs), "jobs": jobs}
+
+
+@app.post("/api/video/jobs")
+async def api_video_upload(
+    file: UploadFile = File(...),
+    sample_fps: float = Query(DEFAULT_SAMPLE_FPS, ge=0.2, le=2.0),
+    auto_start: bool = Query(True),
+) -> dict[str, Any]:
+    """Upload a full-match video and optionally start approximate spotting."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
+    try:
+        meta = upload_video(file.file, file.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if auto_start:
+        meta = start_job(meta["job_id"], sample_fps=sample_fps)
+    return meta
+
+
+@app.post("/api/video/jobs/{job_id}/start")
+def api_video_start(
+    job_id: str,
+    sample_fps: float = Query(DEFAULT_SAMPLE_FPS, ge=0.2, le=2.0),
+) -> dict[str, Any]:
+    try:
+        return start_job(job_id, sample_fps=sample_fps)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/video/jobs/{job_id}")
+def api_video_job(
+    job_id: str,
+    include_timeline: bool = Query(True),
+) -> dict[str, Any]:
+    job = get_job(job_id, include_timeline=include_timeline)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Unknown job_id={job_id}")
+    return job
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

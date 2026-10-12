@@ -559,6 +559,112 @@ tbody tr:hover {
   text-decoration: underline;
 }
 
+/* —— Full-match video upload —— */
+.upload-form {
+  margin-top: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.file-drop {
+  display: grid;
+  place-items: center;
+  min-height: 7rem;
+  padding: 1.25rem;
+  border: 1.5px dashed rgba(15, 61, 34, 0.35);
+  border-radius: 16px;
+  background: rgba(247, 250, 246, 0.7);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.file-drop input {
+  display: none;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.field span {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.progress-wrap {
+  margin-top: 1rem;
+}
+
+.progress-bar {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: rgba(15, 61, 34, 0.12);
+  overflow: hidden;
+}
+
+.progress-bar__fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--turf), var(--accent));
+  transition: width 280ms ease;
+}
+
+.progress-text {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.banner {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  line-height: 1.45;
+}
+
+.banner--warn {
+  background: rgba(180, 83, 9, 0.1);
+  color: #7c3d0a;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.85rem 1rem;
+}
+
+.stat-tile {
+  display: grid;
+  gap: 0.2rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.stat-tile__label {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.stat-tile__value {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.job-row {
+  cursor: pointer;
+}
+
+.job-row:hover {
+  background: rgba(31, 107, 58, 0.06);
+}
+
 @media (max-width: 800px) {
   .hero__inner {
     margin-bottom: 8vh;

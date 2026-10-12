@@ -6,7 +6,7 @@ Football match stats for the StatMan site: expected goals, PPDA, possession, sho
 
 - [docs/football-stats-repos.md](docs/football-stats-repos.md) — GitHub repos that collect or compute these stats
 - `statman/` — backend that loads StatsBomb open-data matches, converts them to SPADL via [socceraction](https://github.com/ML-KULeuven/socceraction), and returns JSON
-- `web/` — match UI + **season view** (tournament table, team sheets, player leaderboards)
+- `web/` — match UI, **season view**, and **full-match video upload**
 
 Default demo match: **Belgium 2–0 England**, FIFA World Cup 2018 third place (`game_id=8657`).
 
@@ -39,12 +39,15 @@ Then open:
 - http://127.0.0.1:8000/ — match UI (tables + pitch maps)
 - http://127.0.0.1:8000/season — tournament table (build first)
 - http://127.0.0.1:8000/season/players — player leaderboards
+- http://127.0.0.1:8000/video — upload a **full match** video (90–120′+)
 - http://127.0.0.1:8000/api/docs — interactive API docs
 - `GET /api/matches/8657/maps/shots.png` — shot map (xG)
 - `GET /api/matches/8657/maps/progressive.png` — progressive passes
 - `GET /api/matches/8657/maps/defence.png` — tackles & interceptions
 - `POST /api/seasons/43/3/build` — start World Cup 2018 store
 - `GET /api/seasons/43/3/table` — aggregated table JSON
+- `POST /api/video/jobs` — multipart upload of a full-match file (up to 4&nbsp;GB)
+- `GET /api/video/jobs/{id}` — progress + approximate action stats
 
 Per-match payloads are cached in `.data/seasons/c43_s3/matches/`. Re-running build skips matches that are already stored unless you pass `--force` / `force=true`.
 
@@ -60,4 +63,10 @@ Per-match payloads are cached in `.data/seasons/c43_s3/matches/`. Re-running bui
 | `tackles` / `interceptions` / `clearances` | SPADL action types |
 | `aerials_*` | Raw StatsBomb aerial duels (SPADL drops these) |
 
-Data is from [StatsBomb open data](https://github.com/statsbomb/open-data). Attribute StatsBomb if you publish analysis based on it, and read their licence before putting numbers on a public product site.
+### Full-match video (approximate)
+
+Upload a complete broadcast (not a highlight clip). The spotter samples the **entire** timeline (default 0.5&nbsp;fps, capped at 150&nbsp;minutes) and tags SoccerNet-style ball actions. It does **not** produce provider-grade xG, PPDA, possession %, progressive passes, pass accuracy, or aerial duels — those stay on the StatsBomb/SPADL path.
+
+Jobs and uploads live under `.data/videos/`.
+
+Data is from [StatsBomb open data](https://github.com/statsbomb/open-data) for the event path. Attribute StatsBomb if you publish analysis based on it, and read their licence before putting numbers on a public product site.
