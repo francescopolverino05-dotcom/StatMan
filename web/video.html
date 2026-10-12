@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>StatMan — upload a full match</title>
+    <title>StatMan — film tags from a full match</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,30 +19,46 @@
         <a href="/">Match</a>
         <a href="/season">Season</a>
         <a href="/season/players">Players</a>
-        <a class="is-active" href="/video">Full match video</a>
+        <a class="is-active" href="/video">Film tags</a>
+        <a href="/import">Event import</a>
         <a href="/api/docs">API</a>
       </div>
     </nav>
 
     <header class="page-hero">
-      <p class="eyebrow">Film ingest</p>
-      <h1>Upload a full match</h1>
+      <p class="eyebrow">Film ingest · SoccerNet tags</p>
+      <h1>Tag a full match from film</h1>
       <p class="lede">
-        Drop a complete 90–120 minute broadcast. StatMan samples the whole timeline
-        and tags SoccerNet-style actions (passes, shots, tackles, headers…).
-        Approximate only — not Opta or StatsBomb.
+        Drop a complete 90–120 minute broadcast. StatMan samples the timeline with YOLO
+        (person + ball; OpenCV fallback) and returns SoccerNet-style action tags —
+        goals, shots, passes, tackles, and the rest as a film timeline.
       </p>
     </header>
 
     <main>
+      <p class="banner banner--info banner--sticky" id="film-banner">
+        Film tags live here. The locked match sheet — xG, PPDA, pass accuracy, progressive
+        passes, aerial duels — is on
+        <a href="/">open-data Match</a> or
+        <a href="/import">StatsBomb event import</a>.
+      </p>
+
       <section class="section">
         <div class="section__head">
           <h2>Full-game file</h2>
-          <p>MP4 / MKV / MOV up to 4&nbsp;GB. Processing runs in the background and can take a while on CPU.</p>
+          <p>
+            MP4 / MKV / MOV up to 4&nbsp;GB. Uploads in 8&nbsp;MB chunks with live progress,
+            automatic retries, and resume if a chunk fails — keep this tab open.
+            Detector: <code id="detector-status">checking…</code>
+          </p>
         </div>
+        <p class="hint">
+          Tip: a 90′ match at 720p H.264 is usually ~1–2&nbsp;GB. If the bar stalls, leave the
+          tab open — failed chunks retry; click upload again with the same file to resume.
+        </p>
         <form id="upload-form" class="upload-form">
           <label class="file-drop" for="file-input">
-            <input id="file-input" name="file" type="file" accept="video/*" required />
+            <input id="file-input" name="file" type="file" accept="video/mp4,video/x-matroska,video/quicktime,video/*" required />
             <span id="file-label">Choose full-match video…</span>
           </label>
           <div class="match-bar">
@@ -55,7 +71,10 @@
               </select>
             </label>
             <button id="upload-btn" class="btn btn--primary" type="submit">
-              Upload &amp; spot full match
+              Upload &amp; tag full match
+            </button>
+            <button id="cancel-btn" class="btn btn--ghost" type="button" hidden>
+              Cancel upload / job
             </button>
           </div>
         </form>
@@ -63,19 +82,24 @@
         <div id="progress-wrap" class="progress-wrap" hidden>
           <div class="progress-bar"><div id="progress-fill" class="progress-bar__fill"></div></div>
           <p id="progress-text" class="progress-text"></p>
+          <p id="eta-text" class="progress-text progress-text--eta"></p>
         </div>
       </section>
 
       <section id="results" class="section" hidden>
         <div class="section__head">
-          <h2 id="result-title">Results</h2>
+          <h2 id="result-title">Film tags</h2>
           <p id="result-meta"></p>
         </div>
-        <p id="quality-banner" class="banner banner--warn"></p>
+        <p id="quality-banner" class="banner banner--info"></p>
+        <div class="film-sheet-cta">
+          <a class="btn btn--primary" href="/import">Get the match sheet (StatsBomb)</a>
+          <a class="btn btn--ghost" href="/">Open-data Match view</a>
+        </div>
         <div id="totals" class="stat-grid"></div>
         <div class="section__head" style="margin-top: 2rem">
           <h2>Label counts</h2>
-          <p>SoccerNet ball-action classes across the full match.</p>
+          <p>SoccerNet ball-action classes spotted on this broadcast.</p>
         </div>
         <div class="table-wrap">
           <table id="label-table">
@@ -109,7 +133,7 @@
 
       <section class="section">
         <div class="section__head">
-          <h2>Recent uploads</h2>
+          <h2>Recent film jobs</h2>
           <p>Jobs stored on this machine under <code>.data/videos/</code>.</p>
         </div>
         <div class="table-wrap">
@@ -121,6 +145,7 @@
                 <th>Duration</th>
                 <th>Status</th>
                 <th>Events</th>
+                <th>ETA</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -131,8 +156,9 @@
 
     <footer class="footer">
       <p>
-        Video spotting is approximate. For provider-grade xG, PPDA, aerials and progressive
-        passes, use the StatsBomb / SPADL match and season views.
+        Need xG, PPDA, pass accuracy, progressive passes, or aerial duels?
+        Use the <a href="/">Match</a> sheet or
+        <a href="/import">import StatsBomb JSON</a> — those metrics are event-derived, not film tags.
       </p>
     </footer>
 

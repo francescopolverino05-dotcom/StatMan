@@ -25,7 +25,8 @@
         <div class="cta">
           <a class="btn btn--primary" href="#match">Load demo match</a>
           <a class="btn btn--ghost" href="/season">Season view</a>
-          <a class="btn btn--ghost" href="/video">Upload full match</a>
+          <a class="btn btn--ghost" href="/video">Film tags</a>
+          <a class="btn btn--ghost" href="/import">Import events</a>
         </div>
       </div>
     </header>
@@ -86,24 +87,60 @@
         </div>
       </section>
 
+      <section id="keepers" class="section section--keepers" hidden>
+        <div class="section__head">
+          <h2>Goalkeepers</h2>
+          <p>Shots faced, saves, save %, and keeper passing.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="keeper-table">
+            <thead>
+              <tr>
+                <th>Keeper</th>
+                <th>Team</th>
+                <th>Shots faced</th>
+                <th>SoT faced</th>
+                <th>Goals conc.</th>
+                <th>Saves</th>
+                <th>Save %</th>
+                <th>Passes / acc.</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
       <section id="players" class="section section--players" hidden>
         <div class="section__head">
           <h2>Player sheet</h2>
-          <p>Sorted by xG, then passing volume.</p>
+          <p>Individual match stats — sorted by xG, then passing volume.</p>
         </div>
-        <div class="table-wrap">
-          <table id="player-table">
+        <div class="table-wrap table-wrap--wide">
+          <table id="player-table" class="player-sheet">
             <thead>
               <tr>
                 <th>Player</th>
                 <th>Team</th>
-                <th>xG</th>
-                <th>Shots</th>
+                <th>Passes</th>
                 <th>Pass %</th>
-                <th>Prog.</th>
+                <th>Prog</th>
+                <th>Key</th>
+                <th>Shots</th>
+                <th>SoT</th>
+                <th>G</th>
+                <th>xG</th>
                 <th>Tkl</th>
                 <th>Int</th>
-                <th>Aerial</th>
+                <th>Rec</th>
+                <th>Clr</th>
+                <th>Blk</th>
+                <th>Duels</th>
+                <th>Fouls</th>
+                <th>Lost</th>
+                <th>Saves</th>
+                <th>Yel</th>
+                <th>Red</th>
               </tr>
             </thead>
             <tbody></tbody>
