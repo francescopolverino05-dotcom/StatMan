@@ -140,6 +140,7 @@ export function catalogSections(team) {
     {
       title: "Defence",
       rows: [
+        ["Tackles", fmt(d.tackles ?? team.tackles, 0)],
         ["Interceptions", fmt(d.interceptions ?? team.interceptions, 0)],
         ["Recoveries", fmt(d.recoveries ?? team.recoveries, 0)],
         ["High recoveries", fmt(d.high_recoveries ?? team.high_recoveries, 0)],

@@ -31,15 +31,16 @@
       <p class="lede">
         Drop a complete 90–120 minute broadcast. StatMan samples the whole timeline
         with a YOLO person/ball model (OpenCV fallback) and tags SoccerNet-style actions.
-        Counts are approximate — not Opta or StatsBomb. For real stats from a game you have,
-        use <a href="/import">event-data import</a>.
+        Counts are approximate film tags — not a stats sheet. For provider-grade numbers,
+        <a href="/import">import StatsBomb JSON</a>.
       </p>
     </header>
 
     <main>
       <p class="banner banner--warn banner--sticky" id="approx-banner">
-        This is approximate. Do not trust the counts. Video tags are film workflow only —
-        not provider-grade xG, PPDA, possession, or progressive passes.
+        This is approximate film tagging — do not trust the counts. YOLO finds people/ball;
+        action labels stay heuristic. For real match stats use
+        <a href="/import">StatsBomb event import</a>.
       </p>
 
       <section class="section">

@@ -222,6 +222,10 @@ select {
   font-size: 0.95rem;
 }
 
+.status.is-warn {
+  color: var(--warn);
+}
+
 .status.is-error {
   color: var(--warn);
 }

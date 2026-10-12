@@ -160,6 +160,7 @@ def import_statsbomb(
         "lineups_filename": Path(lineups_filename).name if lineups_filename else None,
         "match_filename": Path(match_filename).name if match_filename else None,
         "quality": "provider",
+        "recommended": True,
     }
     _persist_import(import_id, stats, format_name="statsbomb")
     return {"import_id": import_id, "format": "statsbomb", "stats": stats}
@@ -250,17 +251,31 @@ def import_opta_f24(
         actions=actions,
     )
     stats = compute_match_stats(bundle)
+    warning = (
+        "Opta F24 import is limited. The full match sheet (shots breakdown, recoveries, "
+        "GK sheet, corners/offsides splits, etc.) is defined on StatsBomb event names. "
+        "Expect many catalog fields to be 0 or SPADL-only. Prefer StatsBomb events JSON."
+    )
     stats["source"] = {
         "provider": "Opta",
         "dataset": "imported-f24",
-        "schema": "SPADL via socceraction",
+        "schema": "SPADL via socceraction (partial catalog)",
         "import_id": import_id,
         "import_format": "opta_f24",
         "events_filename": Path(events_filename).name,
-        "quality": "provider",
+        "quality": "partial",
+        "recommended": False,
+        "warning": warning,
     }
+    stats["warnings"] = [warning]
     _persist_import(import_id, stats, format_name="opta_f24")
-    return {"import_id": import_id, "format": "opta_f24", "stats": stats}
+    return {
+        "import_id": import_id,
+        "format": "opta_f24",
+        "stats": stats,
+        "warning": warning,
+        "recommended_format": "statsbomb",
+    }
 
 
 def import_events_auto(

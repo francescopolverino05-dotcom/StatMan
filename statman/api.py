@@ -45,9 +45,9 @@ app = FastAPI(
         "team match sheets, and player leaderboards. Pitch maps (mplsoccer) cover "
         "shots with xG, progressive passes, and tackle/interception locations. "
         "Video endpoints accept a full-match broadcast upload and return "
-        "approximate SoccerNet-style action tags (YOLO person/ball when available; "
-        "not provider-grade). Event-data import accepts StatsBomb/Opta JSON for "
-        "real match stats from a game you already have."
+        "approximate SoccerNet-style film tags (YOLO person/ball when available; "
+        "not a stats sheet). Event-data import prefers StatsBomb JSON for the locked "
+        "match catalog; Opta F24 is accepted but only partially fills the sheet."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -321,13 +321,16 @@ def api_imports(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
 
 @app.post("/api/imports")
 async def api_import_events(
-    events: UploadFile = File(..., description="StatsBomb events JSON or Opta F24 JSON"),
+    events: UploadFile = File(
+        ...,
+        description="StatsBomb events JSON (recommended) or Opta F24 JSON (partial catalog)",
+    ),
     lineups: UploadFile | None = File(None, description="Optional StatsBomb lineups JSON"),
     match: UploadFile | None = File(None, description="Optional StatsBomb match JSON"),
     game_id: int | None = Form(None),
     home_team_id: int | None = Form(None),
 ) -> dict[str, Any]:
-    """Import StatsBomb or Opta event JSON and return SPADL match stats."""
+    """Import event JSON. Prefer StatsBomb for the full locked sheet; Opta is partial."""
     if not events.filename:
         raise HTTPException(status_code=400, detail="Missing events filename")
     try:

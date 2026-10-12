@@ -102,6 +102,7 @@ function renderMatch(data) {
       <td>${fmt(p.shots_on_target, 0)}</td>
       <td>${fmt(p.goals, 0)}</td>
       <td>${fmt(p.xg, 2)}</td>
+      <td>${fmt(p.tackles, 0)}</td>
       <td>${fmt(p.interceptions, 0)}</td>
       <td>${fmt(p.recoveries, 0)}</td>
       <td>${fmt(p.clearances, 0)}</td>

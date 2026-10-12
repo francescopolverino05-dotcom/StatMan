@@ -64,10 +64,12 @@ Team boards on `/` and `/import` collect the full match sheet from StatsBomb eve
 | Match | Goals, possession %, fouls committed/won, yellow/red cards, offsides & corners (1H/2H/total), free kicks, goal kicks, throw-ins |
 | Attack | xG, shots, SoT, shot accuracy %, blocked/missed, inside/outside box, headed shots, key passes, into final third & into box (completed/attempted) |
 | Passes | Open-play passes completed/attempted & accuracy, progressive (c/a), crosses, long balls, through balls |
-| Defence | Interceptions, recoveries, high recoveries, balls lost, blocks, clearances, ground/aerial duels (won/total), PPDA |
+| Defence | Tackles, interceptions, recoveries, high recoveries, balls lost, blocks, clearances, ground/aerial duels (won/total), PPDA |
 | Goalkeeper | Shots faced, shots on target faced, goals conceded, saves, save %, passes / accurate |
 
-Definitions ship on every `/api/matches/{id}/stats` response. Through-balls stay `0` when the feed omits `through_ball` (common on open data).
+Definitions ship on every `/api/matches/{id}/stats` response (`catalog_version`, currently `statsbomb-sheet-v1`). Through-balls stay `0` when the feed omits `through_ball` (common on open data). Belgium–England (`8657`) is pinned as a regression fixture under `tests/fixtures/`.
+
+**Import:** StatsBomb JSON is the recommended provider path. Opta F24 is accepted but only partially fills the catalog.
 
 ### Full-match video (approximate)
 

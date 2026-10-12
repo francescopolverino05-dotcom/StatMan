@@ -38,9 +38,22 @@ function renderStats(payload) {
     `game ${match.game_id ?? "—"}`,
     stats.source?.import_format || stats.source?.provider,
     payload.import_id ? `import ${payload.import_id}` : null,
+    stats.catalog_version ? `catalog ${stats.catalog_version}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
+
+  const warn =
+    payload.warning ||
+    stats.source?.warning ||
+    (Array.isArray(stats.warnings) && stats.warnings[0]) ||
+    "";
+  if (warn) {
+    setStatus(warn, { error: false });
+    statusEl.classList.add("is-warn");
+  } else {
+    statusEl.classList.remove("is-warn");
+  }
 
   const teams = stats.teams || [];
   const home = teams.find((t) => t.team_id === match.home_team_id) || teams[0];
@@ -69,6 +82,7 @@ function renderStats(payload) {
       <td>${fmt(p.shots_on_target, 0)}</td>
       <td>${fmt(p.goals, 0)}</td>
       <td>${fmt(p.xg, 2)}</td>
+      <td>${fmt(p.tackles, 0)}</td>
       <td>${fmt(p.interceptions, 0)}</td>
       <td>${fmt(p.recoveries, 0)}</td>
       <td>${fmt(p.clearances, 0)}</td>

@@ -18,6 +18,9 @@ PENALTY_BOX_X = FIELD_LENGTH - 16.5
 # PPDA zone: opponent passes in their own 60% of the pitch.
 PPDA_OWN_ZONE_X = 0.6 * FIELD_LENGTH
 
+# Bump when locked catalog definitions or counting rules change.
+CATALOG_VERSION = "statsbomb-sheet-v1"
+
 CATALOG_DEFINITIONS: dict[str, str] = {
     "goals": "Shot events with outcome Goal (StatsBomb).",
     "possession_pct": "Share of StatsBomb possession-chain duration by team (full match).",
@@ -61,6 +64,7 @@ CATALOG_DEFINITIONS: dict[str, str] = {
         "Pass.through_ball or technique Through Ball when the feed provides it "
         "(often 0 on open data)."
     ),
+    "tackles": "SPADL tackle actions (socceraction conversion of StatsBomb duels/tackles).",
     "interceptions": "StatsBomb Interception events.",
     "recoveries": "StatsBomb Ball Recovery events.",
     "high_recoveries": "Ball recoveries with location in the attacking final third (x≥80).",
@@ -117,8 +121,11 @@ def compute_match_stats(bundle: MatchBundle) -> dict[str, Any]:
             "dataset": "open-data",
             "attribution": "Data provided by StatsBomb. See https://github.com/statsbomb/open-data",
             "schema": "SPADL via socceraction + StatsBomb event catalog",
+            "catalog_version": CATALOG_VERSION,
+            "catalog_locked": True,
         },
         "definitions": dict(CATALOG_DEFINITIONS),
+        "catalog_version": CATALOG_VERSION,
         "match": {
             "game_id": bundle.game_id,
             "competition": bundle.game.get("competition_name"),
@@ -253,6 +260,9 @@ def _team_stats(
             prog_attempted=prog_attempted,
             interceptions=interceptions,
             clearances=clearances,
+            tackles=int((team_actions["type_name"] == "tackle").sum())
+            if not team_actions.empty
+            else 0,
             ppda=ppda,
         ),
     }
@@ -270,6 +280,7 @@ def _sections_view(
     prog_attempted: int,
     interceptions: int,
     clearances: int,
+    tackles: int,
     ppda: float | None,
 ) -> dict[str, dict[str, Any]]:
     """Grouped view for UIs that want Match / Attack / Passes / Defence blocks."""
@@ -317,6 +328,7 @@ def _sections_view(
             "through_balls_total": catalog["through_balls_total"],
         },
         "defence": {
+            "tackles": tackles,
             "interceptions": interceptions,
             "recoveries": catalog["recoveries"],
             "high_recoveries": catalog["high_recoveries"],

@@ -29,23 +29,27 @@
       <p class="eyebrow">Provider event data</p>
       <h1>Import a match you have</h1>
       <p class="lede">
-        Upload StatsBomb events JSON (and optional lineups / match metadata) or Opta F24 JSON.
-        StatMan converts to SPADL and returns possession, xG, PPDA, progressive passes, and the rest —
-        the same path as open data, for a game you already collected.
+        Upload <strong>StatsBomb events JSON</strong> (recommended) with optional lineups / match metadata.
+        StatMan converts to SPADL and returns the full locked match sheet — possession, xG, PPDA,
+        progressive passes, GK stats, and the rest.
       </p>
     </header>
 
     <main>
       <p class="banner banner--ok">
-        This path uses real event data. Prefer it over video spotting when you have StatsBomb or Opta JSON.
+        StatsBomb JSON recommended. This is the provider path for real match stats — not video spotting.
+      </p>
+      <p class="banner banner--warn">
+        Opta / StatsPerform F24 is accepted but limited: many sheet fields stay empty because the
+        catalog is defined on StatsBomb event names. Use StatsBomb when you can.
       </p>
 
       <section class="section">
         <div class="section__head">
           <h2>Event file</h2>
           <p>
-            StatsBomb open-data <code>events/{match_id}.json</code>, or Opta / StatsPerform F24 JSON.
-            Lineups recommended for StatsBomb; match JSON optional.
+            Prefer StatsBomb open-data <code>events/{match_id}.json</code> (+ lineups).
+            Opta F24 JSON works only for a partial SPADL subset.
           </p>
         </div>
         <form id="import-form" class="upload-form">
@@ -100,6 +104,7 @@
                 <th>SoT</th>
                 <th>G</th>
                 <th>xG</th>
+                <th>Tkl</th>
                 <th>Int</th>
                 <th>Rec</th>
                 <th>Clr</th>
