@@ -93,16 +93,25 @@ function renderMatch(data) {
       (p, i) => `
     <tr style="animation-delay:${Math.min(i, 12) * 30}ms">
       <td>${p.player_name || "—"}</td>
-      <td>${p.team_name}</td>
-      <td>${fmt(p.xg, 3)}</td>
-      <td>${fmt(p.shots, 0)}</td>
-      <td>${fmt(p.shots_on_target, 0)}</td>
-      <td>${fmt(p.key_passes, 0)}</td>
+      <td>${p.team_name || "—"}</td>
+      <td>${fmt(p.passes_attempted ?? p.passes, 0)}</td>
       <td>${p.pass_accuracy == null ? "—" : `${fmt(p.pass_accuracy)}%`}</td>
       <td>${fmt(p.progressive_passes, 0)}</td>
+      <td>${fmt(p.key_passes, 0)}</td>
+      <td>${fmt(p.shots, 0)}</td>
+      <td>${fmt(p.shots_on_target, 0)}</td>
+      <td>${fmt(p.goals, 0)}</td>
+      <td>${fmt(p.xg, 2)}</td>
       <td>${fmt(p.interceptions, 0)}</td>
       <td>${fmt(p.recoveries, 0)}</td>
-      <td>${fmt(p.aerials_won, 0)}/${fmt(p.aerials_lost, 0)}</td>
+      <td>${fmt(p.clearances, 0)}</td>
+      <td>${fmt(p.blocks, 0)}</td>
+      <td>${fmt(p.duels_won, 0)}/${fmt(p.duels_total, 0)}</td>
+      <td>${fmt(p.fouls ?? p.fouls_committed, 0)}</td>
+      <td>${fmt(p.balls_lost, 0)}</td>
+      <td>${fmt(p.saves ?? p.gk_saves, 0)}</td>
+      <td>${fmt(p.yellow_cards, 0)}</td>
+      <td>${fmt(p.red_cards, 0)}</td>
     </tr>`
     )
     .join("");

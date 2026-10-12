@@ -381,6 +381,8 @@ def _player_stats(
             if pev["player_name"].notna().any():
                 name = pev["player_name"].dropna().iloc[0]
 
+        duels_won = catalog["ground_duels_won"] + catalog["aerials_won"]
+        duels_total = catalog["ground_duels_total"] + catalog["aerials_total"]
         rows.append(
             {
                 "player_id": int(player_id),
@@ -392,6 +394,7 @@ def _player_stats(
                 "shots": catalog["shots_raw"],
                 "shots_on_target": catalog["shots_on_target"],
                 "key_passes": catalog["key_passes"],
+                "passes": catalog["open_passes_attempted"],
                 "passes_attempted": catalog["open_passes_attempted"],
                 "passes_completed": catalog["open_passes_completed"],
                 "pass_accuracy": catalog["open_pass_accuracy"],
@@ -403,6 +406,14 @@ def _player_stats(
                 "clearances": catalog["clearances_raw"],
                 "recoveries": catalog["recoveries"],
                 "blocks": catalog["blocks"],
+                "fouls": catalog["fouls_committed"],
+                "fouls_committed": catalog["fouls_committed"],
+                "fouls_won": catalog["fouls_won"],
+                "balls_lost": catalog["balls_lost"],
+                "yellow_cards": catalog["yellow_cards"],
+                "red_cards": catalog["red_cards"],
+                "duels_won": duels_won,
+                "duels_total": duels_total,
                 "gk_saves": catalog["gk_saves"],
                 "shots_faced": catalog["shots_faced"],
                 "shots_on_target_faced": catalog["shots_on_target_faced"],
@@ -420,6 +431,7 @@ def _player_stats(
                 ),
                 "aerials_won": catalog["aerials_won"],
                 "aerials_lost": catalog["aerials_lost"],
+                "aerials_total": catalog["aerials_total"],
                 "ground_duels_won": catalog["ground_duels_won"],
                 "ground_duels_total": catalog["ground_duels_total"],
             }

@@ -56,20 +56,29 @@ function renderStats(payload) {
   `;
 
   playerBody.innerHTML = (stats.players || [])
-    .slice(0, 24)
     .map(
       (p) => `
     <tr>
       <td>${p.player_name || p.player_id}</td>
       <td>${p.team_name || "—"}</td>
-      <td>${fmt(p.xg, 2)}</td>
+      <td>${fmt(p.passes_attempted ?? p.passes, 0)}</td>
+      <td>${p.pass_accuracy == null ? "—" : `${fmt(p.pass_accuracy)}%`}</td>
+      <td>${fmt(p.progressive_passes, 0)}</td>
+      <td>${fmt(p.key_passes, 0)}</td>
       <td>${fmt(p.shots, 0)}</td>
       <td>${fmt(p.shots_on_target, 0)}</td>
-      <td>${fmt(p.key_passes, 0)}</td>
-      <td>${fmt(p.passes_attempted, 0)}</td>
-      <td>${fmt(p.progressive_passes, 0)}</td>
+      <td>${fmt(p.goals, 0)}</td>
+      <td>${fmt(p.xg, 2)}</td>
       <td>${fmt(p.interceptions, 0)}</td>
-      <td>${fmt(p.gk_saves, 0)}</td>
+      <td>${fmt(p.recoveries, 0)}</td>
+      <td>${fmt(p.clearances, 0)}</td>
+      <td>${fmt(p.blocks, 0)}</td>
+      <td>${fmt(p.duels_won, 0)}/${fmt(p.duels_total, 0)}</td>
+      <td>${fmt(p.fouls ?? p.fouls_committed, 0)}</td>
+      <td>${fmt(p.balls_lost, 0)}</td>
+      <td>${fmt(p.saves ?? p.gk_saves, 0)}</td>
+      <td>${fmt(p.yellow_cards, 0)}</td>
+      <td>${fmt(p.red_cards, 0)}</td>
     </tr>`
     )
     .join("");

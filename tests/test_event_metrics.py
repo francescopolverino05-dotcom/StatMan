@@ -130,6 +130,30 @@ def test_shot_breakdown_and_set_pieces():
     assert cat["interceptions_raw"] == 1
 
 
+def test_player_catalog_includes_discipline_and_duels():
+    events = pd.DataFrame(
+        [
+            _row("Foul Committed", extra={"foul_committed": {"card": {"name": "Yellow Card"}}}),
+            _row("Miscontrol"),
+            _row(
+                "Duel",
+                extra={"duel": {"type": {"name": "Tackle"}, "outcome": {"name": "Won"}}},
+            ),
+            _row(
+                "Pass",
+                location=[50, 40],
+                extra={"pass": {"end_location": [70, 40], "shot_assist": True}},
+            ),
+        ]
+    )
+    cat = team_event_catalog(events)
+    assert cat["fouls_committed"] == 1
+    assert cat["yellow_cards"] == 1
+    assert cat["balls_lost"] == 1
+    assert cat["ground_duels_won"] == 1
+    assert cat["key_passes"] == 1
+
+
 def test_open_play_passes_and_progressive():
     events = pd.DataFrame(
         [
