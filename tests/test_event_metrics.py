@@ -58,7 +58,38 @@ def test_shot_breakdown_and_set_pieces():
             _row("Foul Committed", extra={"foul_committed": {"card": {"name": "Yellow Card"}}}),
             _row("Foul Won"),
             _row("Bad Behaviour", extra={"bad_behaviour": {"card": {"name": "Red Card"}}}),
-            _row("Goal Keeper", extra={"goalkeeper": {"type": {"name": "Shot Saved"}}}),
+            _row(
+                "Goal Keeper",
+                extra={"goalkeeper": {"type": {"name": "Shot Faced"}}},
+                player_id=1,
+            ),
+            _row(
+                "Goal Keeper",
+                extra={"goalkeeper": {"type": {"name": "Shot Saved"}}},
+                player_id=1,
+            ),
+            _row(
+                "Goal Keeper",
+                extra={"goalkeeper": {"type": {"name": "Goal Conceded"}}},
+                player_id=1,
+            ),
+            _row(
+                "Pass",
+                player_id=1,
+                location=[10, 40],
+                extra={"pass": {"type": {"name": "Goal Kick"}, "end_location": [40, 40]}},
+            ),
+            _row(
+                "Pass",
+                player_id=1,
+                location=[10, 40],
+                extra={
+                    "pass": {
+                        "end_location": [30, 40],
+                        "outcome": {"name": "Incomplete"},
+                    }
+                },
+            ),
             _row("Ball Recovery", location=[85, 40]),
             _row("Ball Recovery", location=[40, 40]),
             _row("Miscontrol"),
@@ -83,6 +114,14 @@ def test_shot_breakdown_and_set_pieces():
     assert cat["fouls_committed"] == 1
     assert cat["fouls_won"] == 1
     assert cat["gk_saves"] == 1
+    assert cat["saves"] == 1
+    assert cat["shots_faced"] == 3
+    assert cat["shots_on_target_faced"] == 2
+    assert cat["goals_conceded"] == 1
+    assert cat["save_pct"] == 50.0
+    assert cat["gk_passes_attempted"] == 2
+    assert cat["gk_passes_completed"] == 1
+    assert cat["gk_pass_accuracy"] == 50.0
     assert cat["high_recoveries"] == 1
     assert cat["recoveries"] == 2
     assert cat["balls_lost"] == 1

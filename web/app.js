@@ -6,8 +6,10 @@ const statusEl = document.getElementById("status");
 const boardSection = document.getElementById("board");
 const mapsSection = document.getElementById("maps");
 const playersSection = document.getElementById("players");
+const keepersSection = document.getElementById("keepers");
 const teamBoard = document.getElementById("team-board");
 const playerBody = document.querySelector("#player-table tbody");
+const keeperBody = document.querySelector("#keeper-table tbody");
 const scoreline = document.getElementById("scoreline");
 const matchMeta = document.getElementById("match-meta");
 const defsEl = document.getElementById("definitions");
@@ -61,6 +63,30 @@ function renderMatch(data) {
     </div>
     ${renderTeamCatalogHtml(away, "Away")}
   `;
+
+  const keepers = players.filter(
+    (p) => p.is_goalkeeper || p.shots_faced || p.saves || p.goals_conceded
+  );
+  if (keeperBody) {
+    keeperBody.innerHTML = keepers
+      .map(
+        (p) => `
+      <tr>
+        <td>${p.player_name || "—"}</td>
+        <td>${p.team_name}</td>
+        <td>${fmt(p.shots_faced, 0)}</td>
+        <td>${fmt(p.shots_on_target_faced, 0)}</td>
+        <td>${fmt(p.goals_conceded, 0)}</td>
+        <td>${fmt(p.saves, 0)}</td>
+        <td>${p.save_pct == null ? "—" : `${fmt(p.save_pct)}%`}</td>
+        <td>${fmt(p.gk_passes_completed, 0)} / ${fmt(p.gk_passes_attempted, 0)}${
+          p.gk_pass_accuracy == null ? "" : ` (${fmt(p.gk_pass_accuracy)}%)`
+        }</td>
+      </tr>`
+      )
+      .join("");
+  }
+  if (keepersSection) keepersSection.hidden = keepers.length === 0;
 
   playerBody.innerHTML = players
     .map(

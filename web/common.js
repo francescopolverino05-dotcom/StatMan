@@ -51,12 +51,19 @@ export function fmtPair(completed, attempted) {
 }
 
 /** Grouped catalog rows for match / import team boards. */
+export function fmtPassesAccurate(completed, attempted, accuracy) {
+  if (attempted == null) return "—";
+  const acc = accuracy == null ? "" : ` (${fmt(accuracy)}%)`;
+  return `${fmt(completed, 0)} / ${fmt(attempted, 0)}${acc}`;
+}
+
 export function catalogSections(team) {
   const s = team.sections || {};
   const m = s.match || team;
   const a = s.attack || team;
   const p = s.passes || team;
   const d = s.defence || team;
+  const g = s.goalkeeper || team;
   return [
     {
       title: "Match",
@@ -139,7 +146,6 @@ export function catalogSections(team) {
         ["Balls lost", fmt(d.balls_lost ?? team.balls_lost, 0)],
         ["Blocks", fmt(d.blocks ?? team.blocks, 0)],
         ["Clearances", fmt(d.clearances ?? team.clearances, 0)],
-        ["GK saves", fmt(d.gk_saves ?? team.gk_saves, 0)],
         [
           "Ground duels (w / tot)",
           fmtPair(d.ground_duels_won ?? team.ground_duels_won, d.ground_duels_total ?? team.ground_duels_total),
@@ -149,6 +155,24 @@ export function catalogSections(team) {
           fmtPair(d.aerials_won ?? team.aerials_won, d.aerials_total ?? team.aerials_total),
         ],
         ["PPDA", fmt(d.ppda ?? team.ppda, 2)],
+      ],
+    },
+    {
+      title: "Goalkeeper",
+      rows: [
+        ["Shots faced", fmt(g.shots_faced ?? team.shots_faced, 0)],
+        ["Shots on target faced", fmt(g.shots_on_target_faced ?? team.shots_on_target_faced, 0)],
+        ["Goals conceded", fmt(g.goals_conceded ?? team.goals_conceded, 0)],
+        ["Saves", fmt(g.saves ?? team.saves ?? team.gk_saves, 0)],
+        ["Save %", fmtPct(g.save_pct ?? team.save_pct)],
+        [
+          "Passes / accurate",
+          fmtPassesAccurate(
+            g.gk_passes_completed ?? team.gk_passes_completed,
+            g.gk_passes_attempted ?? team.gk_passes_attempted,
+            g.gk_pass_accuracy ?? team.gk_pass_accuracy
+          ),
+        ],
       ],
     },
   ];

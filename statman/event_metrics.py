@@ -110,7 +110,7 @@ def team_event_catalog(team_events: pd.DataFrame) -> dict[str, Any]:
     balls_lost = int((type_name.isin(["Miscontrol", "Dispossessed", "Error"])).sum())
     blocks = int((type_name == "Block").sum())
     clearances = int((type_name == "Clearance").sum())
-    gk_saves = _gk_saves(ev)
+    gk = _goalkeeper_stats(ev)
 
     # —— Duels ——
     ground_won, ground_total = _ground_duels(ev)
@@ -158,7 +158,15 @@ def team_event_catalog(team_events: pd.DataFrame) -> dict[str, Any]:
         "balls_lost": balls_lost,
         "blocks": blocks,
         "clearances_raw": clearances,
-        "gk_saves": gk_saves,
+        "gk_saves": gk["saves"],
+        "shots_faced": gk["shots_faced"],
+        "shots_on_target_faced": gk["shots_on_target_faced"],
+        "goals_conceded": gk["goals_conceded"],
+        "saves": gk["saves"],
+        "save_pct": gk["save_pct"],
+        "gk_passes_attempted": gk["passes_attempted"],
+        "gk_passes_completed": gk["passes_completed"],
+        "gk_pass_accuracy": gk["pass_accuracy"],
         "ground_duels_won": ground_won,
         "ground_duels_total": ground_total,
         "aerials_won": aerial_won,
@@ -211,6 +219,14 @@ def _empty_catalog() -> dict[str, Any]:
         "blocks": 0,
         "clearances_raw": 0,
         "gk_saves": 0,
+        "shots_faced": 0,
+        "shots_on_target_faced": 0,
+        "goals_conceded": 0,
+        "saves": 0,
+        "save_pct": None,
+        "gk_passes_attempted": 0,
+        "gk_passes_completed": 0,
+        "gk_pass_accuracy": None,
         "ground_duels_won": 0,
         "ground_duels_total": 0,
         "aerials_won": 0,
@@ -448,14 +464,84 @@ def _high_recoveries(events: pd.DataFrame) -> int:
 
 
 def _gk_saves(events: pd.DataFrame) -> int:
-    n = 0
+    return int(_goalkeeper_stats(events)["saves"])
+
+
+_GK_SHOT_FACED_TYPES = {
+    "Shot Faced",
+    "Shot Saved",
+    "Goal Conceded",
+    "Penalty Faced",
+    "Penalty Saved",
+    "Saved To Post",
+}
+_GK_SAVE_TYPES = {"Shot Saved", "Penalty Saved", "Saved To Post"}
+_GK_ON_TARGET_TYPES = {"Shot Saved", "Goal Conceded", "Penalty Saved", "Saved To Post"}
+_GK_GOAL_TYPES = {"Goal Conceded", "Penalty Conceded"}
+
+
+def _goalkeeper_stats(events: pd.DataFrame) -> dict[str, Any]:
+    """Keeper sheet from StatsBomb Goal Keeper + that keeper's Pass events.
+
+    - shots_faced: Shot Faced + Shot Saved + Goal Conceded (+ penalty variants)
+    - shots_on_target_faced: saves + goals conceded
+    - save_pct: saves / shots on target faced
+    - passes: all Pass events by players who logged Goal Keeper actions
+    """
+    if events is None or events.empty:
+        return {
+            "shots_faced": 0,
+            "shots_on_target_faced": 0,
+            "goals_conceded": 0,
+            "saves": 0,
+            "save_pct": None,
+            "passes_attempted": 0,
+            "passes_completed": 0,
+            "pass_accuracy": None,
+        }
+
+    shots_faced = sot_faced = goals_conceded = saves = 0
+    keeper_ids: set[int] = set()
     for _, row in events.iterrows():
         if row.get("type_name") != "Goal Keeper":
             continue
+        if pd.notna(row.get("player_id")):
+            keeper_ids.add(int(row["player_id"]))
         gk = _extra(row).get("goalkeeper")
-        if isinstance(gk, dict) and _name(gk.get("type")) == "Shot Saved":
-            n += 1
-    return n
+        if not isinstance(gk, dict):
+            continue
+        gtype = _name(gk.get("type"))
+        if gtype in _GK_SHOT_FACED_TYPES:
+            shots_faced += 1
+        if gtype in _GK_ON_TARGET_TYPES:
+            sot_faced += 1
+        if gtype in _GK_SAVE_TYPES:
+            saves += 1
+        if gtype in _GK_GOAL_TYPES:
+            goals_conceded += 1
+
+    passes_attempted = passes_completed = 0
+    if keeper_ids:
+        for _, row in events.iterrows():
+            if row.get("type_name") != "Pass":
+                continue
+            if pd.isna(row.get("player_id")) or int(row["player_id"]) not in keeper_ids:
+                continue
+            p = _pass_block(row)
+            passes_attempted += 1
+            if _pass_complete(p):
+                passes_completed += 1
+
+    return {
+        "shots_faced": shots_faced,
+        "shots_on_target_faced": sot_faced,
+        "goals_conceded": goals_conceded,
+        "saves": saves,
+        "save_pct": _ratio(saves, sot_faced),
+        "passes_attempted": passes_attempted,
+        "passes_completed": passes_completed,
+        "pass_accuracy": _ratio(passes_completed, passes_attempted),
+    }
 
 
 def _ground_duels(events: pd.DataFrame) -> tuple[int, int]:

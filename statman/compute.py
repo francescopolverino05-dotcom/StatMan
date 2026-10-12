@@ -67,7 +67,19 @@ CATALOG_DEFINITIONS: dict[str, str] = {
     "balls_lost": "Miscontrol + Dispossessed + Error events.",
     "blocks": "StatsBomb Block events (defensive blocks).",
     "clearances": "StatsBomb Clearance events.",
-    "gk_saves": "Goal Keeper events with type Shot Saved.",
+    "gk_saves": "Goal Keeper events with type Shot Saved (alias of saves).",
+    "shots_faced": (
+        "Goal Keeper events: Shot Faced + Shot Saved + Goal Conceded "
+        "(+ penalty faced/saved variants)."
+    ),
+    "shots_on_target_faced": "Saves + goals conceded (on-target shots the keeper faced).",
+    "goals_conceded": "Goal Keeper events with type Goal Conceded / Penalty Conceded.",
+    "saves": "Goal Keeper events with type Shot Saved / Penalty Saved / Saved To Post.",
+    "save_pct": "Saves / shots on target faced × 100.",
+    "gk_passes": (
+        "All Pass events by players who logged Goal Keeper actions "
+        "(completed / attempted, with accuracy %)."
+    ),
     "ground_duels": "Non-aerial Duel + 50/50 + Dribble. Won / total.",
     "aerial_duels": (
         "Aerial Lost duels plus aerial_won flags on pass/shot/clearance. Won / total."
@@ -215,6 +227,14 @@ def _team_stats(
         "blocks": catalog["blocks"],
         "clearances": clearances,
         "gk_saves": catalog["gk_saves"],
+        "shots_faced": catalog["shots_faced"],
+        "shots_on_target_faced": catalog["shots_on_target_faced"],
+        "goals_conceded": catalog["goals_conceded"],
+        "saves": catalog["saves"],
+        "save_pct": catalog["save_pct"],
+        "gk_passes_attempted": catalog["gk_passes_attempted"],
+        "gk_passes_completed": catalog["gk_passes_completed"],
+        "gk_pass_accuracy": catalog["gk_pass_accuracy"],
         "tackles": int((team_actions["type_name"] == "tackle").sum()) if not team_actions.empty else 0,
         # Duels
         "ground_duels_won": catalog["ground_duels_won"],
@@ -310,6 +330,16 @@ def _sections_view(
             "aerials_total": catalog["aerials_total"],
             "ppda": ppda,
         },
+        "goalkeeper": {
+            "shots_faced": catalog["shots_faced"],
+            "shots_on_target_faced": catalog["shots_on_target_faced"],
+            "goals_conceded": catalog["goals_conceded"],
+            "saves": catalog["saves"],
+            "save_pct": catalog["save_pct"],
+            "gk_passes_attempted": catalog["gk_passes_attempted"],
+            "gk_passes_completed": catalog["gk_passes_completed"],
+            "gk_pass_accuracy": catalog["gk_pass_accuracy"],
+        },
     }
 
 
@@ -374,6 +404,20 @@ def _player_stats(
                 "recoveries": catalog["recoveries"],
                 "blocks": catalog["blocks"],
                 "gk_saves": catalog["gk_saves"],
+                "shots_faced": catalog["shots_faced"],
+                "shots_on_target_faced": catalog["shots_on_target_faced"],
+                "goals_conceded": catalog["goals_conceded"],
+                "saves": catalog["saves"],
+                "save_pct": catalog["save_pct"],
+                "gk_passes_attempted": catalog["gk_passes_attempted"],
+                "gk_passes_completed": catalog["gk_passes_completed"],
+                "gk_pass_accuracy": catalog["gk_pass_accuracy"],
+                "is_goalkeeper": bool(
+                    catalog["shots_faced"]
+                    or catalog["saves"]
+                    or catalog["goals_conceded"]
+                    or catalog["gk_passes_attempted"]
+                ),
                 "aerials_won": catalog["aerials_won"],
                 "aerials_lost": catalog["aerials_lost"],
                 "ground_duels_won": catalog["ground_duels_won"],
