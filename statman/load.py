@@ -105,50 +105,55 @@ def _find_game(loader: Any, game_id: int) -> dict[str, Any]:
 
 
 def list_demo_games(limit: int = 20) -> list[dict[str, Any]]:
-    """Return a short list of open World Cup 2018 games for the UI."""
+    """Return open World Cup 2018 games for the UI.
+
+    Always pins the default Belgium–England third-place match first so the
+    demo CTA and docs stay aligned with ``DEFAULT_GAME_ID``.
+    """
     from socceraction.data.statsbomb import StatsBombLoader
 
     loader = StatsBombLoader(getter="remote", creds={"user": None, "passwd": None})
     games = loader.games(DEFAULT_COMPETITION_ID, DEFAULT_SEASON_ID)
-    teams = {}
+
+    def _row_to_game(row: Any) -> dict[str, Any]:
+        return {
+            "game_id": int(row.game_id),
+            "game_date": str(row.game_date),
+            "home_team_id": int(row.home_team_id),
+            "away_team_id": int(row.away_team_id),
+            "home_score": int(row.home_score) if pd.notna(row.home_score) else None,
+            "away_score": int(row.away_score) if pd.notna(row.away_score) else None,
+            "competition": "FIFA World Cup",
+            "season": "2018",
+        }
+
     out: list[dict[str, Any]] = []
+    seen: set[int] = set()
+
+    # Pin the documented demo match first when it exists in this season.
+    default_hit = games[games["game_id"] == DEFAULT_GAME_ID]
+    if not default_hit.empty:
+        pinned = _row_to_game(default_hit.iloc[0])
+        out.append(pinned)
+        seen.add(pinned["game_id"])
+
     for row in games.sort_values("game_date").itertuples(index=False):
-        for tid, tname_attr in (
-            (int(row.home_team_id), "home_team_name"),
-            (int(row.away_team_id), "away_team_name"),
-        ):
-            if tid not in teams:
-                # teams() needs a game_id; resolve lazily from first lineup fetch below
-                pass
-        out.append(
-            {
-                "game_id": int(row.game_id),
-                "game_date": str(row.game_date),
-                "home_team_id": int(row.home_team_id),
-                "away_team_id": int(row.away_team_id),
-                "home_score": int(row.home_score) if pd.notna(row.home_score) else None,
-                "away_score": int(row.away_score) if pd.notna(row.away_score) else None,
-                "competition": "FIFA World Cup",
-                "season": "2018",
-            }
-        )
+        game_id = int(row.game_id)
+        if game_id in seen:
+            continue
+        out.append(_row_to_game(row))
+        seen.add(game_id)
         if len(out) >= limit:
             break
 
-    # Attach team names from one lineup fetch per unique team via first game
+    # Attach team names; always resolve names for the pinned demo match.
     if out:
-        first_id = out[0]["game_id"]
-        team_df = loader.teams(first_id)
-        # Build a fuller map by scanning a few games
-        name_map: dict[int, str] = {
-            int(r.team_id): str(r.team_name) for r in team_df.itertuples(index=False)
-        }
-        for g in out[1:12]:
-            for tid in (g["home_team_id"], g["away_team_id"]):
-                if tid not in name_map:
-                    tdf = loader.teams(g["game_id"])
-                    for r in tdf.itertuples(index=False):
-                        name_map[int(r.team_id)] = str(r.team_name)
+        name_map: dict[int, str] = {}
+        scan_ids = [out[0]["game_id"]] + [g["game_id"] for g in out[1:16]]
+        for gid in dict.fromkeys(scan_ids):
+            tdf = loader.teams(gid)
+            for r in tdf.itertuples(index=False):
+                name_map[int(r.team_id)] = str(r.team_name)
         for g in out:
             g["home_team"] = name_map.get(g["home_team_id"], str(g["home_team_id"]))
             g["away_team"] = name_map.get(g["away_team_id"], str(g["away_team_id"]))
