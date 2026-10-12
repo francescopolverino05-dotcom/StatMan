@@ -252,7 +252,8 @@ def ui_import() -> FileResponse:
 
 @app.get("/api/video/detector")
 def api_video_detector() -> dict[str, Any]:
-    return yolo_status()
+    """Report detector backend; loads YOLO on first call so the UI can show readiness."""
+    return yolo_status(ensure_loaded=True)
 
 
 @app.get("/api/video/jobs")

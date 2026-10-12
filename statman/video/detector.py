@@ -45,12 +45,15 @@ def detector_backend() -> str:
     return "yolo-or-opencv"  # decided on first frame
 
 
-def yolo_status() -> dict[str, Any]:
+def yolo_status(*, ensure_loaded: bool = False) -> dict[str, Any]:
+    if ensure_loaded:
+        _load_yolo()
     return {
         "available": _YOLO_MODEL is not None,
         "tried": _YOLO_TRIED,
         "error": _YOLO_ERROR,
         "backend": "yolo" if _YOLO_MODEL is not None else "opencv-hog",
+        "weights": str(_WEIGHTS) if _WEIGHTS.exists() else "yolov8n.pt",
     }
 
 
