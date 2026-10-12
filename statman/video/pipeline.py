@@ -16,6 +16,8 @@ from statman.video.stats_from_events import stats_from_video_events
 # Full-match broadcasts are large (often 1–3 GB at 720p).
 DEFAULT_MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024
 DEFAULT_SAMPLE_FPS = 0.5
+# Chunk size for resumable browser uploads (keeps each request small).
+DEFAULT_CHUNK_BYTES = 8 * 1024 * 1024
 
 _BUILD_LOCK = threading.Lock()
 _ACTIVE = False
@@ -26,13 +28,199 @@ APPROX_WARNING = (
 )
 
 
+def init_chunked_upload(
+    filename: str,
+    size_bytes: int,
+    *,
+    max_bytes: int = DEFAULT_MAX_UPLOAD_BYTES,
+    chunk_bytes: int = DEFAULT_CHUNK_BYTES,
+) -> dict[str, Any]:
+    """Create a queued job and empty file for resumable full-match upload."""
+    if size_bytes <= 0:
+        raise ValueError("size_bytes must be > 0")
+    if size_bytes > max_bytes:
+        raise ValueError(
+            f"File exceeds max upload size ({max_bytes // (1024**3)} GB). "
+            "Compress the match (e.g. 720p) or split is not supported — use a smaller file."
+        )
+    job_id = store.new_job_id()
+    dest = store.upload_path(job_id, filename)
+    dest.write_bytes(b"")
+    meta: dict[str, Any] = {
+        "job_id": job_id,
+        "status": "uploading",
+        "filename": Path(filename).name,
+        "video_path": str(dest),
+        "size_bytes": int(size_bytes),
+        "bytes_received": 0,
+        "chunk_bytes": int(chunk_bytes),
+        "created_at": time.time(),
+        "updated_at": time.time(),
+        "error": None,
+        "probe": None,
+        "cancel_requested": False,
+        "approximate": True,
+        "warning": APPROX_WARNING,
+        "progress": {
+            "stage": "uploading",
+            "pct": 0,
+            "bytes_received": 0,
+            "size_bytes": int(size_bytes),
+            "time_sec": 0,
+            "duration_sec": None,
+            "eta_sec": None,
+            "elapsed_sec": 0,
+            "approximate": True,
+        },
+        "scope": "full_match",
+        "detector": yolo_status(),
+    }
+    store.write_job(job_id, meta)
+    return {
+        **meta,
+        "chunk_bytes": int(chunk_bytes),
+        "max_bytes": max_bytes,
+    }
+
+
+def append_upload_chunk(
+    job_id: str,
+    data: bytes,
+    *,
+    offset: int | None = None,
+) -> dict[str, Any]:
+    """Append one chunk to an in-progress upload (sequential by default)."""
+    meta = store.read_job(job_id)
+    if meta is None:
+        raise FileNotFoundError(f"Unknown job_id={job_id}")
+    if meta.get("status") not in {"uploading", "queued"}:
+        raise ValueError(f"Job {job_id} is not accepting chunks (status={meta.get('status')})")
+    if meta.get("cancel_requested"):
+        raise ValueError("Upload was cancelled")
+
+    expected = int(meta.get("bytes_received") or 0)
+    if offset is not None and int(offset) != expected:
+        raise ValueError(
+            f"Chunk offset mismatch: expected {expected}, got {offset}. "
+            "Retry from the last acknowledged offset."
+        )
+    if not data:
+        raise ValueError("Empty chunk")
+
+    dest = Path(meta["video_path"])
+    size_bytes = int(meta.get("size_bytes") or 0)
+    if expected + len(data) > size_bytes:
+        raise ValueError(
+            f"Chunk would exceed declared size ({size_bytes} bytes). "
+            "Re-init the upload with the correct file size."
+        )
+
+    with dest.open("ab") as out:
+        out.write(data)
+
+    received = expected + len(data)
+    meta["bytes_received"] = received
+    meta["status"] = "uploading"
+    upload_pct = int(100 * received / size_bytes) if size_bytes else 0
+    upload_pct = min(max(upload_pct, 0), 100)
+    # Upload phase maps to 0–40% of the overall bar; spotting uses the rest.
+    meta["progress"] = {
+        "stage": "uploading",
+        "pct": int(upload_pct * 0.4),
+        "upload_pct": upload_pct,
+        "bytes_received": received,
+        "size_bytes": size_bytes,
+        "time_sec": 0,
+        "duration_sec": None,
+        "eta_sec": None,
+        "elapsed_sec": round(time.time() - float(meta.get("created_at") or time.time()), 1),
+        "approximate": True,
+    }
+    meta["updated_at"] = time.time()
+    store.write_job(job_id, meta)
+    return meta
+
+
+def finish_chunked_upload(
+    job_id: str,
+    *,
+    sample_fps: float = DEFAULT_SAMPLE_FPS,
+    auto_start: bool = True,
+) -> dict[str, Any]:
+    """Mark a chunked upload complete and optionally start spotting."""
+    meta = store.read_job(job_id)
+    if meta is None:
+        raise FileNotFoundError(f"Unknown job_id={job_id}")
+    if meta.get("cancel_requested") or meta.get("status") == "cancelled":
+        raise ValueError("Upload was cancelled")
+
+    dest = Path(meta["video_path"])
+    actual = dest.stat().st_size if dest.exists() else 0
+    expected = int(meta.get("size_bytes") or 0)
+    if actual == 0:
+        raise ValueError("Upload file is empty")
+    if expected and actual != expected:
+        raise ValueError(
+            f"Upload incomplete: received {actual} of {expected} bytes. "
+            "Continue sending chunks, then finish again."
+        )
+
+    meta["bytes_received"] = actual
+    meta["size_bytes"] = actual
+    meta["status"] = "queued"
+    meta["progress"] = {
+        "stage": "queued",
+        "pct": 40,
+        "upload_pct": 100,
+        "bytes_received": actual,
+        "size_bytes": actual,
+        "time_sec": 0,
+        "duration_sec": None,
+        "eta_sec": None,
+        "elapsed_sec": round(time.time() - float(meta.get("created_at") or time.time()), 1),
+        "approximate": True,
+    }
+    meta["updated_at"] = time.time()
+    store.write_job(job_id, meta)
+    if auto_start:
+        return start_job(job_id, sample_fps=sample_fps)
+    return meta
+
+
+def abort_upload(job_id: str) -> dict[str, Any]:
+    """Cancel an in-progress chunked upload and remove the partial file."""
+    meta = store.read_job(job_id)
+    if meta is None:
+        raise FileNotFoundError(f"Unknown job_id={job_id}")
+    if meta.get("status") in {"running", "done"}:
+        return cancel_job(job_id)
+    path = Path(meta.get("video_path") or "")
+    if path.exists():
+        path.unlink(missing_ok=True)
+    meta["cancel_requested"] = True
+    meta["status"] = "cancelled"
+    meta["error"] = "Upload cancelled by user"
+    meta["progress"] = {
+        **(meta.get("progress") or {}),
+        "stage": "cancelled",
+        "approximate": True,
+    }
+    meta["updated_at"] = time.time()
+    store.write_job(job_id, meta)
+    return meta
+
+
 def upload_video(
     fileobj: BinaryIO,
     filename: str,
     *,
     max_bytes: int = DEFAULT_MAX_UPLOAD_BYTES,
 ) -> dict[str, Any]:
-    """Persist a full-game upload and create a queued job record."""
+    """Persist a full-game upload in one shot and create a queued job record.
+
+    Prefer ``init_chunked_upload`` / ``append_upload_chunk`` / ``finish_chunked_upload``
+    for multi-GB browser uploads (progress + retry).
+    """
     job_id = store.new_job_id()
     dest = store.upload_path(job_id, filename)
     written = 0
@@ -60,6 +248,7 @@ def upload_video(
         "filename": Path(filename).name,
         "video_path": str(dest),
         "size_bytes": written,
+        "bytes_received": written,
         "created_at": time.time(),
         "updated_at": time.time(),
         "error": None,
@@ -201,7 +390,8 @@ def _process(job_id: str, *, sample_fps: float) -> None:
         meta["detector"] = yolo_status()
         meta["progress"] = {
             "stage": "spotting",
-            "pct": 5,
+            "pct": 40,
+            "upload_pct": 100,
             "time_sec": 0,
             "duration_sec": duration or None,
             "eta_sec": None,
@@ -213,9 +403,10 @@ def _process(job_id: str, *, sample_fps: float) -> None:
         spotting_started = time.time()
 
         def on_progress(t: float, dur: float, n_events: int) -> None:
-            pct = 5
+            # Spotting owns 40→96% so chunked upload progress (0→40%) stays meaningful.
+            pct = 40
             if dur > 0:
-                pct = 5 + int(90 * min(t / dur, 1.0))
+                pct = 40 + int(56 * min(t / dur, 1.0))
             elapsed = time.time() - spotting_started
             frac = (t / dur) if dur and dur > 0 else 0.0
             eta = None
@@ -225,6 +416,7 @@ def _process(job_id: str, *, sample_fps: float) -> None:
             current["progress"] = {
                 "stage": "spotting",
                 "pct": pct,
+                "upload_pct": 100,
                 "time_sec": round(t, 1),
                 "duration_sec": round(dur, 1) if dur else duration or None,
                 "events_so_far": n_events,

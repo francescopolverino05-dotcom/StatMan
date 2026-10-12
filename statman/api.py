@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -28,9 +28,19 @@ from statman.season import (
     team_page,
     tournament_table,
 )
-from statman.video import cancel_job, get_job, list_jobs, start_job, upload_video
+from statman.video import (
+    abort_upload,
+    append_upload_chunk,
+    cancel_job,
+    finish_chunked_upload,
+    get_job,
+    init_chunked_upload,
+    list_jobs,
+    start_job,
+    upload_video,
+)
 from statman.video.detector import yolo_status
-from statman.video.pipeline import DEFAULT_SAMPLE_FPS
+from statman.video.pipeline import DEFAULT_CHUNK_BYTES, DEFAULT_SAMPLE_FPS
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -76,6 +86,9 @@ def api_root() -> dict[str, Any]:
             "season_team": "/api/seasons/{competition_id}/{season_id}/teams/{team_id}",
             "season_players": "/api/seasons/{competition_id}/{season_id}/players",
             "video_upload": "/api/video/jobs",
+            "video_upload_init": "POST /api/video/uploads",
+            "video_upload_chunk": "PUT /api/video/uploads/{job_id}/chunk",
+            "video_upload_finish": "POST /api/video/uploads/{job_id}/finish",
             "video_job": "/api/video/jobs/{job_id}",
             "video_cancel": "/api/video/jobs/{job_id}/cancel",
             "video_detector": "/api/video/detector",
@@ -262,13 +275,65 @@ def api_video_jobs(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
     return {"count": len(jobs), "jobs": jobs}
 
 
+@app.post("/api/video/uploads")
+async def api_video_upload_init(
+    filename: str = Form(...),
+    size_bytes: int = Form(..., ge=1),
+) -> dict[str, Any]:
+    """Start a resumable chunked upload for a full-match video."""
+    try:
+        return init_chunked_upload(filename, size_bytes, chunk_bytes=DEFAULT_CHUNK_BYTES)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/video/uploads/{job_id}/chunk")
+async def api_video_upload_chunk(
+    job_id: str,
+    request: Request,
+    offset: int = Query(..., ge=0),
+) -> dict[str, Any]:
+    """Append one binary chunk (raw body) at the given byte offset."""
+    data = await request.body()
+    try:
+        return append_upload_chunk(job_id, data, offset=offset)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/video/uploads/{job_id}/finish")
+def api_video_upload_finish(
+    job_id: str,
+    sample_fps: float = Query(DEFAULT_SAMPLE_FPS, ge=0.2, le=2.0),
+    auto_start: bool = Query(True),
+) -> dict[str, Any]:
+    """Finalize a chunked upload and optionally start approximate spotting."""
+    try:
+        return finish_chunked_upload(job_id, sample_fps=sample_fps, auto_start=auto_start)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/video/uploads/{job_id}")
+def api_video_upload_abort(job_id: str) -> dict[str, Any]:
+    """Abort an in-progress chunked upload."""
+    try:
+        return abort_upload(job_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.post("/api/video/jobs")
 async def api_video_upload(
     file: UploadFile = File(...),
     sample_fps: float = Query(DEFAULT_SAMPLE_FPS, ge=0.2, le=2.0),
     auto_start: bool = Query(True),
 ) -> dict[str, Any]:
-    """Upload a full-match video and optionally start approximate spotting."""
+    """One-shot upload (small files). Prefer chunked ``/api/video/uploads`` for full matches."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename")
     try:

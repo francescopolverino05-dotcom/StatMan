@@ -639,6 +639,14 @@ tbody tr:hover {
   letter-spacing: 0.06em;
 }
 
+.hint {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  max-width: 52ch;
+  line-height: 1.45;
+}
+
 .progress-wrap {
   margin-top: 1rem;
 }

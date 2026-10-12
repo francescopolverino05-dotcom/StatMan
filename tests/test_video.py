@@ -12,7 +12,15 @@ from statman.video.probe import probe_video
 from statman.video.spotter import SpotConfig, spot_actions
 from statman.video.stats_from_events import stats_from_video_events
 from statman.video import store
-from statman.video.pipeline import cancel_job, get_job, upload_video
+from statman.video.pipeline import (
+    abort_upload,
+    append_upload_chunk,
+    cancel_job,
+    finish_chunked_upload,
+    get_job,
+    init_chunked_upload,
+    upload_video,
+)
 
 
 @pytest.fixture(scope="module")
@@ -150,3 +158,52 @@ def test_cancel_during_process(short_match_video: Path, monkeypatch, tmp_path):
     job = get_job(job_id)
     assert job is not None
     assert job["status"] == "cancelled"
+
+
+def test_chunked_upload_resume_and_finish(short_match_video: Path, monkeypatch, tmp_path):
+    monkeypatch.setattr(store, "ROOT", tmp_path / "videos")
+    store.ensure_root()
+    data = short_match_video.read_bytes()
+    size = len(data)
+    init = init_chunked_upload("full_match.mp4", size, chunk_bytes=1024)
+    assert init["status"] == "uploading"
+    assert init["bytes_received"] == 0
+    assert init["chunk_bytes"] == 1024
+
+    mid = size // 2
+    first = append_upload_chunk(init["job_id"], data[:mid], offset=0)
+    assert first["bytes_received"] == mid
+    assert first["progress"]["upload_pct"] == int(100 * mid / size)
+    assert first["progress"]["pct"] == int(first["progress"]["upload_pct"] * 0.4)
+
+    # Wrong offset must fail so the client can re-sync.
+    with pytest.raises(ValueError, match="offset mismatch"):
+        append_upload_chunk(init["job_id"], data[mid : mid + 10], offset=0)
+
+    # Resume from acknowledged offset (simulates retry after a blip).
+    second = append_upload_chunk(init["job_id"], data[mid:], offset=mid)
+    assert second["bytes_received"] == size
+    assert second["progress"]["upload_pct"] == 100
+
+    finished = finish_chunked_upload(init["job_id"], sample_fps=2.0, auto_start=False)
+    assert finished["status"] == "queued"
+    assert finished["progress"]["pct"] == 40
+    assert Path(finished["video_path"]).read_bytes() == data
+
+
+def test_chunked_upload_abort(short_match_video: Path, monkeypatch, tmp_path):
+    monkeypatch.setattr(store, "ROOT", tmp_path / "videos")
+    store.ensure_root()
+    data = short_match_video.read_bytes()
+    init = init_chunked_upload("abort_me.mp4", len(data), chunk_bytes=2048)
+    append_upload_chunk(init["job_id"], data[:2048], offset=0)
+    aborted = abort_upload(init["job_id"])
+    assert aborted["status"] == "cancelled"
+    assert not Path(init["video_path"]).exists()
+
+
+def test_chunked_upload_rejects_oversized(monkeypatch, tmp_path):
+    monkeypatch.setattr(store, "ROOT", tmp_path / "videos")
+    store.ensure_root()
+    with pytest.raises(ValueError, match="max upload"):
+        init_chunked_upload("huge.mp4", 5 * 1024 * 1024 * 1024)

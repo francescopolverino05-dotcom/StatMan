@@ -47,13 +47,18 @@
         <div class="section__head">
           <h2>Full-game file</h2>
           <p>
-            MP4 / MKV / MOV up to 4&nbsp;GB. Detector:
-            <code id="detector-status">checking…</code>
+            MP4 / MKV / MOV up to 4&nbsp;GB. Uploads in 8&nbsp;MB chunks with live progress,
+            automatic retries, and resume if a chunk fails — keep this tab open.
+            Detector: <code id="detector-status">checking…</code>
           </p>
         </div>
+        <p class="hint">
+          Tip: a 90′ match at 720p H.264 is usually ~1–2&nbsp;GB. If the bar stalls, leave the
+          tab open — failed chunks retry; click upload again with the same file to resume.
+        </p>
         <form id="upload-form" class="upload-form">
           <label class="file-drop" for="file-input">
-            <input id="file-input" name="file" type="file" accept="video/*" required />
+            <input id="file-input" name="file" type="file" accept="video/mp4,video/x-matroska,video/quicktime,video/*" required />
             <span id="file-label">Choose full-match video…</span>
           </label>
           <div class="match-bar">
@@ -69,7 +74,7 @@
               Upload &amp; spot full match
             </button>
             <button id="cancel-btn" class="btn btn--ghost" type="button" hidden>
-              Cancel job
+              Cancel upload / job
             </button>
           </div>
         </form>
