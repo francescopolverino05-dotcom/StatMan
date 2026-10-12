@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StatMan — player leaderboards</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="page page--players">
+    <nav class="topnav">
+      <a class="topnav__brand" href="/">StatMan</a>
+      <div class="topnav__links">
+        <a href="/">Match</a>
+        <a href="/season">Season</a>
+        <a class="is-active" href="/season/players">Players</a>
+        <a href="/video">Full match video</a>
+        <a href="/api/docs">API</a>
+      </div>
+    </nav>
+
+    <header class="page-hero">
+      <p class="eyebrow">World Cup 2018</p>
+      <h1>Player leaderboards</h1>
+      <p class="lede">
+        Totals across stored matches — xG, progressive passes, and defensive actions.
+      </p>
+      <div class="match-bar match-bar--sort">
+        <label for="sort-select">Sort by</label>
+        <select id="sort-select">
+          <option value="xg">xG</option>
+          <option value="goals">Goals</option>
+          <option value="progressive_passes">Progressive passes</option>
+          <option value="tackles">Tackles</option>
+          <option value="interceptions">Interceptions</option>
+          <option value="aerials_won">Aerials won</option>
+        </select>
+        <button id="reload-btn" class="btn btn--primary" type="button">Refresh</button>
+      </div>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="table-wrap">
+          <table id="players">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Player</th>
+                <th>Team</th>
+                <th>Apps</th>
+                <th>xG</th>
+                <th>Goals</th>
+                <th>Shots</th>
+                <th>Pass %</th>
+                <th>Prog</th>
+                <th>Tkl</th>
+                <th>Int</th>
+                <th>Aerial</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p><a href="/season">Tournament table</a> · Build the season first if this is empty.</p>
+    </footer>
+    <script src="/static/players.js" type="module"></script>
+  </body>
+</html>
