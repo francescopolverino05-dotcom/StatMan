@@ -201,12 +201,8 @@ def select_shots(
         if any(abs(float(e["time_sec"]) - float(o["time_sec"])) < min_gap_sec for o in chosen):
             continue
         row = dict(e)
-        # SoT: only the strongest near-goal strikes (fact goals added separately).
-        row["on_target"] = bool(
-            float(e.get("goal_dist") or 1e9) < 0.07 * 720
-            and float(e.get("toward_n") or 0) >= 0.6
-            and float(e.get("score") or 0) >= 0.9
-        )
+        # SoT from video alone is still unreliable — default off; fact goals mark SoT.
+        row["on_target"] = False
         chosen.append(row)
         if len(chosen) >= budget:
             break
@@ -271,7 +267,8 @@ def select_shots(
         },
         "warning": (
             "Approximate shot list: film Shot tags re-scored with ball motion toward a "
-            "goal line, then rate-limited. Not Opta. Fact goals always count as SoT."
+            "goal line, then rate-limited. SoT currently follows fact goals only "
+            "(video SoT still too noisy). Not Opta."
         ),
     }
 

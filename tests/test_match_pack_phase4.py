@@ -36,7 +36,9 @@ def test_select_shots_respects_budget_and_fact_goals():
     )
     assert out["budget"] == 12
     assert out["totals"]["match"]["shots"] <= 13  # budget + possible extra fact goal
+    # SoT comes from fact goals (video SoT left off until a better model).
     assert out["totals"]["home"]["shots_on_target"] >= 1
+    assert out["totals"]["away"]["shots_on_target"] == 0
     assert any(e.get("fact_goal") for e in out["selected"])
 
 
