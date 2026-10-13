@@ -28,6 +28,7 @@ const reconcileBtn = document.getElementById("reconcile-btn");
 const phase3Btn = document.getElementById("phase3-btn");
 const phase4Btn = document.getElementById("phase4-btn");
 const phase5Btn = document.getElementById("phase5-btn");
+const phase6Btn = document.getElementById("phase6-btn");
 const analyzeCancel = document.getElementById("analyze-cancel");
 const analyzeStatusEl = document.getElementById("analyze-status");
 const analyzeProgressWrap = document.getElementById("analyze-progress-wrap");
@@ -138,7 +139,8 @@ async function openPack(packId) {
       ["queued", "running", "cancelling"].includes(pack.analyze?.status) ||
       ["queued", "running", "cancelling"].includes(pack.phase3?.status) ||
       ["queued", "running"].includes(pack.phase4?.status) ||
-      ["queued", "running"].includes(pack.phase5?.status)
+      ["queued", "running"].includes(pack.phase5?.status) ||
+      ["queued", "running"].includes(pack.phase6?.status)
     ) {
       pollAnalyze(packId);
     }
@@ -174,9 +176,11 @@ function renderSheet(pack) {
   const p3 = cov.phase3 || sheet.tracking?.possession || null;
   const p4 = cov.phase4 || null;
   const p5 = cov.phase5 || null;
+  const p6 = cov.phase6 || null;
   const hasP3 = Boolean(sheet.tracking?.possession);
   const hasP4 = Boolean(sheet.shots?.totals || p4);
   const hasP5 = Boolean(p5 || sheet.source?.phase === "match-pack-phase5");
+  const hasP6 = Boolean(p6 || sheet.source?.phase === "match-pack-phase6");
   coverageBanner.innerHTML = `
     <strong>Phase 1 — filled from your JSON:</strong> ${factList}
     (${counts.goals ?? 0} goals, ${counts.cards ?? 0} cards, ${counts.substitutions ?? 0} subs).
@@ -203,20 +207,27 @@ function renderSheet(pack) {
         ? `<br /><strong>Phase 5 — SoT:</strong> ${p5?.sot_home ?? sheet.shots?.totals?.home?.shots_on_target ?? "—"}–${p5?.sot_away ?? sheet.shots?.totals?.away?.shots_on_target ?? "—"} (saves + deflections, approximate).`
         : `<br /><strong>Phase 5:</strong> Score SoT after Phase 4.`
     }
+    ${
+      hasP6
+        ? `<br /><strong>Phase 6 — GK:</strong> saves ${p6?.saves_home ?? sheet.teams?.[0]?.saves ?? "—"}–${p6?.saves_away ?? sheet.teams?.[1]?.saves ?? "—"} (faced ${p6?.faced_home ?? "—"}–${p6?.faced_away ?? "—"}, approximate).`
+        : `<br /><strong>Phase 6:</strong> Fill GK after Phase 5.`
+    }
   `;
 
   const teams = sheet.teams || [];
   const home = teams[0];
   const away = teams[1];
-  const vsLabel = hasP5
-    ? "facts + track + shots + SoT"
-    : hasP4
-      ? "facts + track + shots"
-      : hasP3
-        ? "facts + film + track"
-        : hasFilm
-          ? "facts + film"
-          : "fact sheet";
+  const vsLabel = hasP6
+    ? "facts + track + shots + SoT + GK"
+    : hasP5
+      ? "facts + track + shots + SoT"
+      : hasP4
+        ? "facts + track + shots"
+        : hasP3
+          ? "facts + film + track"
+          : hasFilm
+            ? "facts + film"
+            : "fact sheet";
   teamBoard.innerHTML = `
     ${home ? renderTeamCatalogHtml(home, "Home", { showFormation: true }) : ""}
     <div class="score-stack">
@@ -226,7 +237,7 @@ function renderSheet(pack) {
     ${away ? renderTeamCatalogHtml(away, "Away", { showFormation: true }) : ""}
   `;
 
-  renderFilmPanel(sheet.film, sheet.tracking, sheet.shots);
+  renderFilmPanel(sheet.film, sheet.tracking, sheet.shots, sheet.goalkeeper);
 
   const events = sheet.events || [];
   eventsBody.innerHTML = events
@@ -266,9 +277,9 @@ function renderSheet(pack) {
   syncAnalyzeUi(pack);
 }
 
-function renderFilmPanel(film, tracking, shots) {
+function renderFilmPanel(film, tracking, shots, goalkeeper) {
   if (!filmPanel) return;
-  if (!film?.totals && !tracking?.possession && !shots?.totals) {
+  if (!film?.totals && !tracking?.possession && !shots?.totals && !goalkeeper?.totals) {
     filmPanel.hidden = true;
     filmPanel.innerHTML = "";
     return;
@@ -367,6 +378,20 @@ function renderFilmPanel(film, tracking, shots) {
     </ul>`
         : ""
     }
+    ${
+      goalkeeper?.totals
+        ? `<h4 class="stat-section__title" style="margin-top:1.25rem">Phase 6 goalkeeper</h4>
+    <p class="film-warn">${goalkeeper.warning || ""}</p>
+    <ul class="film-grid">
+      <li><span class="label">Faced home</span><span class="value">${fmt(goalkeeper.totals.home?.shots_faced, 0)}</span></li>
+      <li><span class="label">Faced away</span><span class="value">${fmt(goalkeeper.totals.away?.shots_faced, 0)}</span></li>
+      <li><span class="label">Saves home</span><span class="value">${fmt(goalkeeper.totals.home?.saves, 0)}</span></li>
+      <li><span class="label">Saves away</span><span class="value">${fmt(goalkeeper.totals.away?.saves, 0)}</span></li>
+      <li><span class="label">Save % home</span><span class="value">${fmt(goalkeeper.totals.home?.save_pct)}</span></li>
+      <li><span class="label">Save % away</span><span class="value">${fmt(goalkeeper.totals.away?.save_pct)}</span></li>
+    </ul>`
+        : ""
+    }
   `;
 }
 
@@ -389,13 +414,22 @@ function syncAnalyzeUi(pack) {
   const p3 = pack?.phase3;
   const p4 = pack?.phase4;
   const p5 = pack?.phase5;
+  const p6 = pack?.phase6;
   const busyA = a && ["queued", "running", "cancelling"].includes(a.status);
   const busy3 = p3 && ["queued", "running", "cancelling"].includes(p3.status);
   const busy4 = p4 && ["queued", "running"].includes(p4.status);
   const busy5 = p5 && ["queued", "running"].includes(p5.status);
+  const busy6 = p6 && ["queued", "running"].includes(p6.status);
   const prog =
-    (busy5 ? p5?.progress : busy4 ? p4?.progress : busy3 ? p3?.progress : a?.progress) ||
-    {};
+    (busy6
+      ? p6?.progress
+      : busy5
+        ? p5?.progress
+        : busy4
+          ? p4?.progress
+          : busy3
+            ? p3?.progress
+            : a?.progress) || {};
   const pct = prog.pct ?? 0;
   if (analyzeProgressWrap) {
     analyzeProgressWrap.hidden =
@@ -403,15 +437,19 @@ function syncAnalyzeUi(pack) {
       !busy3 &&
       !busy4 &&
       !busy5 &&
+      !busy6 &&
       !(
         a?.status === "done" ||
         p3?.status === "done" ||
         p4?.status === "done" ||
-        p5?.status === "done"
+        p5?.status === "done" ||
+        p6?.status === "done"
       );
     if (analyzeProgressFill) analyzeProgressFill.style.width = `${pct}%`;
     if (analyzeProgressText) {
-      if (busy5) {
+      if (busy6) {
+        analyzeProgressText.textContent = `phase6 ${p6.status} · ${pct}% · GK`;
+      } else if (busy5) {
         analyzeProgressText.textContent = `phase5 ${p5.status} · ${pct}% · SoT`;
       } else if (busy4) {
         analyzeProgressText.textContent = `phase4 ${p4.status} · ${pct}% · ${prog.done ?? 0}/${prog.total ?? "?"} candidates`;
@@ -419,6 +457,9 @@ function syncAnalyzeUi(pack) {
         analyzeProgressText.textContent = `phase3 ${p3.status} · ${pct}% · ${prog.stage || ""} · ${prog.samples ?? ""} samples`;
       } else if (busyA) {
         analyzeProgressText.textContent = `phase2 ${a.status} · ${pct}% · ${prog.events_so_far ?? a.event_count ?? 0} events`;
+      } else if (p6?.status === "done") {
+        const tot = p6.totals || {};
+        analyzeProgressText.textContent = `phase6 done · saves ${(tot.home && tot.home.saves) ?? "—"}–${(tot.away && tot.away.saves) ?? "—"}`;
       } else if (p5?.status === "done") {
         const tot = p5.totals || {};
         analyzeProgressText.textContent = `phase5 done · SoT ${(tot.home && tot.home.shots_on_target) ?? "—"}–${(tot.away && tot.away.shots_on_target) ?? "—"}`;
@@ -435,12 +476,23 @@ function syncAnalyzeUi(pack) {
       }
     }
   }
-  if (busy5) {
+  if (busy6) {
+    setAnalyzeStatus(`Phase 6 filling GK… ${pct}%`, { loading: true });
+  } else if (p6?.status === "done") {
+    const tot = p6.totals || {};
+    setAnalyzeStatus(
+      `Phase 6 ready — saves ${tot.home?.saves ?? "—"}–${tot.away?.saves ?? "—"} (faced ${tot.home?.shots_faced ?? "—"}–${tot.away?.shots_faced ?? "—"}).`
+    );
+    stopAnalyzePoll();
+  } else if (p6?.status === "error") {
+    setAnalyzeStatus(p6.error || "Phase 6 failed", { error: true });
+    stopAnalyzePoll();
+  } else if (busy5) {
     setAnalyzeStatus(`Phase 5 scoring SoT… ${pct}%`, { loading: true });
-  } else if (p5?.status === "done") {
+  } else if (p5?.status === "done" && !p6) {
     const tot = p5.totals || {};
     setAnalyzeStatus(
-      `Phase 5 ready — SoT ${tot.home?.shots_on_target ?? "—"}–${tot.away?.shots_on_target ?? "—"} (shots ${tot.home?.shots ?? "—"}–${tot.away?.shots ?? "—"}).`
+      `Phase 5 ready — SoT ${tot.home?.shots_on_target ?? "—"}–${tot.away?.shots_on_target ?? "—"}. Run Phase 6 for GK.`
     );
     stopAnalyzePoll();
   } else if (p5?.status === "error") {
@@ -498,11 +550,13 @@ async function pollAnalyze(packId) {
       const st3 = pack.phase3?.status;
       const st4 = pack.phase4?.status;
       const st5 = pack.phase5?.status;
+      const st6 = pack.phase6?.status;
       const busy2 = st2 && ["queued", "running", "cancelling"].includes(st2);
       const busy3 = st3 && ["queued", "running", "cancelling"].includes(st3);
       const busy4 = st4 && ["queued", "running"].includes(st4);
       const busy5 = st5 && ["queued", "running"].includes(st5);
-      if (!busy2 && !busy3 && !busy4 && !busy5) {
+      const busy6 = st6 && ["queued", "running"].includes(st6);
+      if (!busy2 && !busy3 && !busy4 && !busy5 && !busy6) {
         stopAnalyzePoll();
         await refreshPacks();
       }
@@ -605,6 +659,26 @@ phase5Btn?.addEventListener("click", async () => {
     setPackId(pack.pack_id);
     syncAnalyzeUi(pack);
     if (pack.phase5?.status === "done" && pack.sheet) {
+      renderSheet(pack);
+    } else {
+      pollAnalyze(id);
+    }
+    await refreshPacks();
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+phase6Btn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Starting Phase 6 GK (shots faced / saves)…", {
+    loading: true,
+  });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/phase6`, { method: "POST" });
+    setPackId(pack.pack_id);
+    syncAnalyzeUi(pack);
+    if (pack.phase6?.status === "done" && pack.sheet) {
       renderSheet(pack);
     } else {
       pollAnalyze(id);

@@ -50,6 +50,7 @@ from statman.match_pack import (
     cancel_phase3,
     start_phase4,
     start_phase5,
+    start_phase6,
 )
 from statman.match_pack.phase3 import refresh_team_splits
 from statman.video import (
@@ -77,8 +78,8 @@ app = FastAPI(
         "PPDA, tackles, interceptions, clearances, and aerials as JSON. "
         "Match-pack Phase 1: facts. Phase 2: film tags. Phase 3: kit tracking / "
         "possession. Phase 4: rescored approximate shots. Phase 5: approximate SoT "
-        "(goalmouth/save + deflection/corner). PPDA, xG, and pass completion stay "
-        "pending."
+        "(goalmouth/save + deflection/corner). Phase 6: GK shots faced / saves from "
+        "SoT. PPDA, xG, and pass completion stay pending."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -128,6 +129,7 @@ def api_root() -> dict[str, Any]:
             "match_pack_phase3": "POST /api/match-packs/{pack_id}/phase3",
             "match_pack_phase4": "POST /api/match-packs/{pack_id}/phase4",
             "match_pack_phase5": "POST /api/match-packs/{pack_id}/phase5",
+            "match_pack_phase6": "POST /api/match-packs/{pack_id}/phase6",
             "match_pack_example_facts": "/api/match-packs/example-facts",
         },
         "default_game_id": DEFAULT_GAME_ID,
@@ -740,6 +742,17 @@ def api_match_pack_phase5(pack_id: str) -> dict[str, Any]:
     """Phase 5: classify approximate SoT on Phase 4 shots (saves + deflections)."""
     try:
         return start_phase5(pack_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/phase6")
+def api_match_pack_phase6(pack_id: str) -> dict[str, Any]:
+    """Phase 6: GK shots faced / saves from opponent SoT + fact goals conceded."""
+    try:
+        return start_phase6(pack_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

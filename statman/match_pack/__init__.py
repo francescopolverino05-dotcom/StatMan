@@ -11,6 +11,7 @@ from statman.match_pack.analyze import (
 from statman.match_pack.phase3 import cancel_phase3, refresh_team_splits, start_phase3
 from statman.match_pack.phase4 import start_phase4
 from statman.match_pack.phase5 import start_phase5
+from statman.match_pack.phase6 import start_phase6
 from statman.match_pack.reconcile import reconcile_pack
 from statman.match_pack.pipeline import (
     append_pack_video_chunk,
@@ -56,4 +57,5 @@ __all__ = [
     "refresh_team_splits",
     "start_phase4",
     "start_phase5",
+    "start_phase6",
 ]
