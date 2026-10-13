@@ -51,6 +51,7 @@ from statman.match_pack import (
     start_phase4,
     start_phase5,
     start_phase6,
+    start_phase7,
 )
 from statman.match_pack.phase3 import refresh_team_splits
 from statman.video import (
@@ -79,7 +80,8 @@ app = FastAPI(
         "Match-pack Phase 1: facts. Phase 2: film tags. Phase 3: kit tracking / "
         "possession. Phase 4: rescored approximate shots. Phase 5: approximate SoT "
         "(goalmouth/save + deflection/corner). Phase 6: GK shots faced / saves from "
-        "SoT. PPDA, xG, and pass completion stay pending."
+        "SoT. Phase 7: pass completion + tackle rescore. Progressive passes, "
+        "aerials, interceptions, clearances, xG, and PPDA stay pending."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -130,6 +132,7 @@ def api_root() -> dict[str, Any]:
             "match_pack_phase4": "POST /api/match-packs/{pack_id}/phase4",
             "match_pack_phase5": "POST /api/match-packs/{pack_id}/phase5",
             "match_pack_phase6": "POST /api/match-packs/{pack_id}/phase6",
+            "match_pack_phase7": "POST /api/match-packs/{pack_id}/phase7",
             "match_pack_example_facts": "/api/match-packs/example-facts",
         },
         "default_game_id": DEFAULT_GAME_ID,
@@ -753,6 +756,25 @@ def api_match_pack_phase6(pack_id: str) -> dict[str, Any]:
     """Phase 6: GK shots faced / saves from opponent SoT + fact goals conceded."""
     try:
         return start_phase6(pack_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/phase7")
+def api_match_pack_phase7(
+    pack_id: str,
+    max_tackles_per_90: float = Query(18.0, ge=6.0, le=40.0),
+    min_gap_sec: float = Query(30.0, ge=15.0, le=90.0),
+) -> dict[str, Any]:
+    """Phase 7: approximate pass completion + tackle rescore."""
+    try:
+        return start_phase7(
+            pack_id,
+            max_tackles_per_90=max_tackles_per_90,
+            min_gap_sec=min_gap_sec,
+        )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

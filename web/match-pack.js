@@ -29,6 +29,7 @@ const phase3Btn = document.getElementById("phase3-btn");
 const phase4Btn = document.getElementById("phase4-btn");
 const phase5Btn = document.getElementById("phase5-btn");
 const phase6Btn = document.getElementById("phase6-btn");
+const phase7Btn = document.getElementById("phase7-btn");
 const analyzeCancel = document.getElementById("analyze-cancel");
 const analyzeStatusEl = document.getElementById("analyze-status");
 const analyzeProgressWrap = document.getElementById("analyze-progress-wrap");
@@ -140,7 +141,8 @@ async function openPack(packId) {
       ["queued", "running", "cancelling"].includes(pack.phase3?.status) ||
       ["queued", "running"].includes(pack.phase4?.status) ||
       ["queued", "running"].includes(pack.phase5?.status) ||
-      ["queued", "running"].includes(pack.phase6?.status)
+      ["queued", "running"].includes(pack.phase6?.status) ||
+      ["queued", "running"].includes(pack.phase7?.status)
     ) {
       pollAnalyze(packId);
     }
@@ -177,10 +179,12 @@ function renderSheet(pack) {
   const p4 = cov.phase4 || null;
   const p5 = cov.phase5 || null;
   const p6 = cov.phase6 || null;
+  const p7 = cov.phase7 || null;
   const hasP3 = Boolean(sheet.tracking?.possession);
   const hasP4 = Boolean(sheet.shots?.totals || p4);
   const hasP5 = Boolean(p5 || sheet.source?.phase === "match-pack-phase5");
   const hasP6 = Boolean(p6 || sheet.source?.phase === "match-pack-phase6");
+  const hasP7 = Boolean(p7 || sheet.source?.phase === "match-pack-phase7");
   coverageBanner.innerHTML = `
     <strong>Phase 1 — filled from your JSON:</strong> ${factList}
     (${counts.goals ?? 0} goals, ${counts.cards ?? 0} cards, ${counts.substitutions ?? 0} subs).
@@ -212,22 +216,29 @@ function renderSheet(pack) {
         ? `<br /><strong>Phase 6 — GK:</strong> saves ${p6?.saves_home ?? sheet.teams?.[0]?.saves ?? "—"}–${p6?.saves_away ?? sheet.teams?.[1]?.saves ?? "—"} (faced ${p6?.faced_home ?? "—"}–${p6?.faced_away ?? "—"}, approximate).`
         : `<br /><strong>Phase 6:</strong> Fill GK after Phase 5.`
     }
+    ${
+      hasP7
+        ? `<br /><strong>Phase 7 — passes/tackles:</strong> pass acc ${p7?.pass_acc_home ?? sheet.teams?.[0]?.pass_accuracy ?? "—"}%–${p7?.pass_acc_away ?? sheet.teams?.[1]?.pass_accuracy ?? "—"}% · tackles ${p7?.tackles_home ?? sheet.teams?.[0]?.tackles ?? "—"}–${p7?.tackles_away ?? sheet.teams?.[1]?.tackles ?? "—"} (approximate).`
+        : `<br /><strong>Phase 7:</strong> Pass completion + tackles after Phase 6.`
+    }
   `;
 
   const teams = sheet.teams || [];
   const home = teams[0];
   const away = teams[1];
-  const vsLabel = hasP6
-    ? "facts + track + shots + SoT + GK"
-    : hasP5
-      ? "facts + track + shots + SoT"
-      : hasP4
-        ? "facts + track + shots"
-        : hasP3
-          ? "facts + film + track"
-          : hasFilm
-            ? "facts + film"
-            : "fact sheet";
+  const vsLabel = hasP7
+    ? "facts + track + shots + SoT + GK + actions"
+    : hasP6
+      ? "facts + track + shots + SoT + GK"
+      : hasP5
+        ? "facts + track + shots + SoT"
+        : hasP4
+          ? "facts + track + shots"
+          : hasP3
+            ? "facts + film + track"
+            : hasFilm
+              ? "facts + film"
+              : "fact sheet";
   teamBoard.innerHTML = `
     ${home ? renderTeamCatalogHtml(home, "Home", { showFormation: true }) : ""}
     <div class="score-stack">
@@ -237,7 +248,13 @@ function renderSheet(pack) {
     ${away ? renderTeamCatalogHtml(away, "Away", { showFormation: true }) : ""}
   `;
 
-  renderFilmPanel(sheet.film, sheet.tracking, sheet.shots, sheet.goalkeeper);
+  renderFilmPanel(
+    sheet.film,
+    sheet.tracking,
+    sheet.shots,
+    sheet.goalkeeper,
+    sheet.actions
+  );
 
   const events = sheet.events || [];
   eventsBody.innerHTML = events
@@ -277,9 +294,15 @@ function renderSheet(pack) {
   syncAnalyzeUi(pack);
 }
 
-function renderFilmPanel(film, tracking, shots, goalkeeper) {
+function renderFilmPanel(film, tracking, shots, goalkeeper, actions) {
   if (!filmPanel) return;
-  if (!film?.totals && !tracking?.possession && !shots?.totals && !goalkeeper?.totals) {
+  if (
+    !film?.totals &&
+    !tracking?.possession &&
+    !shots?.totals &&
+    !goalkeeper?.totals &&
+    !actions?.passes
+  ) {
     filmPanel.hidden = true;
     filmPanel.innerHTML = "";
     return;
@@ -392,6 +415,20 @@ function renderFilmPanel(film, tracking, shots, goalkeeper) {
     </ul>`
         : ""
     }
+    ${
+      actions?.passes
+        ? `<h4 class="stat-section__title" style="margin-top:1.25rem">Phase 7 passes + tackles</h4>
+    <p class="film-warn">${actions.warning || ""}</p>
+    <ul class="film-grid">
+      <li><span class="label">Pass att home</span><span class="value">${fmt(actions.passes.home?.passes_attempted, 0)}</span></li>
+      <li><span class="label">Pass att away</span><span class="value">${fmt(actions.passes.away?.passes_attempted, 0)}</span></li>
+      <li><span class="label">Pass acc home %</span><span class="value">${fmt(actions.passes.home?.pass_accuracy)}</span></li>
+      <li><span class="label">Pass acc away %</span><span class="value">${fmt(actions.passes.away?.pass_accuracy)}</span></li>
+      <li><span class="label">Tackles home</span><span class="value">${fmt(actions.tackles?.totals?.home?.tackles, 0)}</span></li>
+      <li><span class="label">Tackles away</span><span class="value">${fmt(actions.tackles?.totals?.away?.tackles, 0)}</span></li>
+    </ul>`
+        : ""
+    }
   `;
 }
 
@@ -415,21 +452,25 @@ function syncAnalyzeUi(pack) {
   const p4 = pack?.phase4;
   const p5 = pack?.phase5;
   const p6 = pack?.phase6;
+  const p7 = pack?.phase7;
   const busyA = a && ["queued", "running", "cancelling"].includes(a.status);
   const busy3 = p3 && ["queued", "running", "cancelling"].includes(p3.status);
   const busy4 = p4 && ["queued", "running"].includes(p4.status);
   const busy5 = p5 && ["queued", "running"].includes(p5.status);
   const busy6 = p6 && ["queued", "running"].includes(p6.status);
+  const busy7 = p7 && ["queued", "running"].includes(p7.status);
   const prog =
-    (busy6
-      ? p6?.progress
-      : busy5
-        ? p5?.progress
-        : busy4
-          ? p4?.progress
-          : busy3
-            ? p3?.progress
-            : a?.progress) || {};
+    (busy7
+      ? p7?.progress
+      : busy6
+        ? p6?.progress
+        : busy5
+          ? p5?.progress
+          : busy4
+            ? p4?.progress
+            : busy3
+              ? p3?.progress
+              : a?.progress) || {};
   const pct = prog.pct ?? 0;
   if (analyzeProgressWrap) {
     analyzeProgressWrap.hidden =
@@ -438,16 +479,20 @@ function syncAnalyzeUi(pack) {
       !busy4 &&
       !busy5 &&
       !busy6 &&
+      !busy7 &&
       !(
         a?.status === "done" ||
         p3?.status === "done" ||
         p4?.status === "done" ||
         p5?.status === "done" ||
-        p6?.status === "done"
+        p6?.status === "done" ||
+        p7?.status === "done"
       );
     if (analyzeProgressFill) analyzeProgressFill.style.width = `${pct}%`;
     if (analyzeProgressText) {
-      if (busy6) {
+      if (busy7) {
+        analyzeProgressText.textContent = `phase7 ${p7.status} · ${pct}% · passes/tackles`;
+      } else if (busy6) {
         analyzeProgressText.textContent = `phase6 ${p6.status} · ${pct}% · GK`;
       } else if (busy5) {
         analyzeProgressText.textContent = `phase5 ${p5.status} · ${pct}% · SoT`;
@@ -457,6 +502,9 @@ function syncAnalyzeUi(pack) {
         analyzeProgressText.textContent = `phase3 ${p3.status} · ${pct}% · ${prog.stage || ""} · ${prog.samples ?? ""} samples`;
       } else if (busyA) {
         analyzeProgressText.textContent = `phase2 ${a.status} · ${pct}% · ${prog.events_so_far ?? a.event_count ?? 0} events`;
+      } else if (p7?.status === "done") {
+        const tk = p7.tackles || {};
+        analyzeProgressText.textContent = `phase7 done · tackles ${(tk.home && tk.home.tackles) ?? "—"}–${(tk.away && tk.away.tackles) ?? "—"}`;
       } else if (p6?.status === "done") {
         const tot = p6.totals || {};
         analyzeProgressText.textContent = `phase6 done · saves ${(tot.home && tot.home.saves) ?? "—"}–${(tot.away && tot.away.saves) ?? "—"}`;
@@ -476,12 +524,24 @@ function syncAnalyzeUi(pack) {
       }
     }
   }
-  if (busy6) {
+  if (busy7) {
+    setAnalyzeStatus(`Phase 7 passes + tackles… ${pct}%`, { loading: true });
+  } else if (p7?.status === "done") {
+    const tk = p7.tackles || {};
+    const pa = p7.passes || {};
+    setAnalyzeStatus(
+      `Phase 7 ready — pass acc ${pa.home?.pass_accuracy ?? "—"}%–${pa.away?.pass_accuracy ?? "—"}% · tackles ${tk.home?.tackles ?? "—"}–${tk.away?.tackles ?? "—"}.`
+    );
+    stopAnalyzePoll();
+  } else if (p7?.status === "error") {
+    setAnalyzeStatus(p7.error || "Phase 7 failed", { error: true });
+    stopAnalyzePoll();
+  } else if (busy6) {
     setAnalyzeStatus(`Phase 6 filling GK… ${pct}%`, { loading: true });
-  } else if (p6?.status === "done") {
+  } else if (p6?.status === "done" && !p7) {
     const tot = p6.totals || {};
     setAnalyzeStatus(
-      `Phase 6 ready — saves ${tot.home?.saves ?? "—"}–${tot.away?.saves ?? "—"} (faced ${tot.home?.shots_faced ?? "—"}–${tot.away?.shots_faced ?? "—"}).`
+      `Phase 6 ready — saves ${tot.home?.saves ?? "—"}–${tot.away?.saves ?? "—"}. Run Phase 7 for passes/tackles.`
     );
     stopAnalyzePoll();
   } else if (p6?.status === "error") {
@@ -551,12 +611,14 @@ async function pollAnalyze(packId) {
       const st4 = pack.phase4?.status;
       const st5 = pack.phase5?.status;
       const st6 = pack.phase6?.status;
+      const st7 = pack.phase7?.status;
       const busy2 = st2 && ["queued", "running", "cancelling"].includes(st2);
       const busy3 = st3 && ["queued", "running", "cancelling"].includes(st3);
       const busy4 = st4 && ["queued", "running"].includes(st4);
       const busy5 = st5 && ["queued", "running"].includes(st5);
       const busy6 = st6 && ["queued", "running"].includes(st6);
-      if (!busy2 && !busy3 && !busy4 && !busy5 && !busy6) {
+      const busy7 = st7 && ["queued", "running"].includes(st7);
+      if (!busy2 && !busy3 && !busy4 && !busy5 && !busy6 && !busy7) {
         stopAnalyzePoll();
         await refreshPacks();
       }
@@ -679,6 +741,24 @@ phase6Btn?.addEventListener("click", async () => {
     setPackId(pack.pack_id);
     syncAnalyzeUi(pack);
     if (pack.phase6?.status === "done" && pack.sheet) {
+      renderSheet(pack);
+    } else {
+      pollAnalyze(id);
+    }
+    await refreshPacks();
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+phase7Btn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Starting Phase 7 passes + tackles…", { loading: true });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/phase7`, { method: "POST" });
+    setPackId(pack.pack_id);
+    syncAnalyzeUi(pack);
+    if (pack.phase7?.status === "done" && pack.sheet) {
       renderSheet(pack);
     } else {
       pollAnalyze(id);

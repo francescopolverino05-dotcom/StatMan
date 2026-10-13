@@ -162,12 +162,10 @@
 
       <section class="section" id="analyze-section">
         <div class="section__head">
-          <h2>5. Analyze video (Phase 2–6)</h2>
+          <h2>5. Analyze video (Phase 2–7)</h2>
           <p>
-            Phase&nbsp;2: YOLO film tags (or import a finished
-            <a href="/video">Film tags</a> job). Phase&nbsp;3: kit tracking.
-            Phase&nbsp;4–5: shots / SoT. Phase&nbsp;6: GK shots faced &amp; saves from
-            SoT. Still approximate — not Opta/StatsBomb.
+            Phase&nbsp;2–6: film, tracking, shots/SoT/GK. Phase&nbsp;7: pass completion
+            + tackle rescore. Still approximate — not Opta/StatsBomb.
           </p>
         </div>
         <div class="match-bar">
@@ -189,12 +187,15 @@
           <button id="phase6-btn" class="btn btn--primary" type="button">
             Fill GK (Phase 6)
           </button>
+          <button id="phase7-btn" class="btn btn--primary" type="button">
+            Passes + tackles (Phase 7)
+          </button>
           <button id="analyze-cancel" class="btn btn--ghost" type="button">
             Cancel
           </button>
         </div>
         <p class="hint">
-          Order: Analyze → Correct film → Phase&nbsp;3 → shots (4) → SoT (5) → GK (6).
+          Order: Analyze → Correct film → 3 → shots → SoT → GK → passes/tackles (7).
           Phase&nbsp;3/4 can take a while on CPU — keep this tab open.
         </p>
         <p id="analyze-status" class="status" role="status" aria-live="polite"></p>
