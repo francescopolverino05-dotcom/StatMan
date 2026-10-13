@@ -9,7 +9,10 @@ const factsJson = document.getElementById("facts-json");
 const factsFile = document.getElementById("facts-file");
 const uploadFactsFile = document.getElementById("upload-facts-file");
 const loadExample = document.getElementById("load-example");
+const loadPrimavera = document.getElementById("load-primavera");
 const saveFacts = document.getElementById("save-facts");
+const PRIMAVERA_SAMPLE_URL =
+  "/static/samples/napoli_pisa_primavera2_2026-10-10_facts.json";
 const formationHome = document.getElementById("formation-home");
 const formationAway = document.getElementById("formation-away");
 const uploadFormations = document.getElementById("upload-formations");
@@ -234,15 +237,91 @@ function stripBom(text) {
   return text.replace(/^\uFEFF/, "");
 }
 
+/** Normalize paste/download artifacts that break JSON.parse (curly quotes, trailing commas). */
+function normalizeFactsText(text) {
+  return stripBom(String(text || ""))
+    .replace(/^\uFEFF/, "")
+    .replace(/[\u201C\u201D\u00AB\u00BB]/g, '"')
+    .replace(/[\u2018\u2019\u2032]/g, "'")
+    .replace(/\u00A0/g, " ")
+    .trim();
+}
+
+function formatJsonParseError(raw, err) {
+  const msg = err && err.message ? err.message : String(err);
+  const m = /position\s+(\d+)/i.exec(msg);
+  if (!m) return `Facts JSON is invalid: ${msg}`;
+  const pos = Number(m[1]);
+  const before = raw.slice(0, pos);
+  const line = before.split("\n").length;
+  const col = pos - before.lastIndexOf("\n");
+  const lines = raw.split("\n");
+  const from = Math.max(0, line - 2);
+  const to = Math.min(lines.length, line + 1);
+  const snippet = lines
+    .slice(from, to)
+    .map((l, i) => `${from + i + 1}: ${l}`)
+    .join("\n");
+  return (
+    `Facts JSON is invalid near line ${line}, column ${col}: ${msg}. ` +
+    `Use “Load Napoli–Pisa Primavera 2 into editor” for a clean copy.\n${snippet}`
+  );
+}
+
+function parseFactsJson(text) {
+  const normalized = normalizeFactsText(text);
+  if (!normalized) {
+    throw new Error("Facts editor is empty.");
+  }
+  try {
+    return JSON.parse(normalized);
+  } catch (err) {
+    // Common Mac/editor artifact: trailing comma before ] or }.
+    const repaired = normalized.replace(/,\s*([\]}])/g, "$1");
+    if (repaired !== normalized) {
+      try {
+        return JSON.parse(repaired);
+      } catch {
+        /* fall through */
+      }
+    }
+    throw new Error(formatJsonParseError(normalized, err));
+  }
+}
+
 async function readFactsFileAsText(file) {
   const buf = await file.arrayBuffer();
   // Prefer UTF-8 with BOM strip; fall back if decode throws.
   try {
-    return stripBom(new TextDecoder("utf-8").decode(buf));
+    return normalizeFactsText(new TextDecoder("utf-8").decode(buf));
   } catch {
-    return stripBom(await file.text());
+    return normalizeFactsText(await file.text());
   }
 }
+
+async function loadPrimaveraSampleIntoEditor() {
+  setStatus("Loading Napoli–Pisa Primavera 2 facts…", { loading: true, near: "facts" });
+  const res = await fetch(PRIMAVERA_SAMPLE_URL);
+  if (!res.ok) {
+    throw new Error(`Could not fetch sample JSON (${res.status})`);
+  }
+  const payload = parseFactsJson(await res.text());
+  factsJson.value = JSON.stringify(payload, null, 2);
+  homeTeam.value = payload.home?.team_name || homeTeam.value;
+  awayTeam.value = payload.away?.team_name || awayTeam.value;
+  setStatus(
+    "Primavera 2 facts loaded into the editor. Click Save facts (creates sheet automatically).",
+    { near: "facts" }
+  );
+}
+
+loadPrimavera?.addEventListener("click", async () => {
+  try {
+    await loadPrimaveraSampleIntoEditor();
+  } catch (err) {
+    setStatus(err.message, { error: true, near: "facts" });
+  }
+});
 
 factsFile?.addEventListener("change", async () => {
   const file = factsFile.files?.[0];
@@ -250,11 +329,17 @@ factsFile?.addEventListener("change", async () => {
   try {
     const text = await readFactsFileAsText(file);
     // Preview in editor only — does not save until Upload / Save.
-    JSON.parse(stripBom(text));
-    factsJson.value = JSON.stringify(JSON.parse(stripBom(text)), null, 2);
-    setStatus(`Loaded ${file.name} into the editor. Click “Upload JSON file” or Save facts.`);
+    const payload = parseFactsJson(text);
+    factsJson.value = JSON.stringify(payload, null, 2);
+    setStatus(
+      `Loaded ${file.name} into the editor. Click “Upload JSON file” or Save facts.`,
+      { near: "facts" }
+    );
   } catch (err) {
-    setStatus(`Could not read ${file.name}: ${err.message}`, { error: true });
+    setStatus(`Could not read ${file.name}: ${err.message}`, {
+      error: true,
+      near: "facts",
+    });
     // Clear the broken selection so the same file can be re-chosen after a fix.
     factsFile.value = "";
   }
@@ -271,11 +356,11 @@ uploadFactsFile?.addEventListener("click", async () => {
         throw new Error("Choose a .json facts file, or paste JSON then Save facts.");
       }
       // Validate locally first so we never POST garbage that looks like a drop.
-      JSON.parse(stripBom(factsJson.value));
+      const payload = parseFactsJson(factsJson.value);
       const pack = await fetchJson(`/api/match-packs/${id}/facts`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: stripBom(factsJson.value),
+        body: JSON.stringify(payload),
       });
       factsJson.value = JSON.stringify(pack.facts, null, 2);
       homeTeam.value = pack.facts?.home?.team_name || homeTeam.value;
@@ -316,12 +401,7 @@ saveFacts.addEventListener("click", async () => {
   setStatus("Saving facts…", { loading: true, near: "facts" });
   try {
     const id = requirePack();
-    let payload;
-    try {
-      payload = JSON.parse(stripBom(factsJson.value));
-    } catch (err) {
-      throw new Error(`Facts JSON is invalid: ${err.message}`);
-    }
+    const payload = parseFactsJson(factsJson.value);
     const pack = await fetchJson(`/api/match-packs/${id}/facts`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -449,12 +529,13 @@ computeBtn.addEventListener("click", async () => {
     const id = requirePack();
     // Auto-save facts from editor if present.
     if (factsJson.value.trim()) {
-      const payload = JSON.parse(stripBom(factsJson.value));
+      const payload = parseFactsJson(factsJson.value);
       await fetchJson(`/api/match-packs/${id}/facts`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      factsJson.value = JSON.stringify(payload, null, 2);
     }
     const pack = await computeSheet(id);
     const m = pack.sheet?.match || {};
