@@ -40,6 +40,7 @@ from statman.match_pack import (
     init_pack_video,
     list_packs,
     put_facts,
+    put_facts_file,
 )
 from statman.video import (
     abort_upload,
@@ -485,6 +486,28 @@ async def api_match_pack_facts(pack_id: str, request: Request) -> dict[str, Any]
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc}") from exc
     try:
         return put_facts(pack_id, payload)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/facts/file")
+async def api_match_pack_facts_file(
+    pack_id: str,
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Upload a UTF-8 match-facts .json file. Bad files do not wipe prior facts."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing facts filename")
+    name = file.filename.lower()
+    if not (name.endswith(".json") or name.endswith(".txt")):
+        raise HTTPException(
+            status_code=400,
+            detail="Facts upload must be a .json file (UTF-8 match-facts schema).",
+        )
+    try:
+        return put_facts_file(pack_id, file.file, file.filename)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

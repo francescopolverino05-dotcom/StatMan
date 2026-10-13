@@ -6,6 +6,8 @@ const awayTeam = document.getElementById("away-team");
 const packIdLine = document.getElementById("pack-id-line");
 const packIdEl = document.getElementById("pack-id");
 const factsJson = document.getElementById("facts-json");
+const factsFile = document.getElementById("facts-file");
+const uploadFactsFile = document.getElementById("upload-facts-file");
 const loadExample = document.getElementById("load-example");
 const saveFacts = document.getElementById("save-facts");
 const formationHome = document.getElementById("formation-home");
@@ -204,13 +206,83 @@ loadExample.addEventListener("click", async () => {
   }
 });
 
+function stripBom(text) {
+  return text.replace(/^\uFEFF/, "");
+}
+
+async function readFactsFileAsText(file) {
+  const buf = await file.arrayBuffer();
+  // Prefer UTF-8 with BOM strip; fall back if decode throws.
+  try {
+    return stripBom(new TextDecoder("utf-8").decode(buf));
+  } catch {
+    return stripBom(await file.text());
+  }
+}
+
+factsFile?.addEventListener("change", async () => {
+  const file = factsFile.files?.[0];
+  if (!file) return;
+  try {
+    const text = await readFactsFileAsText(file);
+    // Preview in editor only — does not save until Upload / Save.
+    JSON.parse(stripBom(text));
+    factsJson.value = JSON.stringify(JSON.parse(stripBom(text)), null, 2);
+    setStatus(`Loaded ${file.name} into the editor. Click “Upload JSON file” or Save facts.`);
+  } catch (err) {
+    setStatus(`Could not read ${file.name}: ${err.message}`, { error: true });
+    // Clear the broken selection so the same file can be re-chosen after a fix.
+    factsFile.value = "";
+  }
+});
+
+uploadFactsFile?.addEventListener("click", async () => {
+  setStatus("Uploading facts JSON…", { loading: true });
+  try {
+    const id = requirePack();
+    const file = factsFile.files?.[0];
+    if (!file) {
+      // Allow upload from editor contents as a synthetic file.
+      if (!factsJson.value.trim()) {
+        throw new Error("Choose a .json facts file, or paste JSON then Save facts.");
+      }
+      // Validate locally first so we never POST garbage that looks like a drop.
+      JSON.parse(stripBom(factsJson.value));
+      const pack = await fetchJson(`/api/match-packs/${id}/facts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: stripBom(factsJson.value),
+      });
+      factsJson.value = JSON.stringify(pack.facts, null, 2);
+      homeTeam.value = pack.facts?.home?.team_name || homeTeam.value;
+      awayTeam.value = pack.facts?.away?.team_name || awayTeam.value;
+      setStatus("Facts saved from editor.");
+      await refreshPacks();
+      return;
+    }
+    const body = new FormData();
+    body.append("file", file, file.name.endsWith(".json") ? file.name : `${file.name}.json`);
+    const pack = await fetchJson(`/api/match-packs/${id}/facts/file`, {
+      method: "POST",
+      body,
+    });
+    factsJson.value = JSON.stringify(pack.facts, null, 2);
+    homeTeam.value = pack.facts?.home?.team_name || homeTeam.value;
+    awayTeam.value = pack.facts?.away?.team_name || awayTeam.value;
+    setStatus(`Uploaded ${file.name} — facts ready (score ${pack.facts?.home?.team_name} facts saved).`);
+    await refreshPacks();
+  } catch (err) {
+    setStatus(err.message, { error: true });
+  }
+});
+
 saveFacts.addEventListener("click", async () => {
   setStatus("Saving facts…", { loading: true });
   try {
     const id = requirePack();
     let payload;
     try {
-      payload = JSON.parse(factsJson.value);
+      payload = JSON.parse(stripBom(factsJson.value));
     } catch (err) {
       throw new Error(`Facts JSON is invalid: ${err.message}`);
     }

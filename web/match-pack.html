@@ -70,9 +70,25 @@
           <h2>2. Match facts</h2>
           <p>
             JSON with home/away lineups + formation, timed events, optional set-piece totals.
-            <button type="button" id="load-example" class="btn btn--ghost">Load example</button>
+            <button type="button" id="load-example" class="btn btn--ghost">Load WC example</button>
+            <a class="btn btn--ghost" href="/static/samples/napoli_pisa_2025-09-22_facts.json" download>
+              Download Napoli–Pisa JSON
+            </a>
           </p>
         </div>
+        <div class="match-bar match-bar--stack" style="margin-bottom: 0.75rem">
+          <label class="field">
+            <span>Upload facts JSON</span>
+            <input id="facts-file" type="file" accept="application/json,.json,text/plain,.txt" />
+          </label>
+          <button id="upload-facts-file" class="btn btn--primary" type="button">
+            Upload JSON file
+          </button>
+        </div>
+        <p class="hint">
+          Drop a UTF-8 <code>.json</code> facts file (e.g. Napoli–Pisa). A bad file shows an error and
+          keeps any facts already saved — it will not wipe the pack.
+        </p>
         <textarea
           id="facts-json"
           class="facts-editor"

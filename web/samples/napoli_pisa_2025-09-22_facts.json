@@ -1,0 +1,213 @@
+{
+  "competition": "Serie A Enilive 2025-2026",
+  "season": "2025-2026",
+  "kickoff": "2025-09-22T20:45:00+02:00",
+  "venue": "Stadio Diego Armando Maradona",
+  "notes": "Converted from Lega Serie A match report / distinta (Giornata 4). Final score 3-2.",
+  "home": {
+    "team_id": 1,
+    "team_name": "Napoli",
+    "formation": "4-1-4-1",
+    "lineup": [
+      { "player_name": "Alex Meret", "jersey": 1, "position": "GK", "is_starter": true },
+      { "player_name": "Giovanni Di Lorenzo", "jersey": 22, "position": "RB", "is_starter": true },
+      { "player_name": "Sam Beukema", "jersey": 31, "position": "CB", "is_starter": true },
+      { "player_name": "Alessandro Buongiorno", "jersey": 4, "position": "CB", "is_starter": true },
+      { "player_name": "Leonardo Spinazzola", "jersey": 37, "position": "LB", "is_starter": true },
+      { "player_name": "Billy Gilmour", "jersey": 6, "position": "DM", "is_starter": true },
+      { "player_name": "Matteo Politano", "jersey": 21, "position": "RW", "is_starter": true },
+      { "player_name": "Eljif Elmas", "jersey": 20, "position": "CM", "is_starter": true },
+      { "player_name": "Kevin De Bruyne", "jersey": 11, "position": "AM", "is_starter": true },
+      { "player_name": "Scott McTominay", "jersey": 8, "position": "CM", "is_starter": true },
+      { "player_name": "Rasmus Højlund", "jersey": 19, "position": "ST", "is_starter": true },
+      { "player_name": "Mathias Ferrante", "jersey": 25, "position": "GK", "is_starter": false },
+      { "player_name": "Vanja Milinković-Savić", "jersey": 32, "position": "GK", "is_starter": false },
+      { "player_name": "Miguel Gutiérrez", "jersey": 3, "position": "DF", "is_starter": false },
+      { "player_name": "Juan Jesus", "jersey": 5, "position": "DF", "is_starter": false },
+      { "player_name": "David Neres", "jersey": 7, "position": "FW", "is_starter": false },
+      { "player_name": "Amir Rrahmani", "jersey": 13, "position": "DF", "is_starter": false },
+      { "player_name": "Mathías Olivera", "jersey": 17, "position": "DF", "is_starter": false },
+      { "player_name": "Antonio Vergara", "jersey": 26, "position": "MF", "is_starter": false },
+      { "player_name": "Lorenzo Lucca", "jersey": 27, "position": "FW", "is_starter": false },
+      { "player_name": "Luca Marianucci", "jersey": 35, "position": "DF", "is_starter": false },
+      { "player_name": "Stanislav Lobotka", "jersey": 68, "position": "MF", "is_starter": false },
+      { "player_name": "Giuseppe Ambrosino", "jersey": 69, "position": "FW", "is_starter": false },
+      { "player_name": "Noa Lang", "jersey": 70, "position": "FW", "is_starter": false },
+      { "player_name": "Frank Anguissa", "jersey": 99, "position": "MF", "is_starter": false }
+    ],
+    "totals": {
+      "corners": { "first_half": 0, "second_half": 0, "total": 5 },
+      "offsides": { "first_half": 0, "second_half": 0, "total": 1 }
+    }
+  },
+  "away": {
+    "team_id": 2,
+    "team_name": "Pisa",
+    "formation": "3-5-2",
+    "lineup": [
+      { "player_name": "Adrian Šemper", "jersey": 1, "position": "GK", "is_starter": true },
+      { "player_name": "Simone Canestrelli", "jersey": 5, "position": "CB", "is_starter": true },
+      { "player_name": "Antonio Caracciolo", "jersey": 4, "position": "CB", "is_starter": true },
+      { "player_name": "Mateus Lusuardi", "jersey": 47, "position": "CB", "is_starter": true },
+      { "player_name": "Mehdi Léris", "jersey": 7, "position": "RWB", "is_starter": true },
+      { "player_name": "Ebenezer Akinsanmiro", "jersey": 14, "position": "CM", "is_starter": true },
+      { "player_name": "Michel Aebischer", "jersey": 20, "position": "CM", "is_starter": true },
+      { "player_name": "Marius Marin", "jersey": 6, "position": "CM", "is_starter": true },
+      { "player_name": "Giovanni Bonfanti", "jersey": 94, "position": "LWB", "is_starter": true },
+      { "player_name": "Stefano Moreo", "jersey": 32, "position": "ST", "is_starter": true },
+      { "player_name": "M'Bala Nzola", "jersey": 18, "position": "ST", "is_starter": true },
+      { "player_name": "Nícolas", "jersey": 12, "position": "GK", "is_starter": false },
+      { "player_name": "Simone Scuffet", "jersey": 22, "position": "GK", "is_starter": false },
+      { "player_name": "Samuele Angori", "jersey": 3, "position": "DF", "is_starter": false },
+      { "player_name": "Malthe Højholt", "jersey": 8, "position": "MF", "is_starter": false },
+      { "player_name": "Henrik Meister", "jersey": 9, "position": "FW", "is_starter": false },
+      { "player_name": "Mattéo Tramoni", "jersey": 10, "position": "MF", "is_starter": false },
+      { "player_name": "Juan Cuadrado", "jersey": 11, "position": "MF", "is_starter": false },
+      { "player_name": "Tomás Esteves", "jersey": 19, "position": "DF", "is_starter": false },
+      { "player_name": "İsak Vural", "jersey": 21, "position": "MF", "is_starter": false },
+      { "player_name": "Arturo Calabresi", "jersey": 33, "position": "DF", "is_starter": false },
+      { "player_name": "Gabriele Piccinini", "jersey": 36, "position": "MF", "is_starter": false },
+      { "player_name": "Raúl Albiol", "jersey": 39, "position": "DF", "is_starter": false },
+      { "player_name": "Lorran Lucas Pereira de Sousa", "jersey": 99, "position": "MF", "is_starter": false }
+    ],
+    "totals": {
+      "corners": { "first_half": 0, "second_half": 0, "total": 3 },
+      "offsides": { "first_half": 0, "second_half": 0, "total": 1 }
+    }
+  },
+  "events": [
+    {
+      "type": "goal",
+      "minute": 39,
+      "team": "home",
+      "player_name": "Billy Gilmour",
+      "assist_name": "Leonardo Spinazzola",
+      "period": 1
+    },
+    {
+      "type": "yellow_card",
+      "minute": 50,
+      "team": "away",
+      "player_name": "Antonio Caracciolo",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 57,
+      "team": "home",
+      "player_out": "Billy Gilmour",
+      "player_in": "Stanislav Lobotka",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 58,
+      "team": "home",
+      "player_out": "Eljif Elmas",
+      "player_in": "Frank Anguissa",
+      "period": 2
+    },
+    {
+      "type": "goal",
+      "minute": 60,
+      "team": "away",
+      "player_name": "M'Bala Nzola",
+      "notes": "penalty",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 61,
+      "team": "away",
+      "player_out": "Mehdi Léris",
+      "player_in": "Juan Cuadrado",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 61,
+      "team": "away",
+      "player_out": "Stefano Moreo",
+      "player_in": "Henrik Meister",
+      "period": 2
+    },
+    {
+      "type": "yellow_card",
+      "minute": 69,
+      "team": "home",
+      "player_name": "Leonardo Spinazzola",
+      "period": 2
+    },
+    {
+      "type": "goal",
+      "minute": 73,
+      "team": "home",
+      "player_name": "Leonardo Spinazzola",
+      "assist_name": "Stanislav Lobotka",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 74,
+      "team": "away",
+      "player_out": "Giovanni Bonfanti",
+      "player_in": "Samuele Angori",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 74,
+      "team": "away",
+      "player_out": "M'Bala Nzola",
+      "player_in": "Mattéo Tramoni",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 77,
+      "team": "home",
+      "player_out": "Rasmus Højlund",
+      "player_in": "Lorenzo Lucca",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 80,
+      "team": "away",
+      "player_out": "Marius Marin",
+      "player_in": "Lorran Lucas Pereira de Sousa",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 81,
+      "team": "home",
+      "player_out": "Alessandro Buongiorno",
+      "player_in": "Juan Jesus",
+      "period": 2
+    },
+    {
+      "type": "yellow_card",
+      "minute": 82,
+      "team": "away",
+      "player_name": "Mateus Lusuardi",
+      "period": 2
+    },
+    {
+      "type": "goal",
+      "minute": 82,
+      "team": "home",
+      "player_name": "Lorenzo Lucca",
+      "assist_name": "Scott McTominay",
+      "period": 2
+    },
+    {
+      "type": "goal",
+      "minute": 90,
+      "team": "away",
+      "player_name": "Lorran Lucas Pereira de Sousa",
+      "assist_name": "Samuele Angori",
+      "period": 2
+    }
+  ]
+}

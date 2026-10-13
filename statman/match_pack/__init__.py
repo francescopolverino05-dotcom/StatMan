@@ -13,12 +13,14 @@ from statman.match_pack.pipeline import (
     link_video_job,
     list_packs,
     put_facts,
+    put_facts_file,
     save_formation_pdf,
 )
 
 __all__ = [
     "create_pack",
     "put_facts",
+    "put_facts_file",
     "save_formation_pdf",
     "attach_formation",
     "attach_video_bytes",

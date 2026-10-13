@@ -119,10 +119,36 @@ def _event(raw: Any, i: int) -> dict[str, Any]:
     return event
 
 
+def parse_facts_text(raw: str | bytes) -> dict[str, Any]:
+    """Parse facts JSON from uploaded text/bytes (BOM-safe, UTF-8)."""
+    import json
+
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8-sig")
+    else:
+        raw = raw.lstrip("\ufeff")
+    text = raw.strip()
+    if not text:
+        raise ValueError("Facts file is empty")
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Invalid JSON at line {exc.lineno} col {exc.colno}: {exc.msg}. "
+            "Upload a UTF-8 .json match-facts file (see samples/napoli_pisa_2025-09-22_facts.json)."
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Facts JSON must be an object with home, away, and events")
+    return normalize_facts(payload)
+
+
 def normalize_facts(payload: dict[str, Any]) -> dict[str, Any]:
     """Validate user facts and return a canonical structure."""
     if not isinstance(payload, dict):
         raise ValueError("Facts payload must be a JSON object")
+    # Tolerate wrappers like { "facts": { ... } } from some exporters.
+    if "home" not in payload and isinstance(payload.get("facts"), dict):
+        payload = payload["facts"]
     home = _side(payload.get("home") or {"team_name": "Home"}, label="home")
     away = _side(payload.get("away") or {"team_name": "Away"}, label="away")
     events_in = payload.get("events") or []

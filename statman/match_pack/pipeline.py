@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from statman.match_pack import store
-from statman.match_pack.facts import EXAMPLE_FACTS, normalize_facts
+from statman.match_pack.facts import EXAMPLE_FACTS, normalize_facts, parse_facts_text
 from statman.match_pack.formation import extract_pdf_text
 from statman.match_pack.sheet_from_facts import sheet_from_facts
 from statman.video.pipeline import DEFAULT_MAX_UPLOAD_BYTES
@@ -69,14 +69,43 @@ def put_facts(pack_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     if meta is None:
         raise FileNotFoundError(f"Unknown pack_id={pack_id}")
     facts = normalize_facts(payload)
+    return _store_facts(pack_id, meta, facts)
+
+
+def put_facts_file(pack_id: str, fileobj: BinaryIO, filename: str = "facts.json") -> dict[str, Any]:
+    """Accept an uploaded .json facts file without dropping the pack on bad input."""
+    meta = store.read_meta(pack_id)
+    if meta is None:
+        raise FileNotFoundError(f"Unknown pack_id={pack_id}")
+    raw = fileobj.read()
+    if not raw:
+        raise ValueError("Facts file is empty")
+    # Persist the original upload for audit, even before parse succeeds.
+    safe = Path(filename).name or "facts_upload.json"
+    if not safe.lower().endswith(".json"):
+        safe = f"{safe}.json"
+    upload_path = store.pack_dir(pack_id) / f"upload_{safe}"
+    upload_path.write_bytes(raw if isinstance(raw, bytes) else str(raw).encode("utf-8"))
+    try:
+        facts = parse_facts_text(raw)
+    except ValueError as exc:
+        meta["error"] = str(exc)
+        meta["facts_upload_path"] = str(upload_path)
+        # Keep prior facts intact — do not wipe a good pack on a bad file.
+        store.write_meta(pack_id, meta)
+        raise
+    meta["facts_upload_path"] = str(upload_path)
+    meta["error"] = None
+    return _store_facts(pack_id, meta, facts)
+
+
+def _store_facts(pack_id: str, meta: dict[str, Any], facts: dict[str, Any]) -> dict[str, Any]:
     facts_path = store.pack_dir(pack_id) / "facts.json"
-    facts_path.write_text(json.dumps(facts, indent=2), encoding="utf-8")
+    facts_path.write_text(json.dumps(facts, indent=2, ensure_ascii=False), encoding="utf-8")
     meta["facts"] = facts
     meta["facts_path"] = str(facts_path)
     meta["status"] = "facts_ready" if not meta.get("sheet") else meta.get("status")
-    meta["title"] = (
-        f"{facts['home']['team_name']} vs {facts['away']['team_name']}"
-    )
+    meta["title"] = f"{facts['home']['team_name']} vs {facts['away']['team_name']}"
     meta["error"] = None
     store.write_meta(pack_id, meta)
     return meta

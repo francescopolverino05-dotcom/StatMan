@@ -7,12 +7,13 @@ from pathlib import Path
 import pytest
 
 from statman.match_pack import store
-from statman.match_pack.facts import EXAMPLE_FACTS, normalize_facts
+from statman.match_pack.facts import EXAMPLE_FACTS, normalize_facts, parse_facts_text
 from statman.match_pack.pipeline import (
     attach_video_bytes,
     compute_pack,
     create_pack,
     put_facts,
+    put_facts_file,
     save_formation_pdf,
 )
 from statman.match_pack.sheet_from_facts import sheet_from_facts
@@ -105,3 +106,30 @@ def test_rejects_bad_event_type():
                 "events": [{"type": "var_review", "minute": 10, "team": "home"}],
             }
         )
+
+
+def test_napoli_pisa_sample_facts_validate():
+    sample = Path(__file__).resolve().parents[1] / "samples" / "napoli_pisa_2025-09-22_facts.json"
+    assert sample.exists()
+    facts = parse_facts_text(sample.read_bytes())
+    sheet = sheet_from_facts(facts, pack_id="np")
+    assert sheet["match"]["home_score"] == 3
+    assert sheet["match"]["away_score"] == 2
+    assert sheet["match"]["home_formation"] == "4-1-4-1"
+    assert sheet["teams"][0]["corners"]["total"] == 5
+
+
+def test_bad_facts_file_does_not_wipe_prior(pack_root, tmp_path):
+    meta = create_pack()
+    pack_id = meta["pack_id"]
+    put_facts(pack_id, EXAMPLE_FACTS)
+    before = store.read_meta(pack_id)["facts"]["home"]["team_name"]
+    bad = tmp_path / "broken.json"
+    bad.write_text("{not json", encoding="utf-8")
+    with bad.open("rb") as fh:
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            put_facts_file(pack_id, fh, "broken.json")
+    after = store.read_meta(pack_id)
+    assert after["facts"]["home"]["team_name"] == before
+    assert after.get("error")
+    assert after.get("facts_upload_path")
