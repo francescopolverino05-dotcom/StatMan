@@ -120,9 +120,16 @@ def test_napoli_pisa_primavera_sample_facts_validate():
     assert "Primavera 2" in (sheet["match"]["competition"] or "")
     assert sheet["match"]["home_score"] == 1
     assert sheet["match"]["away_score"] == 0
-    assert sheet["match"]["home_formation"] == "4-3-2-1"
+    assert sheet["match"]["home_formation"] == "3-4-2-1"
+    assert sheet["match"]["away_formation"] == "4-4-2"
     assert any(
         e["type"] == "goal" and e.get("player_name") == "Mané" for e in sheet["events"]
+    )
+    assert any(
+        e["type"] == "substitution"
+        and e.get("player_in") == "Mané"
+        and e.get("minute") == 70
+        for e in sheet["events"]
     )
 
 
