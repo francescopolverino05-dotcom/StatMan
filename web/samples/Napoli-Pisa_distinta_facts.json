@@ -1,0 +1,167 @@
+{
+  "competition": "Campionato Primavera 2 — Girone B",
+  "season": "2026-2027",
+  "kickoff": "2026-10-10T11:30:00+02:00",
+  "venue": "Stadio Giuseppe Piccolo, Cercola",
+  "notes": "Primavera 2 (NOT Serie A). Rebuilt from official Primavera lineups / match sheet for Napoli–Pisa 1-0 (Mané 74'). Your local distinta PDF was not mounted on the cloud VM; jersey numbers for Napoli XI/bench from Transfermarkt match sheet; Pisa jersey numbers left null except where reported in live coverage (Mocanu 9, Ghizzani 22). Re-upload the PDF on Match pack to attach the original distinta.",
+  "home": {
+    "team_id": 1,
+    "team_name": "Napoli Primavera",
+    "formation": "4-3-2-1",
+    "lineup": [
+      { "player_name": "Pugliese", "jersey": 1, "position": "GK", "is_starter": true },
+      { "player_name": "Melnyk", "jersey": 2, "position": "RB", "is_starter": true },
+      { "player_name": "Zappalà", "jersey": 3, "position": "CB", "is_starter": true },
+      { "player_name": "De Stefano", "jersey": 4, "position": "CB", "is_starter": true },
+      { "player_name": "Branchizio", "jersey": 5, "position": "LB", "is_starter": true },
+      { "player_name": "Lieto", "jersey": 6, "position": "CM", "is_starter": true },
+      { "player_name": "Anic", "jersey": 7, "position": "CM", "is_starter": true },
+      { "player_name": "D'Angelo", "jersey": 8, "position": "CM", "is_starter": true },
+      { "player_name": "Pengue", "jersey": 9, "position": "AM", "is_starter": true },
+      { "player_name": "Baridò", "jersey": 10, "position": "AM", "is_starter": true },
+      { "player_name": "Santella", "jersey": 11, "position": "ST", "is_starter": true },
+      { "player_name": "Spinelli", "jersey": 12, "position": "GK", "is_starter": false },
+      { "player_name": "Lepre", "jersey": 13, "position": "CB", "is_starter": false },
+      { "player_name": "Marotta", "jersey": 14, "position": "CB", "is_starter": false },
+      { "player_name": "Natale", "jersey": 15, "position": "CB", "is_starter": false },
+      { "player_name": "Liccardo", "jersey": 16, "position": "RB", "is_starter": false },
+      { "player_name": "Candela", "jersey": 17, "position": "LB", "is_starter": false },
+      { "player_name": "De Michele", "jersey": 18, "position": "CM", "is_starter": false },
+      { "player_name": "Pepe", "jersey": 19, "position": "MF", "is_starter": false },
+      { "player_name": "Favicchio", "jersey": 20, "position": "LW", "is_starter": false },
+      { "player_name": "Mané", "jersey": 21, "position": "CF", "is_starter": false },
+      { "player_name": "Russo", "jersey": 22, "position": "CM", "is_starter": false }
+    ],
+    "totals": {
+      "corners": null,
+      "offsides": null,
+      "free_kicks": null
+    }
+  },
+  "away": {
+    "team_id": 2,
+    "team_name": "Pisa Primavera",
+    "formation": "4-4-2",
+    "lineup": [
+      { "player_name": "Sebastiano", "jersey": null, "position": "GK", "is_starter": true },
+      { "player_name": "Bernardini", "jersey": null, "position": "DF", "is_starter": true },
+      { "player_name": "Neri", "jersey": null, "position": "DF", "is_starter": true },
+      { "player_name": "Bendinelli", "jersey": null, "position": "DF", "is_starter": true },
+      { "player_name": "Serafini", "jersey": null, "position": "DF", "is_starter": true },
+      { "player_name": "Rocca", "jersey": null, "position": "MF", "is_starter": true },
+      { "player_name": "Landucci", "jersey": null, "position": "MF", "is_starter": true },
+      { "player_name": "Lucarelli", "jersey": null, "position": "MF", "is_starter": true },
+      { "player_name": "Mocanu", "jersey": 9, "position": "FW", "is_starter": true },
+      { "player_name": "Mainardi", "jersey": null, "position": "FW", "is_starter": true },
+      { "player_name": "Masini", "jersey": null, "position": "FW", "is_starter": true },
+      { "player_name": "Paolini", "jersey": null, "position": null, "is_starter": false },
+      { "player_name": "Bertacca", "jersey": null, "position": null, "is_starter": false },
+      { "player_name": "Lenzoni", "jersey": null, "position": "DF", "is_starter": false },
+      { "player_name": "Bolognini", "jersey": null, "position": null, "is_starter": false },
+      { "player_name": "Minisini", "jersey": null, "position": null, "is_starter": false },
+      { "player_name": "Ietro", "jersey": null, "position": null, "is_starter": false },
+      { "player_name": "Menicucci", "jersey": null, "position": "MF", "is_starter": false },
+      { "player_name": "Saviozzi", "jersey": null, "position": "MF", "is_starter": false },
+      { "player_name": "Tuon", "jersey": null, "position": null, "is_starter": false },
+      { "player_name": "Ribechini", "jersey": null, "position": "MF", "is_starter": false },
+      { "player_name": "Ghizzani", "jersey": 22, "position": "FW", "is_starter": false },
+      { "player_name": "Miglianti", "jersey": null, "position": null, "is_starter": false }
+    ],
+    "totals": {
+      "corners": null,
+      "offsides": null,
+      "free_kicks": null
+    }
+  },
+  "events": [
+    {
+      "type": "substitution",
+      "minute": 46,
+      "team": "away",
+      "player_out": "Mocanu",
+      "player_in": "Ghizzani",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 55,
+      "team": "home",
+      "player_out": "Anic",
+      "player_in": "Favicchio",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 55,
+      "team": "home",
+      "player_out": "Santella",
+      "player_in": "Liccardo",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 67,
+      "team": "away",
+      "player_out": "Neri",
+      "player_in": "Lenzoni",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 67,
+      "team": "away",
+      "player_out": "Rocca",
+      "player_in": "Saviozzi",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 71,
+      "team": "home",
+      "player_out": "Pengue",
+      "player_in": "Mané",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 71,
+      "team": "home",
+      "player_out": "Lieto",
+      "player_in": "Natale",
+      "period": 2
+    },
+    {
+      "type": "goal",
+      "minute": 74,
+      "team": "home",
+      "player_name": "Mané",
+      "assist_name": "Baridò",
+      "period": 2,
+      "notes": "deciding goal"
+    },
+    {
+      "type": "substitution",
+      "minute": 76,
+      "team": "away",
+      "player_out": "Landucci",
+      "player_in": "Ribechini",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 80,
+      "team": "away",
+      "player_out": "Lucarelli",
+      "player_in": "Menicucci",
+      "period": 2
+    },
+    {
+      "type": "substitution",
+      "minute": 82,
+      "team": "home",
+      "player_out": "Baridò",
+      "player_in": "De Michele",
+      "period": 2
+    }
+  ]
+}

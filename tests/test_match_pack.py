@@ -108,15 +108,22 @@ def test_rejects_bad_event_type():
         )
 
 
-def test_napoli_pisa_sample_facts_validate():
-    sample = Path(__file__).resolve().parents[1] / "samples" / "napoli_pisa_2025-09-22_facts.json"
+def test_napoli_pisa_primavera_sample_facts_validate():
+    sample = (
+        Path(__file__).resolve().parents[1]
+        / "samples"
+        / "napoli_pisa_primavera2_2026-10-10_facts.json"
+    )
     assert sample.exists()
     facts = parse_facts_text(sample.read_bytes())
     sheet = sheet_from_facts(facts, pack_id="np")
-    assert sheet["match"]["home_score"] == 3
-    assert sheet["match"]["away_score"] == 2
-    assert sheet["match"]["home_formation"] == "4-1-4-1"
-    assert sheet["teams"][0]["corners"]["total"] == 5
+    assert "Primavera 2" in (sheet["match"]["competition"] or "")
+    assert sheet["match"]["home_score"] == 1
+    assert sheet["match"]["away_score"] == 0
+    assert sheet["match"]["home_formation"] == "4-3-2-1"
+    assert any(
+        e["type"] == "goal" and e.get("player_name") == "Mané" for e in sheet["events"]
+    )
 
 
 def test_bad_facts_file_does_not_wipe_prior(pack_root, tmp_path):

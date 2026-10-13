@@ -135,7 +135,7 @@ def parse_facts_text(raw: str | bytes) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise ValueError(
             f"Invalid JSON at line {exc.lineno} col {exc.colno}: {exc.msg}. "
-            "Upload a UTF-8 .json match-facts file (see samples/napoli_pisa_2025-09-22_facts.json)."
+            "Upload a UTF-8 .json match-facts file (see samples/napoli_pisa_primavera2_2026-10-10_facts.json)."
         ) from exc
     if not isinstance(payload, dict):
         raise ValueError("Facts JSON must be an object with home, away, and events")
