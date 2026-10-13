@@ -26,6 +26,7 @@ const computeBtn = document.getElementById("compute-btn");
 const analyzeBtn = document.getElementById("analyze-btn");
 const reconcileBtn = document.getElementById("reconcile-btn");
 const phase3Btn = document.getElementById("phase3-btn");
+const phase4Btn = document.getElementById("phase4-btn");
 const analyzeCancel = document.getElementById("analyze-cancel");
 const analyzeStatusEl = document.getElementById("analyze-status");
 const analyzeProgressWrap = document.getElementById("analyze-progress-wrap");
@@ -134,7 +135,8 @@ async function openPack(packId) {
     }
     if (
       ["queued", "running", "cancelling"].includes(pack.analyze?.status) ||
-      ["queued", "running", "cancelling"].includes(pack.phase3?.status)
+      ["queued", "running", "cancelling"].includes(pack.phase3?.status) ||
+      ["queued", "running"].includes(pack.phase4?.status)
     ) {
       pollAnalyze(packId);
     }
@@ -168,7 +170,9 @@ function renderSheet(pack) {
   const filmCounts = cov.film_event_counts || sheet.film?.totals || {};
   const hasFilm = Boolean(sheet.film?.totals);
   const p3 = cov.phase3 || sheet.tracking?.possession || null;
+  const p4 = cov.phase4 || null;
   const hasP3 = Boolean(sheet.tracking?.possession);
+  const hasP4 = Boolean(sheet.shots?.totals || p4);
   coverageBanner.innerHTML = `
     <strong>Phase 1 — filled from your JSON:</strong> ${factList}
     (${counts.goals ?? 0} goals, ${counts.cards ?? 0} cards, ${counts.substitutions ?? 0} subs).
@@ -177,20 +181,31 @@ function renderSheet(pack) {
     ${pending || "—"}.
     ${
       hasFilm
-        ? `<br /><strong>Phase 2 — match-level film tags:</strong> ${filmCounts.events ?? "—"} events · ${filmCounts.shots ?? "—"} shots · ${filmCounts.passes ?? "—"} passes.`
+        ? `<br /><strong>Phase 2 — match-level film tags:</strong> ${filmCounts.events ?? "—"} events · ${filmCounts.shots ?? "—"} shot tags · ${filmCounts.passes ?? "—"} pass tags.`
         : `<br /><strong>Phase 2:</strong> Analyze video / import film tags.`
     }
     ${
       hasP3
-        ? `<br /><strong>Phase 3 — tracking:</strong> possession ${p3.possession_home_pct ?? sheet.tracking.possession.home_pct}% – ${p3.possession_away_pct ?? sheet.tracking.possession.away_pct}% · pass tags ${p3.passes_home ?? "—"}–${p3.passes_away ?? "—"} · shot tags ${p3.shot_tags_home ?? "—"}–${p3.shot_tags_away ?? "—"} (not board Shots — film over-counts).`
+        ? `<br /><strong>Phase 3 — tracking:</strong> possession ${p3.possession_home_pct ?? sheet.tracking.possession.home_pct}% – ${p3.possession_away_pct ?? sheet.tracking.possession.away_pct}% · pass tags ${p3.passes_home ?? "—"}–${p3.passes_away ?? "—"}.`
         : `<br /><strong>Phase 3:</strong> Run Phase 3 tracking after correcting film.`
+    }
+    ${
+      hasP4
+        ? `<br /><strong>Phase 4 — shots:</strong> ${p4?.shots_home ?? sheet.shots?.totals?.home?.shots ?? "—"}–${p4?.shots_away ?? sheet.shots?.totals?.away?.shots ?? "—"} (SoT ${p4?.sot_home ?? sheet.shots?.totals?.home?.shots_on_target ?? "—"}–${p4?.sot_away ?? sheet.shots?.totals?.away?.shots_on_target ?? "—"}, approximate).`
+        : `<br /><strong>Phase 4:</strong> Score shots after Phase 3.`
     }
   `;
 
   const teams = sheet.teams || [];
   const home = teams[0];
   const away = teams[1];
-  const vsLabel = hasP3 ? "facts + film + track" : hasFilm ? "facts + film" : "fact sheet";
+  const vsLabel = hasP4
+    ? "facts + track + shots"
+    : hasP3
+      ? "facts + film + track"
+      : hasFilm
+        ? "facts + film"
+        : "fact sheet";
   teamBoard.innerHTML = `
     ${home ? renderTeamCatalogHtml(home, "Home", { showFormation: true }) : ""}
     <div class="score-stack">
@@ -200,7 +215,7 @@ function renderSheet(pack) {
     ${away ? renderTeamCatalogHtml(away, "Away", { showFormation: true }) : ""}
   `;
 
-  renderFilmPanel(sheet.film, sheet.tracking);
+  renderFilmPanel(sheet.film, sheet.tracking, sheet.shots);
 
   const events = sheet.events || [];
   eventsBody.innerHTML = events
@@ -240,9 +255,9 @@ function renderSheet(pack) {
   syncAnalyzeUi(pack);
 }
 
-function renderFilmPanel(film, tracking) {
+function renderFilmPanel(film, tracking, shots) {
   if (!filmPanel) return;
-  if (!film?.totals && !tracking?.possession) {
+  if (!film?.totals && !tracking?.possession && !shots?.totals) {
     filmPanel.hidden = true;
     filmPanel.innerHTML = "";
     return;
@@ -327,6 +342,20 @@ function renderFilmPanel(film, tracking) {
     </ul>`
         : ""
     }
+    ${
+      shots?.totals
+        ? `<h4 class="stat-section__title" style="margin-top:1.25rem">Phase 4 shots (rescored)</h4>
+    <p class="film-warn">${shots.warning || ""}</p>
+    <ul class="film-grid">
+      <li><span class="label">Shots home</span><span class="value">${fmt(shots.totals.home?.shots, 0)}</span></li>
+      <li><span class="label">Shots away</span><span class="value">${fmt(shots.totals.away?.shots, 0)}</span></li>
+      <li><span class="label">SoT home</span><span class="value">${fmt(shots.totals.home?.shots_on_target, 0)}</span></li>
+      <li><span class="label">SoT away</span><span class="value">${fmt(shots.totals.away?.shots_on_target, 0)}</span></li>
+      <li><span class="label">Selected</span><span class="value">${fmt((shots.selected || []).length, 0)}</span></li>
+      <li><span class="label">Budget</span><span class="value">${fmt(shots.budget, 0)}</span></li>
+    </ul>`
+        : ""
+    }
   `;
 }
 
@@ -347,18 +376,29 @@ function stopAnalyzePoll() {
 function syncAnalyzeUi(pack) {
   const a = pack?.analyze;
   const p3 = pack?.phase3;
+  const p4 = pack?.phase4;
   const busyA = a && ["queued", "running", "cancelling"].includes(a.status);
   const busy3 = p3 && ["queued", "running", "cancelling"].includes(p3.status);
-  const prog = (busy3 ? p3?.progress : a?.progress) || {};
+  const busy4 = p4 && ["queued", "running"].includes(p4.status);
+  const prog = (busy4 ? p4?.progress : busy3 ? p3?.progress : a?.progress) || {};
   const pct = prog.pct ?? 0;
   if (analyzeProgressWrap) {
-    analyzeProgressWrap.hidden = !busyA && !busy3 && !(a?.status === "done" || p3?.status === "done");
+    analyzeProgressWrap.hidden =
+      !busyA &&
+      !busy3 &&
+      !busy4 &&
+      !(a?.status === "done" || p3?.status === "done" || p4?.status === "done");
     if (analyzeProgressFill) analyzeProgressFill.style.width = `${pct}%`;
     if (analyzeProgressText) {
-      if (busy3) {
+      if (busy4) {
+        analyzeProgressText.textContent = `phase4 ${p4.status} · ${pct}% · ${prog.done ?? 0}/${prog.total ?? "?"} candidates`;
+      } else if (busy3) {
         analyzeProgressText.textContent = `phase3 ${p3.status} · ${pct}% · ${prog.stage || ""} · ${prog.samples ?? ""} samples`;
       } else if (busyA) {
         analyzeProgressText.textContent = `phase2 ${a.status} · ${pct}% · ${prog.events_so_far ?? a.event_count ?? 0} events`;
+      } else if (p4?.status === "done") {
+        const tot = p4.totals || {};
+        analyzeProgressText.textContent = `phase4 done · shots ${(tot.home && tot.home.shots) ?? "—"}–${(tot.away && tot.away.shots) ?? "—"}`;
       } else if (p3?.status === "done") {
         const poss = p3.possession || {};
         analyzeProgressText.textContent = `phase3 done · possession ${poss.home_pct ?? "—"}%–${poss.away_pct ?? "—"}%`;
@@ -369,16 +409,26 @@ function syncAnalyzeUi(pack) {
       }
     }
   }
-  if (busy3) {
+  if (busy4) {
+    setAnalyzeStatus(`Phase 4 scoring shots… ${pct}%`, { loading: true });
+  } else if (p4?.status === "done") {
+    const tot = p4.totals || {};
+    setAnalyzeStatus(
+      `Phase 4 ready — shots ${tot.home?.shots ?? "—"}–${tot.away?.shots ?? "—"} (SoT ${tot.home?.shots_on_target ?? "—"}–${tot.away?.shots_on_target ?? "—"}).`
+    );
+    stopAnalyzePoll();
+  } else if (p4?.status === "error") {
+    setAnalyzeStatus(p4.error || "Phase 4 failed", { error: true });
+    stopAnalyzePoll();
+  } else if (busy3) {
     setAnalyzeStatus(`Phase 3 tracking… ${pct}% (${prog.stage || "running"})`, {
       loading: true,
     });
-  } else if (p3?.status === "done") {
+  } else if (p3?.status === "done" && !p4) {
     const poss = p3.possession || {};
     setAnalyzeStatus(
       `Phase 3 ready — possession ${poss.home_pct ?? "—"}%–${poss.away_pct ?? "—"}%. Team board updated.`
     );
-    stopAnalyzePoll();
   } else if (p3?.status === "error") {
     setAnalyzeStatus(p3.error || "Phase 3 failed", { error: true });
     stopAnalyzePoll();
@@ -409,9 +459,11 @@ async function pollAnalyze(packId) {
       }
       const st2 = pack.analyze?.status;
       const st3 = pack.phase3?.status;
+      const st4 = pack.phase4?.status;
       const busy2 = st2 && ["queued", "running", "cancelling"].includes(st2);
       const busy3 = st3 && ["queued", "running", "cancelling"].includes(st3);
-      if (!busy2 && !busy3) {
+      const busy4 = st4 && ["queued", "running"].includes(st4);
+      if (!busy2 && !busy3 && !busy4) {
         stopAnalyzePoll();
         await refreshPacks();
       }
@@ -476,6 +528,24 @@ phase3Btn?.addEventListener("click", async () => {
     setPackId(pack.pack_id);
     syncAnalyzeUi(pack);
     if (pack.phase3?.status === "done" && pack.sheet) {
+      renderSheet(pack);
+    } else {
+      pollAnalyze(id);
+    }
+    await refreshPacks();
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+phase4Btn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Starting Phase 4 shot scoring…", { loading: true });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/phase4`, { method: "POST" });
+    setPackId(pack.pack_id);
+    syncAnalyzeUi(pack);
+    if (pack.phase4?.status === "done" && pack.sheet) {
       renderSheet(pack);
     } else {
       pollAnalyze(id);

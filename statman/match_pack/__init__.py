@@ -9,6 +9,7 @@ from statman.match_pack.analyze import (
     start_pack_analyze,
 )
 from statman.match_pack.phase3 import cancel_phase3, refresh_team_splits, start_phase3
+from statman.match_pack.phase4 import start_phase4
 from statman.match_pack.reconcile import reconcile_pack
 from statman.match_pack.pipeline import (
     append_pack_video_chunk,
@@ -52,4 +53,5 @@ __all__ = [
     "start_phase3",
     "cancel_phase3",
     "refresh_team_splits",
+    "start_phase4",
 ]
