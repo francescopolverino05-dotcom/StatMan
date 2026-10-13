@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StatMan — import event data</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="page page--import">
+    <nav class="topnav">
+      <a class="topnav__brand" href="/">StatMan</a>
+      <div class="topnav__links">
+        <a href="/">Match</a>
+        <a href="/season">Season</a>
+        <a href="/season/players">Players</a>
+        <a href="/match-pack">Match pack</a>
+        <a href="/video">Film tags</a>
+        <a class="is-active" href="/import">Event import</a>
+        <a href="/api/docs">API</a>
+      </div>
+    </nav>
+
+    <header class="page-hero">
+      <p class="eyebrow">Provider event data</p>
+      <h1>Import a match you have</h1>
+      <p class="lede">
+        Upload <strong>StatsBomb events JSON</strong> (recommended) with optional lineups / match metadata.
+        StatMan converts to SPADL and returns the full locked match sheet — possession, xG, PPDA,
+        progressive passes, GK stats, and the rest.
+      </p>
+    </header>
+
+    <main>
+      <p class="banner banner--ok">
+        StatsBomb JSON recommended. This is the provider path for real match stats — not video spotting.
+      </p>
+      <p class="banner banner--warn">
+        Opta / StatsPerform F24 is accepted but limited: many sheet fields stay empty because the
+        catalog is defined on StatsBomb event names. Use StatsBomb when you can.
+      </p>
+
+      <section class="section">
+        <div class="section__head">
+          <h2>Event file</h2>
+          <p>
+            Prefer StatsBomb open-data <code>events/{match_id}.json</code> (+ lineups).
+            Opta F24 JSON works only for a partial SPADL subset.
+          </p>
+        </div>
+        <form id="import-form" class="upload-form">
+          <label class="file-drop" for="events-input">
+            <input id="events-input" name="events" type="file" accept=".json,application/json" required />
+            <span id="events-label">Choose events JSON…</span>
+          </label>
+          <div class="match-bar match-bar--stack">
+            <label class="field">
+              <span>Lineups (optional)</span>
+              <input id="lineups-input" name="lineups" type="file" accept=".json,application/json" />
+            </label>
+            <label class="field">
+              <span>Match meta (optional)</span>
+              <input id="match-input" name="match" type="file" accept=".json,application/json" />
+            </label>
+            <label class="field">
+              <span>Game id (optional)</span>
+              <input id="game-id" name="game_id" type="number" placeholder="e.g. 8657" />
+            </label>
+            <label class="field">
+              <span>Home team id (optional)</span>
+              <input id="home-team-id" name="home_team_id" type="number" placeholder="StatsBomb / Opta id" />
+            </label>
+          </div>
+          <button class="btn btn--primary" type="submit">Import &amp; compute stats</button>
+        </form>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="results" class="section" hidden>
+        <div class="section__head">
+          <h2 id="result-title">Imported match</h2>
+          <p id="result-meta"></p>
+        </div>
+        <div id="team-grid" class="team-board"></div>
+        <div class="section__head" style="margin-top: 2rem">
+          <h2>Player sheet</h2>
+          <p>Individual stats — sorted by xG, then passing volume.</p>
+        </div>
+        <div class="table-wrap table-wrap--wide">
+          <table id="player-table" class="player-sheet">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Team</th>
+                <th>Passes</th>
+                <th>Pass %</th>
+                <th>Prog</th>
+                <th>Key</th>
+                <th>Shots</th>
+                <th>SoT</th>
+                <th>G</th>
+                <th>xG</th>
+                <th>Tkl</th>
+                <th>Int</th>
+                <th>Rec</th>
+                <th>Clr</th>
+                <th>Blk</th>
+                <th>Duels</th>
+                <th>Fouls</th>
+                <th>Lost</th>
+                <th>Saves</th>
+                <th>Yel</th>
+                <th>Red</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section__head">
+          <h2>Recent imports</h2>
+          <p>Stored under <code>.data/imports/</code>.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="imports-table">
+            <thead>
+              <tr>
+                <th>Import</th>
+                <th>Format</th>
+                <th>Match</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        This page is the match sheet. Film action tags from a broadcast live on
+        <a href="/video">Film tags</a> — they do not replace StatsBomb xG, PPDA, or aerials.
+      </p>
+    </footer>
+
+    <script src="/static/import.js" type="module"></script>
+  </body>
+</html>
