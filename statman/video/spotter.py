@@ -1,8 +1,9 @@
 """Approximate SoccerNet-style action spotting for a full-match video.
 
 Designed for 90–120+ minute broadcasts, not short clips. Samples the whole
-timeline sparsely (default 0.5 fps), finds people (HOG), tracks motion peaks as
-a ball proxy, and emits SoccerNet Ball Action Spotting classes:
+timeline sparsely (default 0.5 fps), detects people + ball (YOLO when
+available, OpenCV HOG + motion otherwise), and emits SoccerNet Ball Action
+Spotting classes:
 
 Pass, Drive, Header, High Pass, Out, Cross, Throw In, Shot,
 Ball Player Block, Player Successful Tackle, Free Kick, Goal.
@@ -20,6 +21,8 @@ from typing import Any
 import cv2
 import numpy as np
 
+from statman.video.detector import detect_frame
+
 ACTION_CLASSES = (
     "Pass",
     "Drive",
@@ -36,6 +39,7 @@ ACTION_CLASSES = (
 )
 
 ProgressCb = Callable[[float, float, int], None]  # time_sec, duration_sec, event_count
+CancelCb = Callable[[], bool]
 
 
 @dataclass
@@ -50,12 +54,14 @@ class SpotConfig:
     hog_scale: float = 1.08
     hog_win_stride: tuple[int, int] = (8, 8)
     resize_fx: float = 0.4  # smaller frames = workable full-match runtime
+    prefer_yolo: bool = True
 
 
 def spot_actions(
     video_path: Path,
     config: SpotConfig | None = None,
     on_progress: ProgressCb | None = None,
+    should_cancel: CancelCb | None = None,
 ) -> list[dict[str, Any]]:
     """Spot approximate actions across the full video duration."""
     cfg = config or SpotConfig()
@@ -83,133 +89,114 @@ def spot_actions(
     events: list[dict[str, Any]] = []
     last_event_t = -1e9
     frame_idx = 0
-    sampled = 0
     last_report = -1.0
+    backend_used = "unknown"
 
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            break
+    try:
+        while True:
+            if should_cancel and should_cancel():
+                raise InterruptedError("Job cancelled")
 
-        t = frame_idx / src_fps
-        if t > cfg.max_duration_sec:
-            break
+            ok, frame = cap.read()
+            if not ok:
+                break
 
-        if frame_idx % frame_step != 0:
-            frame_idx += 1
-            continue
+            t = frame_idx / src_fps
+            if t > cfg.max_duration_sec:
+                break
 
-        small = cv2.resize(frame, (0, 0), fx=cfg.resize_fx, fy=cfg.resize_fx)
-        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-        gray_blur = cv2.GaussianBlur(gray, (5, 5), 0)
+            if frame_idx % frame_step != 0:
+                frame_idx += 1
+                continue
 
-        people = _detect_people(hog, small, cfg)
-        ball = _detect_ball_proxy(gray_blur, prev_gray)
-        handler = _nearest_person(people, ball) if ball and people else None
+            small = cv2.resize(frame, (0, 0), fx=cfg.resize_fx, fy=cfg.resize_fx)
+            gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+            gray_blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
-        motion_score = 0.0
-        if prev_gray is not None:
-            diff = cv2.absdiff(gray_blur, prev_gray)
-            motion_score = float(np.mean(diff))
-
-        label = _classify_transition(
-            t=t,
-            last_event_t=last_event_t,
-            min_gap=cfg.min_gap_sec,
-            ball=ball,
-            prev_ball=prev_ball,
-            handler=handler,
-            prev_handler=prev_handler,
-            people=people,
-            motion_score=motion_score,
-            frame_w=small.shape[1],
-            frame_h=small.shape[0],
-        )
-        if label is not None:
-            scale = 1.0 / cfg.resize_fx
-            events.append(
-                {
-                    "time_sec": round(t, 3),
-                    "label": label,
-                    "confidence": _confidence(label, motion_score, ball is not None, len(people)),
-                    "ball_xy": (
-                        [round(ball[0] * scale, 1), round(ball[1] * scale, 1)] if ball else None
-                    ),
-                    "handler_xy": (
-                        [round(handler[0] * scale, 1), round(handler[1] * scale, 1)]
-                        if handler
-                        else None
-                    ),
-                    "people_count": len(people),
-                    "motion": round(motion_score, 2),
-                }
+            det = detect_frame(
+                small,
+                prev_gray=prev_gray,
+                gray_blur=gray_blur,
+                hog=hog,
+                hog_scale=cfg.hog_scale,
+                hog_win_stride=cfg.hog_win_stride,
+                prefer_yolo=cfg.prefer_yolo,
             )
-            last_event_t = t
+            backend_used = det.backend
+            people = det.people
+            ball = det.ball
+            # When YOLO finds people but misses the ball, keep motion proxy.
+            if ball is None and det.backend == "yolo":
+                ball = _detect_ball_proxy_local(gray_blur, prev_gray)
+            handler = _nearest_person(people, ball) if ball and people else None
 
-        if on_progress and (t - last_report >= 5.0 or t >= duration):
-            on_progress(t, duration, len(events))
-            last_report = t
+            motion_score = 0.0
+            if prev_gray is not None:
+                diff = cv2.absdiff(gray_blur, prev_gray)
+                motion_score = float(np.mean(diff))
 
-        prev_gray = gray_blur
-        prev_ball = ball
-        prev_handler = handler
-        sampled += 1
-        frame_idx += 1
+            label = _classify_transition(
+                t=t,
+                last_event_t=last_event_t,
+                min_gap=cfg.min_gap_sec,
+                ball=ball,
+                prev_ball=prev_ball,
+                handler=handler,
+                prev_handler=prev_handler,
+                people=people,
+                motion_score=motion_score,
+                frame_w=small.shape[1],
+                frame_h=small.shape[0],
+            )
+            if label is not None:
+                scale = 1.0 / cfg.resize_fx
+                events.append(
+                    {
+                        "time_sec": round(t, 3),
+                        "label": label,
+                        "confidence": _confidence(
+                            label, motion_score, ball is not None, len(people)
+                        ),
+                        "ball_xy": (
+                            [round(ball[0] * scale, 1), round(ball[1] * scale, 1)]
+                            if ball
+                            else None
+                        ),
+                        "handler_xy": (
+                            [round(handler[0] * scale, 1), round(handler[1] * scale, 1)]
+                            if handler
+                            else None
+                        ),
+                        "people_count": len(people),
+                        "motion": round(motion_score, 2),
+                        "detector": backend_used,
+                    }
+                )
+                last_event_t = t
 
-    cap.release()
+            if on_progress and (t - last_report >= 5.0 or t >= duration):
+                on_progress(t, duration, len(events))
+                last_report = t
+
+            prev_gray = gray_blur
+            prev_ball = ball
+            prev_handler = handler
+            frame_idx += 1
+    finally:
+        cap.release()
+
     if on_progress:
         on_progress(min(duration, frame_idx / src_fps), duration, len(events))
     return events
 
 
-def _detect_people(
-    hog: cv2.HOGDescriptor,
-    frame: np.ndarray,
-    cfg: SpotConfig,
-) -> list[tuple[float, float]]:
-    rects, weights = hog.detectMultiScale(
-        frame,
-        winStride=cfg.hog_win_stride,
-        padding=(8, 8),
-        scale=cfg.hog_scale,
-    )
-    centres: list[tuple[float, float]] = []
-    weight_list = list(weights) if weights is not None else [1.0] * len(rects)
-    for (x, y, w, h), weight in zip(rects, weight_list):
-        if float(weight) < 0.35:
-            continue
-        centres.append((float(x + w / 2), float(y + h * 0.65)))
-    return centres
-
-
-def _detect_ball_proxy(
+def _detect_ball_proxy_local(
     gray: np.ndarray,
     prev_gray: np.ndarray | None,
 ) -> tuple[float, float] | None:
-    if prev_gray is None:
-        return None
-    diff = cv2.absdiff(gray, prev_gray)
-    _, thr = cv2.threshold(diff, 22, 255, cv2.THRESH_BINARY)
-    thr = cv2.morphologyEx(thr, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    contours, _ = cv2.findContours(thr, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    best = None
-    best_score = 0.0
-    h, w = gray.shape
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        if area < 6 or area > (h * w) * 0.012:
-            continue
-        x, y, bw, bh = cv2.boundingRect(cnt)
-        aspect = bw / max(bh, 1)
-        if aspect < 0.35 or aspect > 2.8:
-            continue
-        cx, cy = x + bw / 2, y + bh / 2
-        edge_pen = 20.0 if (cx < 8 or cy < 8 or cx > w - 8 or cy > h - 8) else 0.0
-        score = float(area) - edge_pen
-        if score > best_score:
-            best_score = score
-            best = (float(cx), float(cy))
-    return best
+    from statman.video.detector import _detect_ball_proxy
+
+    return _detect_ball_proxy(gray, prev_gray)
 
 
 def _nearest_person(

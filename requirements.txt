@@ -6,7 +6,8 @@ statsbombpy>=1.13.0
 multimethod>=1.10,<2
 # socceraction needs numpy 1.x; OpenCV 4.x matches that pin
 numpy>=1.26.0,<2
-opencv-python-headless>=4.8,<5
+# ultralytics imports cv2.imshow at load time — use full opencv-python, not headless
+opencv-python>=4.8,<5
 python-multipart>=0.0.9
 pandas>=2.0.0
 pydantic>=2.0.0
@@ -14,3 +15,8 @@ httpx>=0.27.0
 pytest>=8.0.0
 mplsoccer>=1.2.0
 matplotlib>=3.8.0
+# YOLO person/ball detector for full-match video spotting (falls back to HOG)
+ultralytics>=8.1,<9
+torch>=2.2.0
+# Formation PDF text extract for match-pack Phase 1
+pypdf>=5.0.0
