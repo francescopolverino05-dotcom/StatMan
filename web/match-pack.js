@@ -25,6 +25,7 @@ const videoProgressText = document.getElementById("video-progress-text");
 const computeBtn = document.getElementById("compute-btn");
 const analyzeBtn = document.getElementById("analyze-btn");
 const reconcileBtn = document.getElementById("reconcile-btn");
+const phase3Btn = document.getElementById("phase3-btn");
 const analyzeCancel = document.getElementById("analyze-cancel");
 const analyzeStatusEl = document.getElementById("analyze-status");
 const analyzeProgressWrap = document.getElementById("analyze-progress-wrap");
@@ -131,7 +132,10 @@ async function openPack(packId) {
       }
       setStatus(`Loaded pack ${packId} — save facts and compute when ready.`);
     }
-    if (["queued", "running", "cancelling"].includes(pack.analyze?.status)) {
+    if (
+      ["queued", "running", "cancelling"].includes(pack.analyze?.status) ||
+      ["queued", "running", "cancelling"].includes(pack.phase3?.status)
+    ) {
       pollAnalyze(packId);
     }
   } catch (err) {
@@ -163,34 +167,40 @@ function renderSheet(pack) {
   const counts = cov.fact_event_counts || {};
   const filmCounts = cov.film_event_counts || sheet.film?.totals || {};
   const hasFilm = Boolean(sheet.film?.totals);
+  const p3 = cov.phase3 || sheet.tracking?.possession || null;
+  const hasP3 = Boolean(sheet.tracking?.possession);
   coverageBanner.innerHTML = `
     <strong>Phase 1 — filled from your JSON:</strong> ${factList}
     (${counts.goals ?? 0} goals, ${counts.cards ?? 0} cards, ${counts.substitutions ?? 0} subs).
-    <br /><strong>Blank (—) on the team board:</strong>
-    ${missing ? `not in your JSON (${missing}); ` : ""}
-    team-split possession / xG / shots / pass accuracy need later phases (${pending}${
-      (cov.pending_later_phases || []).length > 8 ? "…" : ""
-    }).
+    <br /><strong>Still blank / pending:</strong>
+    ${missing ? `optional set pieces (${missing}); ` : ""}
+    ${pending || "—"}.
     ${
       hasFilm
-        ? `<br /><strong>Phase 2 — match-level film tags:</strong> ${filmCounts.events ?? "—"} events · ${filmCounts.shots ?? "—"} shots · ${filmCounts.passes ?? "—"} passes (approximate, no team split).`
-        : `<br /><strong>Phase 2:</strong> click <em>Analyze video / import film tags</em> after the video is ready.`
+        ? `<br /><strong>Phase 2 — match-level film tags:</strong> ${filmCounts.events ?? "—"} events · ${filmCounts.shots ?? "—"} shots · ${filmCounts.passes ?? "—"} passes.`
+        : `<br /><strong>Phase 2:</strong> Analyze video / import film tags.`
+    }
+    ${
+      hasP3
+        ? `<br /><strong>Phase 3 — tracking:</strong> possession ${p3.possession_home_pct ?? sheet.tracking.possession.home_pct}% – ${p3.possession_away_pct ?? sheet.tracking.possession.away_pct}% · shots ${p3.shots_home ?? "—"}–${p3.shots_away ?? "—"} · passes ${p3.passes_home ?? "—"}–${p3.passes_away ?? "—"} (approximate).`
+        : `<br /><strong>Phase 3:</strong> Run Phase 3 tracking after correcting film.`
     }
   `;
 
   const teams = sheet.teams || [];
   const home = teams[0];
   const away = teams[1];
+  const vsLabel = hasP3 ? "facts + film + track" : hasFilm ? "facts + film" : "fact sheet";
   teamBoard.innerHTML = `
     ${home ? renderTeamCatalogHtml(home, "Home", { showFormation: true }) : ""}
     <div class="score-stack">
       <div class="score">${m.home_score}–${m.away_score}</div>
-      <div class="vs">${hasFilm ? "facts + film" : "fact sheet"}</div>
+      <div class="vs">${vsLabel}</div>
     </div>
     ${away ? renderTeamCatalogHtml(away, "Away", { showFormation: true }) : ""}
   `;
 
-  renderFilmPanel(sheet.film);
+  renderFilmPanel(sheet.film, sheet.tracking);
 
   const events = sheet.events || [];
   eventsBody.innerHTML = events
@@ -230,25 +240,24 @@ function renderSheet(pack) {
   syncAnalyzeUi(pack);
 }
 
-function renderFilmPanel(film) {
+function renderFilmPanel(film, tracking) {
   if (!filmPanel) return;
-  if (!film?.totals) {
+  if (!film?.totals && !tracking?.possession) {
     filmPanel.hidden = true;
     filmPanel.innerHTML = "";
     return;
   }
-  const t = film.totals;
-  const c = film.corrected || {};
+  const t = film?.totals || {};
+  const c = film?.corrected || {};
   const rows = [
     ["Events", t.events],
-    ["Shots", c.shots ?? t.shots],
-    ["Passes", c.passes ?? t.passes],
+    ["Shots (match)", c.shots ?? t.shots],
+    ["Passes (match)", c.passes ?? t.passes],
     ["Crosses", t.crosses],
     ["Drives", t.drives],
     ["Headers", t.headers],
     ["Tackles", t.tackles],
     ["Throw-ins", c.throw_ins ?? t.throw_ins],
-    ["Free kicks", c.free_kicks ?? t.free_kicks],
     ["Goals (corrected)", c.goals ?? "—"],
     ["Goal tags raw*", t.goal_tags],
   ];
@@ -260,18 +269,35 @@ function renderFilmPanel(film) {
       return `${a.player_name || "?"} ${a.fact_minute}' (${a.team}) ← ${filmBit}`;
     })
     .join(" · ");
+  const poss = tracking?.possession || {};
+  const splits = tracking?.team_splits || {};
+  const trackRows = tracking
+    ? [
+        ["Poss. home %", poss.home_pct],
+        ["Poss. away %", poss.away_pct],
+        ["Shots home", splits.home?.shots],
+        ["Shots away", splits.away?.shots],
+        ["Passes home", splits.home?.passes],
+        ["Passes away", splits.away?.passes],
+        ["Tagged events", splits.events_tagged],
+      ]
+    : [];
   filmPanel.hidden = false;
   filmPanel.innerHTML = `
-    <h3>Film tags (Phase 2${film.corrected ? " · corrected" : ""})</h3>
-    <p class="film-warn">${film.warning || "Approximate broadcast spotting — not a provider feed."}
-      Method: <code>${film.method || "—"}</code>${
-        film.job_id ? ` · job <code>${film.job_id}</code>` : ""
-      }. *Raw Goal tags are noisy; corrected goals follow match facts.</p>
+    <h3>Film + tracking</h3>
+    <p class="film-warn">${
+      tracking?.warning ||
+      film?.warning ||
+      "Approximate broadcast spotting / tracking — not a provider feed."
+    }</p>
     ${
       anchors
         ? `<p class="film-warn"><strong>Anchored goals:</strong> ${anchors}</p>`
         : ""
     }
+    ${
+      film?.totals
+        ? `<h4 class="stat-section__title">Phase 2 film (match-level)</h4>
     <ul class="film-grid">
       ${rows
         .map(
@@ -282,7 +308,25 @@ function renderFilmPanel(film) {
         </li>`
         )
         .join("")}
-    </ul>
+    </ul>`
+        : ""
+    }
+    ${
+      tracking
+        ? `<h4 class="stat-section__title" style="margin-top:1.25rem">Phase 3 tracking (home/away)</h4>
+    <ul class="film-grid">
+      ${trackRows
+        .map(
+          ([label, value]) => `
+        <li>
+          <span class="label">${label}</span>
+          <span class="value">${fmt(value, 0)}</span>
+        </li>`
+        )
+        .join("")}
+    </ul>`
+        : ""
+    }
   `;
 }
 
@@ -302,39 +346,53 @@ function stopAnalyzePoll() {
 
 function syncAnalyzeUi(pack) {
   const a = pack?.analyze;
-  if (!a) {
-    if (analyzeProgressWrap) analyzeProgressWrap.hidden = true;
-    return;
-  }
-  const prog = a.progress || {};
+  const p3 = pack?.phase3;
+  const busyA = a && ["queued", "running", "cancelling"].includes(a.status);
+  const busy3 = p3 && ["queued", "running", "cancelling"].includes(p3.status);
+  const prog = (busy3 ? p3?.progress : a?.progress) || {};
   const pct = prog.pct ?? 0;
   if (analyzeProgressWrap) {
-    const busy = ["queued", "running", "cancelling"].includes(a.status);
-    analyzeProgressWrap.hidden = !busy && a.status !== "done";
+    analyzeProgressWrap.hidden = !busyA && !busy3 && !(a?.status === "done" || p3?.status === "done");
     if (analyzeProgressFill) analyzeProgressFill.style.width = `${pct}%`;
     if (analyzeProgressText) {
-      analyzeProgressText.textContent = busy
-        ? `${a.status} · ${pct}% · ${prog.events_so_far ?? a.event_count ?? 0} events`
-        : a.status === "done"
-          ? `done · ${a.event_count ?? 0} film events`
-          : a.status || "";
+      if (busy3) {
+        analyzeProgressText.textContent = `phase3 ${p3.status} · ${pct}% · ${prog.stage || ""} · ${prog.samples ?? ""} samples`;
+      } else if (busyA) {
+        analyzeProgressText.textContent = `phase2 ${a.status} · ${pct}% · ${prog.events_so_far ?? a.event_count ?? 0} events`;
+      } else if (p3?.status === "done") {
+        const poss = p3.possession || {};
+        analyzeProgressText.textContent = `phase3 done · possession ${poss.home_pct ?? "—"}%–${poss.away_pct ?? "—"}%`;
+      } else if (a?.status === "done") {
+        analyzeProgressText.textContent = `phase2 done · ${a.event_count ?? 0} film events`;
+      } else {
+        analyzeProgressText.textContent = "";
+      }
     }
   }
-  if (a.status === "done") {
+  if (busy3) {
+    setAnalyzeStatus(`Phase 3 tracking… ${pct}% (${prog.stage || "running"})`, {
+      loading: true,
+    });
+  } else if (p3?.status === "done") {
+    const poss = p3.possession || {};
+    setAnalyzeStatus(
+      `Phase 3 ready — possession ${poss.home_pct ?? "—"}%–${poss.away_pct ?? "—"}%. Team board updated.`
+    );
+    stopAnalyzePoll();
+  } else if (p3?.status === "error") {
+    setAnalyzeStatus(p3.error || "Phase 3 failed", { error: true });
+    stopAnalyzePoll();
+  } else if (busyA) {
+    setAnalyzeStatus(`Analyzing video… ${pct}%`, { loading: true });
+  } else if (a?.status === "done") {
     setAnalyzeStatus(
       `Phase 2 ready — ${a.event_count ?? 0} film events${
         a.video_job_id ? ` (imported job ${a.video_job_id})` : ""
       }.`
     );
-    stopAnalyzePoll();
-  } else if (a.status === "error") {
+  } else if (a?.status === "error") {
     setAnalyzeStatus(a.error || "Analyze failed", { error: true });
     stopAnalyzePoll();
-  } else if (a.status === "cancelled") {
-    setAnalyzeStatus("Analyze cancelled.");
-    stopAnalyzePoll();
-  } else if (["queued", "running", "cancelling"].includes(a.status)) {
-    setAnalyzeStatus(`Analyzing video… ${pct}%`, { loading: true });
   }
 }
 
@@ -345,12 +403,15 @@ async function pollAnalyze(packId) {
       const pack = await fetchJson(`/api/match-packs/${packId}`);
       if (pack.pack_id === activePackId) {
         syncAnalyzeUi(pack);
-        if (pack.sheet?.film) {
+        if (pack.sheet?.film || pack.sheet?.tracking) {
           renderSheet(pack);
         }
       }
-      const st = pack.analyze?.status;
-      if (st && !["queued", "running", "cancelling"].includes(st)) {
+      const st2 = pack.analyze?.status;
+      const st3 = pack.phase3?.status;
+      const busy2 = st2 && ["queued", "running", "cancelling"].includes(st2);
+      const busy3 = st3 && ["queued", "running", "cancelling"].includes(st3);
+      if (!busy2 && !busy3) {
         stopAnalyzePoll();
         await refreshPacks();
       }
@@ -358,7 +419,7 @@ async function pollAnalyze(packId) {
       setAnalyzeStatus(err.message, { error: true });
       stopAnalyzePoll();
     }
-  }, 2000);
+  }, 2500);
 }
 
 analyzeBtn?.addEventListener("click", async () => {
@@ -390,11 +451,36 @@ analyzeBtn?.addEventListener("click", async () => {
 analyzeCancel?.addEventListener("click", async () => {
   try {
     const id = requirePack();
-    const pack = await fetchJson(`/api/match-packs/${id}/analyze/cancel`, {
+    let pack = await fetchJson(`/api/match-packs/${id}/analyze/cancel`, {
+      method: "POST",
+    }).catch(() => null);
+    pack = await fetchJson(`/api/match-packs/${id}/phase3/cancel`, {
       method: "POST",
     });
     syncAnalyzeUi(pack);
     setAnalyzeStatus("Cancel requested.");
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+phase3Btn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Starting Phase 3 tracking (kit colours + possession)…", {
+    loading: true,
+  });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/phase3?sample_fps=0.25`, {
+      method: "POST",
+    });
+    setPackId(pack.pack_id);
+    syncAnalyzeUi(pack);
+    if (pack.phase3?.status === "done" && pack.sheet) {
+      renderSheet(pack);
+    } else {
+      pollAnalyze(id);
+    }
+    await refreshPacks();
   } catch (err) {
     setAnalyzeStatus(err.message, { error: true });
   }

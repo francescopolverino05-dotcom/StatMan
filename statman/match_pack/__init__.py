@@ -8,6 +8,7 @@ from statman.match_pack.analyze import (
     import_matching_film_job,
     start_pack_analyze,
 )
+from statman.match_pack.phase3 import cancel_phase3, start_phase3
 from statman.match_pack.reconcile import reconcile_pack
 from statman.match_pack.pipeline import (
     append_pack_video_chunk,
@@ -48,4 +49,6 @@ __all__ = [
     "apply_film_to_sheet",
     "find_matching_video_job",
     "reconcile_pack",
+    "start_phase3",
+    "cancel_phase3",
 ]

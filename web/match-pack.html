@@ -162,12 +162,12 @@
 
       <section class="section" id="analyze-section">
         <div class="section__head">
-          <h2>5. Analyze video (Phase 2)</h2>
+          <h2>5. Analyze video (Phase 2–3)</h2>
           <p>
-            Runs YOLO person/ball spotting on the pack video (or imports a finished
-            <a href="/video">Film tags</a> job with the same filename). Match-level
-            film counts appear below the fact board — not Opta-accurate, and not split
-            by team yet.
+            Phase&nbsp;2: YOLO film tags (or import a finished
+            <a href="/video">Film tags</a> job). Phase&nbsp;3: kit-colour tracking for
+            possession % and home/away splits of those film tags. Still approximate —
+            not Opta/StatsBomb.
           </p>
         </div>
         <div class="match-bar">
@@ -177,15 +177,16 @@
           <button id="reconcile-btn" class="btn btn--primary" type="button">
             Correct film using facts
           </button>
+          <button id="phase3-btn" class="btn btn--primary" type="button">
+            Run Phase 3 tracking
+          </button>
           <button id="analyze-cancel" class="btn btn--ghost" type="button">
-            Cancel analyze
+            Cancel
           </button>
         </div>
         <p class="hint">
-          Film tags have no team/player — they cannot be pasted into
-          <code>facts.events</code>. <strong>Correct film using facts</strong> anchors Goal
-          tags to your fact goals (score stays truth) and writes
-          <code>facts.film_corrected</code> with the reconciled summary.
+          Order: Analyze → Correct film using facts → Run Phase 3 tracking.
+          Phase&nbsp;3 can take a long time on CPU for a full 90′ match — keep this tab open.
         </p>
         <p id="analyze-status" class="status" role="status" aria-live="polite"></p>
         <div id="analyze-progress-wrap" class="progress-wrap" hidden>

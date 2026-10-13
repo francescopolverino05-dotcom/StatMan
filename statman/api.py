@@ -46,6 +46,8 @@ from statman.match_pack import (
     put_facts_file,
     reconcile_pack,
     start_pack_analyze,
+    start_phase3,
+    cancel_phase3,
 )
 from statman.video import (
     abort_upload,
@@ -70,10 +72,9 @@ app = FastAPI(
         "Loads StatsBomb open-data matches, converts events to SPADL "
         "(socceraction), and returns possession, xG, passes, progressive passes, "
         "PPDA, tackles, interceptions, clearances, and aerials as JSON. "
-        "Match-pack Phase 1: video + formation PDFs + match facts JSON → fact-sourced "
-        "sheet (goals/cards/subs/lineups). Phase 2: YOLO film tags on the pack video "
-        "(or import a finished /video job) attached under sheet.film. Possession, "
-        "PPDA, pass accuracy, and team-split shots stay pending for tracking phases."
+        "Match-pack Phase 1: facts sheet. Phase 2: YOLO film tags. Phase 3: kit-colour "
+        "tracking for possession and home/away film-tag splits. PPDA, xG, and pass "
+        "completion stay pending for denser event models."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -120,6 +121,7 @@ def api_root() -> dict[str, Any]:
             "match_pack_analyze": "POST /api/match-packs/{pack_id}/analyze",
             "match_pack_analyze_import": "POST /api/match-packs/{pack_id}/analyze/import",
             "match_pack_reconcile": "POST /api/match-packs/{pack_id}/reconcile",
+            "match_pack_phase3": "POST /api/match-packs/{pack_id}/phase3",
             "match_pack_example_facts": "/api/match-packs/example-facts",
         },
         "default_game_id": DEFAULT_GAME_ID,
@@ -663,6 +665,40 @@ def api_match_pack_reconcile(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/phase3")
+def api_match_pack_phase3(
+    pack_id: str,
+    sample_fps: float = Query(0.25, ge=0.05, le=1.0),
+    max_duration_sec: float | None = Query(
+        None,
+        ge=30,
+        le=150 * 60,
+        description="Optional cap for smoke tests / partial runs",
+    ),
+    start_sec: float = Query(0.0, ge=0.0, le=150 * 60),
+) -> dict[str, Any]:
+    """Phase 3: kit-colour tracking → possession + home/away film-tag splits."""
+    try:
+        return start_phase3(
+            pack_id,
+            sample_fps=sample_fps,
+            max_duration_sec=max_duration_sec,
+            start_sec=start_sec,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/phase3/cancel")
+def api_match_pack_phase3_cancel(pack_id: str) -> dict[str, Any]:
+    try:
+        return cancel_phase3(pack_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

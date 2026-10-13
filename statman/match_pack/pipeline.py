@@ -322,6 +322,13 @@ def compute_pack(pack_id: str) -> dict[str, Any]:
         meta["phase"] = "match-pack-phase2"
     else:
         meta["status"] = "sheet_ready"
+    # Re-attach Phase-3 tracking when present.
+    tracking_path = store.pack_dir(pack_id) / "tracking.json"
+    if tracking_path.exists():
+        from statman.match_pack.phase3 import apply_phase3_to_sheet
+
+        # apply_phase3_to_sheet rewrites meta/sheet; return that result below.
+        return apply_phase3_to_sheet(pack_id)
     sheet_path = store.pack_dir(pack_id) / "sheet.json"
     sheet_path.write_text(json.dumps(sheet, indent=2, default=str), encoding="utf-8")
     meta["sheet"] = sheet

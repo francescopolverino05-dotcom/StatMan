@@ -57,6 +57,11 @@ def yolo_status(*, ensure_loaded: bool = False) -> dict[str, Any]:
     }
 
 
+def get_yolo_model() -> Any | None:
+    """Return the loaded YOLO model (or None if unavailable)."""
+    return _load_yolo()
+
+
 def _load_yolo() -> Any | None:
     global _YOLO_MODEL, _YOLO_TRIED, _YOLO_ERROR
     with _YOLO_LOCK:
