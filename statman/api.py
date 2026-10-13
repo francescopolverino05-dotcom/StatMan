@@ -49,6 +49,7 @@ from statman.match_pack import (
     start_phase3,
     cancel_phase3,
 )
+from statman.match_pack.phase3 import refresh_team_splits
 from statman.video import (
     abort_upload,
     append_upload_chunk,
@@ -699,6 +700,17 @@ def api_match_pack_phase3_cancel(pack_id: str) -> dict[str, Any]:
         return cancel_phase3(pack_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/phase3/refresh-splits")
+def api_match_pack_phase3_refresh_splits(pack_id: str) -> dict[str, Any]:
+    """Re-debounce film tags onto the existing Phase-3 timeline (no full re-track)."""
+    try:
+        return refresh_team_splits(pack_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

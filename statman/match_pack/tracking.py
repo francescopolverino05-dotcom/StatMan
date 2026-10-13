@@ -435,13 +435,55 @@ def _map_clusters_to_sides(
     return {0: "away", 1: "home", "_source": "anchored_goals"}
 
 
+# Min seconds between accepted tags of the same class. The spotter fires many
+# near-duplicate Shot/Cross labels; without this the team board is unusable.
+DEFAULT_DEBOUNCE_GAPS: dict[str, float] = {
+    "Shot": 30.0,
+    "Goal": 45.0,
+    "Cross": 12.0,
+    "Pass": 5.0,
+    "High Pass": 8.0,
+    "Drive": 10.0,
+    "Header": 12.0,
+    "Throw In": 15.0,
+    "Free Kick": 20.0,
+    "Player Successful Tackle": 8.0,
+    "Out": 6.0,
+    "Ball Player Block": 8.0,
+}
+
+
+def debounce_film_events(
+    film_events: list[dict[str, Any]],
+    gaps: dict[str, float] | None = None,
+) -> list[dict[str, Any]]:
+    """Drop near-duplicate film tags (same label within a gap)."""
+    rules = gaps or DEFAULT_DEBOUNCE_GAPS
+    last: dict[str, float] = {}
+    out: list[dict[str, Any]] = []
+    for e in sorted(film_events, key=lambda x: float(x.get("time_sec") or 0)):
+        lab = e.get("label") or "Unknown"
+        t = float(e.get("time_sec") or 0)
+        gap = rules.get(lab)
+        if gap is not None and lab in last and (t - last[lab]) < gap:
+            continue
+        last[lab] = t
+        out.append(e)
+    return out
+
+
 def assign_events_to_teams(
     film_events: list[dict[str, Any]],
     timeline: list[dict[str, Any]],
+    *,
+    debounce: bool = True,
+    gaps: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Assign each film event to home/away using nearest possession sample."""
     if not timeline:
         return {"home": {}, "away": {}, "unknown": {}, "events_tagged": 0}
+
+    source_events = debounce_film_events(film_events, gaps) if debounce else list(film_events)
 
     times = np.array([row["time_sec"] for row in timeline], dtype=np.float64)
     teams = [row.get("team") for row in timeline]
@@ -459,7 +501,7 @@ def assign_events_to_teams(
     away_c: Counter[str] = Counter()
     unk_c: Counter[str] = Counter()
     tagged = 0
-    for e in film_events:
+    for e in source_events:
         label = e.get("label") or "Unknown"
         side = team_at(float(e.get("time_sec") or 0))
         if side == "home":
@@ -471,8 +513,9 @@ def assign_events_to_teams(
         else:
             unk_c[label] += 1
 
-    def pack(c: Counter[str]) -> dict[str, int]:
-        shots = int(c.get("Shot", 0) + c.get("Goal", 0))
+    def pack(c: Counter[str]) -> dict[str, Any]:
+        # Shots: Shot tags only (Goal tags are noisy; fact goals stay in facts).
+        shot_tags = int(c.get("Shot", 0))
         passes = int(
             c.get("Pass", 0)
             + c.get("High Pass", 0)
@@ -481,7 +524,9 @@ def assign_events_to_teams(
             + c.get("Free Kick", 0)
         )
         return {
-            "shots": shots,
+            # Kept for panel / debugging — not trusted as Opta shots.
+            "shot_tags": shot_tags,
+            "shots": shot_tags,
             "passes": passes,
             "crosses": int(c.get("Cross", 0)),
             "tackles": int(c.get("Player Successful Tackle", 0)),
@@ -497,4 +542,12 @@ def assign_events_to_teams(
         "unknown": pack(unk_c),
         "events_tagged": tagged,
         "events_total": len(film_events),
+        "events_after_debounce": len(source_events),
+        "debounced": bool(debounce),
+        # Board policy: film shot tags stay off the StatsBomb-shaped Shots row.
+        "shots_on_board": False,
+        "shots_note": (
+            "Film Shot tags remain far above true shot counts even after debouncing; "
+            "team-board Shots stay blank until a dedicated shot model. See shot_tags."
+        ),
     }

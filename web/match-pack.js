@@ -182,7 +182,7 @@ function renderSheet(pack) {
     }
     ${
       hasP3
-        ? `<br /><strong>Phase 3 — tracking:</strong> possession ${p3.possession_home_pct ?? sheet.tracking.possession.home_pct}% – ${p3.possession_away_pct ?? sheet.tracking.possession.away_pct}% · shots ${p3.shots_home ?? "—"}–${p3.shots_away ?? "—"} · passes ${p3.passes_home ?? "—"}–${p3.passes_away ?? "—"} (approximate).`
+        ? `<br /><strong>Phase 3 — tracking:</strong> possession ${p3.possession_home_pct ?? sheet.tracking.possession.home_pct}% – ${p3.possession_away_pct ?? sheet.tracking.possession.away_pct}% · pass tags ${p3.passes_home ?? "—"}–${p3.passes_away ?? "—"} · shot tags ${p3.shot_tags_home ?? "—"}–${p3.shot_tags_away ?? "—"} (not board Shots — film over-counts).`
         : `<br /><strong>Phase 3:</strong> Run Phase 3 tracking after correcting film.`
     }
   `;
@@ -275,11 +275,11 @@ function renderFilmPanel(film, tracking) {
     ? [
         ["Poss. home %", poss.home_pct],
         ["Poss. away %", poss.away_pct],
-        ["Shots home", splits.home?.shots],
-        ["Shots away", splits.away?.shots],
-        ["Passes home", splits.home?.passes],
-        ["Passes away", splits.away?.passes],
-        ["Tagged events", splits.events_tagged],
+        ["Pass tags home", splits.home?.passes],
+        ["Pass tags away", splits.away?.passes],
+        ["Shot tags home*", splits.home?.shot_tags ?? splits.home?.shots],
+        ["Shot tags away*", splits.away?.shot_tags ?? splits.away?.shots],
+        ["Tagged (debounced)", splits.events_after_debounce ?? splits.events_tagged],
       ]
     : [];
   filmPanel.hidden = false;

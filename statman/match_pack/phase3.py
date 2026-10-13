@@ -72,13 +72,16 @@ def merge_tracking_into_sheet(
                 "detail": "kit-cluster ball-handler possession (unknown frames ignored)",
             }
 
-        if split.get("shots") is not None:
-            t["shots"] = int(split["shots"])
-            attack["shots"] = int(split["shots"])
+        # Do not write film shot tags into catalog Shots — they over-count badly.
+        # Possession + debounced pass attempts are the Phase-3 board fills.
+        if split.get("shot_tags") is not None or split.get("shots") is not None:
             prov["shots"] = {
-                "status": "approximate_video",
+                "status": "pending",
                 "phase": PHASE,
-                "detail": "film Shot+Goal tags assigned via possession timeline",
+                "detail": (
+                    f"film shot tags≈{split.get('shot_tags', split.get('shots'))} "
+                    "(debounced) — not written to board; needs shot model"
+                ),
             }
         if split.get("passes") is not None:
             t["passes_attempted"] = int(split["passes"])
@@ -120,6 +123,10 @@ def merge_tracking_into_sheet(
             "away": {k: v for k, v in away_split.items() if k != "labels"},
             "events_tagged": splits.get("events_tagged"),
             "events_total": splits.get("events_total"),
+            "events_after_debounce": splits.get("events_after_debounce"),
+            "debounced": splits.get("debounced"),
+            "shots_on_board": splits.get("shots_on_board", False),
+            "shots_note": splits.get("shots_note"),
         },
         "warning": tracking.get("warning"),
     }
@@ -129,21 +136,25 @@ def merge_tracking_into_sheet(
     pending = [
         f
         for f in (cov.get("pending_later_phases") or [])
-        if f not in {"possession_pct", "shots", "tackles"}
+        if f not in {"possession_pct", "tackles"}
     ]
+    if "shots" not in pending:
+        pending.append("shots")
+    pending = sorted(set(pending))
     approx = sorted(
         set(cov.get("approximate_video") or [])
-        | {"possession_pct", "shots", "passes_attempted", "tackles"}
+        | {"possession_pct", "passes_attempted", "tackles", "film_shot_tags"}
     )
     cov["pending_later_phases"] = pending
     cov["approximate_video"] = approx
     cov["phase3"] = {
         "possession_home_pct": poss.get("home_pct"),
         "possession_away_pct": poss.get("away_pct"),
-        "shots_home": home_split.get("shots"),
-        "shots_away": away_split.get("shots"),
+        "shot_tags_home": home_split.get("shot_tags", home_split.get("shots")),
+        "shot_tags_away": away_split.get("shot_tags", away_split.get("shots")),
         "passes_home": home_split.get("passes"),
         "passes_away": away_split.get("passes"),
+        "shots_on_board": False,
     }
     src["coverage"] = cov
     src["phase"] = PHASE
@@ -155,6 +166,24 @@ def merge_tracking_into_sheet(
     ).strip()
     out["source"] = src
     return out
+
+
+def refresh_team_splits(pack_id: str) -> dict[str, Any]:
+    """Recompute debounced home/away film splits from stored tracking + events."""
+    meta = store.read_meta(pack_id)
+    if meta is None:
+        raise FileNotFoundError(f"Unknown pack_id={pack_id}")
+    tpath = _tracking_path(pack_id)
+    if not tpath.exists():
+        raise ValueError("No tracking.json — run Phase 3 first")
+    if not _film_events_path(pack_id).exists():
+        raise ValueError("No film events — run Phase 2 analyze first")
+    tracking = json.loads(tpath.read_text(encoding="utf-8"))
+    events = json.loads(_film_events_path(pack_id).read_text(encoding="utf-8"))
+    splits = assign_events_to_teams(events, tracking.get("timeline") or [])
+    tracking["team_splits"] = splits
+    tpath.write_text(json.dumps(tracking, indent=2, default=str), encoding="utf-8")
+    return apply_phase3_to_sheet(pack_id)
 
 
 def apply_phase3_to_sheet(pack_id: str) -> dict[str, Any]:

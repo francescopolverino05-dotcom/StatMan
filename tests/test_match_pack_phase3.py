@@ -28,14 +28,16 @@ def test_assign_events_to_teams_by_timeline():
     ]
     events = [
         {"label": "Shot", "time_sec": 10.2},
+        {"label": "Shot", "time_sec": 11.0},  # debounced away
         {"label": "Pass", "time_sec": 19.5},
-        {"label": "Goal", "time_sec": 29.0},
+        {"label": "Goal", "time_sec": 29.0},  # not counted as board shot
         {"label": "Cross", "time_sec": 100.0},  # far from samples → unknown
     ]
-    splits = assign_events_to_teams(events, timeline)
-    assert splits["home"]["shots"] == 2  # Shot + Goal
+    splits = assign_events_to_teams(events, timeline, debounce=True)
+    assert splits["home"]["shot_tags"] == 1
     assert splits["away"]["passes"] == 1
-    assert splits["events_tagged"] == 3
+    assert splits["debounced"] is True
+    assert splits["shots_on_board"] is False
     assert splits["unknown"]["crosses"] == 1 or splits["unknown"]["labels"].get("Cross") == 1
 
 
@@ -60,19 +62,22 @@ def test_merge_tracking_fills_possession_and_shots(pack_root):
         "warning": "test",
     }
     splits = {
-        "home": {"shots": 7, "passes": 40, "tackles": 1},
-        "away": {"shots": 4, "passes": 35, "tackles": 0},
+        "home": {"shot_tags": 7, "shots": 7, "passes": 40, "tackles": 1},
+        "away": {"shot_tags": 4, "shots": 4, "passes": 35, "tackles": 0},
         "events_tagged": 80,
         "events_total": 100,
+        "shots_on_board": False,
     }
     merged = merge_tracking_into_sheet(sheet, tracking, splits)
     home, away = merged["teams"]
     assert home["possession_pct"] == 58.0
     assert away["possession_pct"] == 42.0
-    assert home["shots"] == 7
-    assert away["shots"] == 4
+    # Shots stay blank on the catalog board — film tags are not real shot counts.
+    assert home["shots"] is None
+    assert away["shots"] is None
     assert home["passes_attempted"] == 40
     assert merged["source"]["phase"] == "match-pack-phase3"
     assert merged["tracking"]["possession"]["home_pct"] == 58.0
+    assert merged["source"]["coverage"]["phase3"]["shot_tags_home"] == 7
     # Facts score untouched
     assert merged["match"]["home_score"] == 2
