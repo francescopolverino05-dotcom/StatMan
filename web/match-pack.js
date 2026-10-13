@@ -1,0 +1,777 @@
+import { fetchJson, fmt, renderTeamCatalogHtml } from "./common.js";
+
+const createForm = document.getElementById("create-form");
+const homeTeam = document.getElementById("home-team");
+const awayTeam = document.getElementById("away-team");
+const packIdLine = document.getElementById("pack-id-line");
+const packIdEl = document.getElementById("pack-id");
+const factsJson = document.getElementById("facts-json");
+const factsFile = document.getElementById("facts-file");
+const uploadFactsFile = document.getElementById("upload-facts-file");
+const loadExample = document.getElementById("load-example");
+const loadPrimavera = document.getElementById("load-primavera");
+const saveFacts = document.getElementById("save-facts");
+const PRIMAVERA_SAMPLE_URL =
+  "/static/samples/napoli_pisa_primavera2_2026-10-10_facts.json";
+const formationHome = document.getElementById("formation-home");
+const formationAway = document.getElementById("formation-away");
+const uploadFormations = document.getElementById("upload-formations");
+const videoForm = document.getElementById("video-form");
+const videoInput = document.getElementById("video-input");
+const videoLabel = document.getElementById("video-label");
+const videoProgressWrap = document.getElementById("video-progress-wrap");
+const videoProgressFill = document.getElementById("video-progress-fill");
+const videoProgressText = document.getElementById("video-progress-text");
+const computeBtn = document.getElementById("compute-btn");
+const analyzeBtn = document.getElementById("analyze-btn");
+const reconcileBtn = document.getElementById("reconcile-btn");
+const analyzeCancel = document.getElementById("analyze-cancel");
+const analyzeStatusEl = document.getElementById("analyze-status");
+const analyzeProgressWrap = document.getElementById("analyze-progress-wrap");
+const analyzeProgressFill = document.getElementById("analyze-progress-fill");
+const analyzeProgressText = document.getElementById("analyze-progress-text");
+const statusEl = document.getElementById("status");
+const factsStatusEl = document.getElementById("facts-status");
+const results = document.getElementById("results");
+const scoreline = document.getElementById("scoreline");
+const matchMeta = document.getElementById("match-meta");
+const coverageBanner = document.getElementById("coverage-banner");
+const teamBoard = document.getElementById("team-board");
+const filmPanel = document.getElementById("film-panel");
+const eventsBody = document.querySelector("#events-table tbody");
+const lineupBody = document.querySelector("#lineup-table tbody");
+const packsBody = document.querySelector("#packs-table tbody");
+
+let activePackId = null;
+let analyzePollTimer = null;
+
+function setStatus(text, { error = false, loading = false, near = "both" } = {}) {
+  const targets = [];
+  if (near === "facts" || near === "both") {
+    if (factsStatusEl) targets.push(factsStatusEl);
+  }
+  if (near === "compute" || near === "both") {
+    if (statusEl) targets.push(statusEl);
+  }
+  // Always keep the compute-area status in sync for screen readers / scroll.
+  if (!targets.length && statusEl) targets.push(statusEl);
+  for (const el of targets) {
+    el.textContent = text;
+    el.classList.toggle("is-error", error);
+    el.classList.toggle("is-loading", loading);
+  }
+}
+
+async function computeSheet(id) {
+  const pack = await fetchJson(`/api/match-packs/${id}/compute`, { method: "POST" });
+  renderSheet(pack);
+  return pack;
+}
+
+function setPackId(id) {
+  activePackId = id;
+  packIdEl.textContent = id;
+  packIdLine.hidden = !id;
+}
+
+function fmtBytes(n) {
+  if (n == null) return "—";
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)} GB`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)} MB`;
+  return `${Math.round(n / 1e3)} KB`;
+}
+
+function requirePack() {
+  if (!activePackId) {
+    throw new Error("Create a match pack first.");
+  }
+  return activePackId;
+}
+
+async function refreshPacks() {
+  const data = await fetchJson("/api/match-packs?limit=12");
+  packsBody.innerHTML = (data.packs || [])
+    .map((p) => {
+      const vid = p.video?.status || "—";
+      return `
+      <tr data-pack="${p.pack_id}" class="job-row">
+        <td><code>${p.pack_id}</code></td>
+        <td>${p.title || "—"}</td>
+        <td>${p.status || "—"}</td>
+        <td>${vid}</td>
+      </tr>`;
+    })
+    .join("");
+  for (const row of packsBody.querySelectorAll(".job-row")) {
+    row.addEventListener("click", () => openPack(row.dataset.pack));
+  }
+}
+
+async function openPack(packId) {
+  setStatus(`Loading pack ${packId}…`, { loading: true });
+  try {
+    const pack = await fetchJson(`/api/match-packs/${packId}`);
+    setPackId(pack.pack_id);
+    if (pack.facts) {
+      factsJson.value = JSON.stringify(pack.facts, null, 2);
+    }
+    syncAnalyzeUi(pack);
+    if (pack.sheet) {
+      renderSheet(pack);
+      setStatus(
+        pack.sheet.film
+          ? `Loaded pack ${packId} (facts + Phase 2 film tags).`
+          : `Loaded pack ${packId} (sheet ready).`
+      );
+    } else {
+      results.hidden = true;
+      if (filmPanel) {
+        filmPanel.hidden = true;
+        filmPanel.innerHTML = "";
+      }
+      setStatus(`Loaded pack ${packId} — save facts and compute when ready.`);
+    }
+    if (["queued", "running", "cancelling"].includes(pack.analyze?.status)) {
+      pollAnalyze(packId);
+    }
+  } catch (err) {
+    setStatus(err.message, { error: true });
+  }
+}
+
+function renderSheet(pack) {
+  const sheet = pack.sheet;
+  if (!sheet) return;
+  results.hidden = false;
+  const m = sheet.match || {};
+  scoreline.textContent = `${m.home_team} ${m.home_score}–${m.away_score} ${m.away_team}`;
+  matchMeta.textContent = [
+    m.competition,
+    m.kickoff,
+    m.home_formation && m.away_formation
+      ? `${m.home_formation} vs ${m.away_formation}`
+      : null,
+    sheet.source?.phase,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const cov = sheet.source?.coverage || pack.coverage || {};
+  const factList = (cov.fact || []).join(", ") || "—";
+  const missing = (cov.missing_optional || []).join(", ");
+  const pending = (cov.pending_later_phases || []).slice(0, 8).join(", ");
+  const counts = cov.fact_event_counts || {};
+  const filmCounts = cov.film_event_counts || sheet.film?.totals || {};
+  const hasFilm = Boolean(sheet.film?.totals);
+  coverageBanner.innerHTML = `
+    <strong>Phase 1 — filled from your JSON:</strong> ${factList}
+    (${counts.goals ?? 0} goals, ${counts.cards ?? 0} cards, ${counts.substitutions ?? 0} subs).
+    <br /><strong>Blank (—) on the team board:</strong>
+    ${missing ? `not in your JSON (${missing}); ` : ""}
+    team-split possession / xG / shots / pass accuracy need later phases (${pending}${
+      (cov.pending_later_phases || []).length > 8 ? "…" : ""
+    }).
+    ${
+      hasFilm
+        ? `<br /><strong>Phase 2 — match-level film tags:</strong> ${filmCounts.events ?? "—"} events · ${filmCounts.shots ?? "—"} shots · ${filmCounts.passes ?? "—"} passes (approximate, no team split).`
+        : `<br /><strong>Phase 2:</strong> click <em>Analyze video / import film tags</em> after the video is ready.`
+    }
+  `;
+
+  const teams = sheet.teams || [];
+  const home = teams[0];
+  const away = teams[1];
+  teamBoard.innerHTML = `
+    ${home ? renderTeamCatalogHtml(home, "Home", { showFormation: true }) : ""}
+    <div class="score-stack">
+      <div class="score">${m.home_score}–${m.away_score}</div>
+      <div class="vs">${hasFilm ? "facts + film" : "fact sheet"}</div>
+    </div>
+    ${away ? renderTeamCatalogHtml(away, "Away", { showFormation: true }) : ""}
+  `;
+
+  renderFilmPanel(sheet.film);
+
+  const events = sheet.events || [];
+  eventsBody.innerHTML = events
+    .map((e) => {
+      let detail = e.player_name || "";
+      if (e.type === "substitution") {
+        detail = `${e.player_out} → ${e.player_in}`;
+      } else if (e.assist_name) {
+        detail = `${detail} (A: ${e.assist_name})`;
+      }
+      return `
+      <tr>
+        <td>${fmt(e.minute, 0)}'</td>
+        <td>${e.type}</td>
+        <td>${e.team}</td>
+        <td>${detail || "—"}</td>
+      </tr>`;
+    })
+    .join("");
+
+  lineupBody.innerHTML = (sheet.players || [])
+    .map(
+      (p) => `
+    <tr>
+      <td>${p.player_name}</td>
+      <td>${p.team_name}</td>
+      <td>${p.jersey ?? "—"}</td>
+      <td>${p.position || "—"}</td>
+      <td>${fmt(p.goals, 0)}</td>
+      <td>${fmt(p.yellow_cards, 0)}</td>
+      <td>${fmt(p.red_cards, 0)}</td>
+    </tr>`
+    )
+    .join("");
+
+  results.scrollIntoView({ behavior: "smooth", block: "start" });
+  syncAnalyzeUi(pack);
+}
+
+function renderFilmPanel(film) {
+  if (!filmPanel) return;
+  if (!film?.totals) {
+    filmPanel.hidden = true;
+    filmPanel.innerHTML = "";
+    return;
+  }
+  const t = film.totals;
+  const c = film.corrected || {};
+  const rows = [
+    ["Events", t.events],
+    ["Shots", c.shots ?? t.shots],
+    ["Passes", c.passes ?? t.passes],
+    ["Crosses", t.crosses],
+    ["Drives", t.drives],
+    ["Headers", t.headers],
+    ["Tackles", t.tackles],
+    ["Throw-ins", c.throw_ins ?? t.throw_ins],
+    ["Free kicks", c.free_kicks ?? t.free_kicks],
+    ["Goals (corrected)", c.goals ?? "—"],
+    ["Goal tags raw*", t.goal_tags],
+  ];
+  const anchors = (c.anchored_goals || [])
+    .map((a) => {
+      const filmBit = a.matched
+        ? `film ${a.film_minute}'`
+        : "no film match";
+      return `${a.player_name || "?"} ${a.fact_minute}' (${a.team}) ← ${filmBit}`;
+    })
+    .join(" · ");
+  filmPanel.hidden = false;
+  filmPanel.innerHTML = `
+    <h3>Film tags (Phase 2${film.corrected ? " · corrected" : ""})</h3>
+    <p class="film-warn">${film.warning || "Approximate broadcast spotting — not a provider feed."}
+      Method: <code>${film.method || "—"}</code>${
+        film.job_id ? ` · job <code>${film.job_id}</code>` : ""
+      }. *Raw Goal tags are noisy; corrected goals follow match facts.</p>
+    ${
+      anchors
+        ? `<p class="film-warn"><strong>Anchored goals:</strong> ${anchors}</p>`
+        : ""
+    }
+    <ul class="film-grid">
+      ${rows
+        .map(
+          ([label, value]) => `
+        <li>
+          <span class="label">${label}</span>
+          <span class="value">${fmt(value, 0)}</span>
+        </li>`
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
+function setAnalyzeStatus(text, { error = false, loading = false } = {}) {
+  if (!analyzeStatusEl) return;
+  analyzeStatusEl.textContent = text;
+  analyzeStatusEl.classList.toggle("is-error", error);
+  analyzeStatusEl.classList.toggle("is-loading", loading);
+}
+
+function stopAnalyzePoll() {
+  if (analyzePollTimer) {
+    clearInterval(analyzePollTimer);
+    analyzePollTimer = null;
+  }
+}
+
+function syncAnalyzeUi(pack) {
+  const a = pack?.analyze;
+  if (!a) {
+    if (analyzeProgressWrap) analyzeProgressWrap.hidden = true;
+    return;
+  }
+  const prog = a.progress || {};
+  const pct = prog.pct ?? 0;
+  if (analyzeProgressWrap) {
+    const busy = ["queued", "running", "cancelling"].includes(a.status);
+    analyzeProgressWrap.hidden = !busy && a.status !== "done";
+    if (analyzeProgressFill) analyzeProgressFill.style.width = `${pct}%`;
+    if (analyzeProgressText) {
+      analyzeProgressText.textContent = busy
+        ? `${a.status} · ${pct}% · ${prog.events_so_far ?? a.event_count ?? 0} events`
+        : a.status === "done"
+          ? `done · ${a.event_count ?? 0} film events`
+          : a.status || "";
+    }
+  }
+  if (a.status === "done") {
+    setAnalyzeStatus(
+      `Phase 2 ready — ${a.event_count ?? 0} film events${
+        a.video_job_id ? ` (imported job ${a.video_job_id})` : ""
+      }.`
+    );
+    stopAnalyzePoll();
+  } else if (a.status === "error") {
+    setAnalyzeStatus(a.error || "Analyze failed", { error: true });
+    stopAnalyzePoll();
+  } else if (a.status === "cancelled") {
+    setAnalyzeStatus("Analyze cancelled.");
+    stopAnalyzePoll();
+  } else if (["queued", "running", "cancelling"].includes(a.status)) {
+    setAnalyzeStatus(`Analyzing video… ${pct}%`, { loading: true });
+  }
+}
+
+async function pollAnalyze(packId) {
+  stopAnalyzePoll();
+  analyzePollTimer = setInterval(async () => {
+    try {
+      const pack = await fetchJson(`/api/match-packs/${packId}`);
+      if (pack.pack_id === activePackId) {
+        syncAnalyzeUi(pack);
+        if (pack.sheet?.film) {
+          renderSheet(pack);
+        }
+      }
+      const st = pack.analyze?.status;
+      if (st && !["queued", "running", "cancelling"].includes(st)) {
+        stopAnalyzePoll();
+        await refreshPacks();
+      }
+    } catch (err) {
+      setAnalyzeStatus(err.message, { error: true });
+      stopAnalyzePoll();
+    }
+  }, 2000);
+}
+
+analyzeBtn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Starting Phase 2 analyze…", { loading: true });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(
+      `/api/match-packs/${id}/analyze?reuse_matching_job=true`,
+      { method: "POST" }
+    );
+    setPackId(pack.pack_id);
+    if (pack.sheet) {
+      renderSheet(pack);
+      setAnalyzeStatus(
+        pack.analyze?.source === "imported_video_job"
+          ? `Imported film tags from job ${pack.analyze.video_job_id}.`
+          : "Phase 2 sheet updated."
+      );
+    } else {
+      syncAnalyzeUi(pack);
+      pollAnalyze(id);
+    }
+    await refreshPacks();
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+analyzeCancel?.addEventListener("click", async () => {
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/analyze/cancel`, {
+      method: "POST",
+    });
+    syncAnalyzeUi(pack);
+    setAnalyzeStatus("Cancel requested.");
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+reconcileBtn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Correcting film tags against match facts…", { loading: true });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/reconcile?promote=true`, {
+      method: "POST",
+    });
+    setPackId(pack.pack_id);
+    if (pack.facts) {
+      factsJson.value = JSON.stringify(pack.facts, null, 2);
+    }
+    if (pack.sheet) {
+      renderSheet(pack);
+    }
+    const r = pack.reconcile || {};
+    setAnalyzeStatus(
+      `Corrected: ${r.goal_tags_matched ?? 0}/${r.fact_goals ?? 0} fact goals anchored to film. ` +
+        `Summary saved in facts.film_corrected (events list unchanged — still fact truth).`
+    );
+    await refreshPacks();
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+createForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setStatus("Creating pack…", { loading: true });
+  try {
+    const body = new FormData();
+    if (homeTeam.value) body.append("home_team", homeTeam.value);
+    if (awayTeam.value) body.append("away_team", awayTeam.value);
+    const pack = await fetchJson("/api/match-packs", { method: "POST", body });
+    setPackId(pack.pack_id);
+    // Do not clobber an example / draft already in the editor.
+    if (pack.facts && !factsJson.value.trim()) {
+      factsJson.value = JSON.stringify(pack.facts, null, 2);
+    }
+    setStatus(`Created pack ${pack.pack_id}. Save facts next.`);
+    await refreshPacks();
+  } catch (err) {
+    setStatus(err.message, { error: true });
+  }
+});
+
+loadExample.addEventListener("click", async () => {
+  setStatus("Loading example facts…", { loading: true });
+  try {
+    const ex = await fetchJson("/api/match-packs/example-facts");
+    factsJson.value = JSON.stringify(ex, null, 2);
+    homeTeam.value = ex.home?.team_name || "";
+    awayTeam.value = ex.away?.team_name || "";
+    setStatus("Example loaded — create a pack (if needed) then Save facts.");
+  } catch (err) {
+    setStatus(err.message, { error: true });
+  }
+});
+
+function stripBom(text) {
+  return text.replace(/^\uFEFF/, "");
+}
+
+/** Normalize paste/download artifacts that break JSON.parse (curly quotes, trailing commas). */
+function normalizeFactsText(text) {
+  return stripBom(String(text || ""))
+    .replace(/^\uFEFF/, "")
+    .replace(/[\u201C\u201D\u00AB\u00BB]/g, '"')
+    .replace(/[\u2018\u2019\u2032]/g, "'")
+    .replace(/\u00A0/g, " ")
+    .trim();
+}
+
+function formatJsonParseError(raw, err) {
+  const msg = err && err.message ? err.message : String(err);
+  const m = /position\s+(\d+)/i.exec(msg);
+  if (!m) return `Facts JSON is invalid: ${msg}`;
+  const pos = Number(m[1]);
+  const before = raw.slice(0, pos);
+  const line = before.split("\n").length;
+  const col = pos - before.lastIndexOf("\n");
+  const lines = raw.split("\n");
+  const from = Math.max(0, line - 2);
+  const to = Math.min(lines.length, line + 1);
+  const snippet = lines
+    .slice(from, to)
+    .map((l, i) => `${from + i + 1}: ${l}`)
+    .join("\n");
+  return (
+    `Facts JSON is invalid near line ${line}, column ${col}: ${msg}. ` +
+    `Use “Load Napoli–Pisa Primavera 2 into editor” for a clean copy.\n${snippet}`
+  );
+}
+
+function parseFactsJson(text) {
+  const normalized = normalizeFactsText(text);
+  if (!normalized) {
+    throw new Error("Facts editor is empty.");
+  }
+  try {
+    return JSON.parse(normalized);
+  } catch (err) {
+    // Common Mac/editor artifact: trailing comma before ] or }.
+    const repaired = normalized.replace(/,\s*([\]}])/g, "$1");
+    if (repaired !== normalized) {
+      try {
+        return JSON.parse(repaired);
+      } catch {
+        /* fall through */
+      }
+    }
+    throw new Error(formatJsonParseError(normalized, err));
+  }
+}
+
+async function readFactsFileAsText(file) {
+  const buf = await file.arrayBuffer();
+  // Prefer UTF-8 with BOM strip; fall back if decode throws.
+  try {
+    return normalizeFactsText(new TextDecoder("utf-8").decode(buf));
+  } catch {
+    return normalizeFactsText(await file.text());
+  }
+}
+
+async function loadPrimaveraSampleIntoEditor() {
+  setStatus("Loading Napoli–Pisa Primavera 2 facts…", { loading: true, near: "facts" });
+  const res = await fetch(PRIMAVERA_SAMPLE_URL);
+  if (!res.ok) {
+    throw new Error(`Could not fetch sample JSON (${res.status})`);
+  }
+  const payload = parseFactsJson(await res.text());
+  factsJson.value = JSON.stringify(payload, null, 2);
+  homeTeam.value = payload.home?.team_name || homeTeam.value;
+  awayTeam.value = payload.away?.team_name || awayTeam.value;
+  setStatus(
+    "Primavera 2 facts loaded into the editor. Click Save facts (creates sheet automatically).",
+    { near: "facts" }
+  );
+}
+
+loadPrimavera?.addEventListener("click", async () => {
+  try {
+    await loadPrimaveraSampleIntoEditor();
+  } catch (err) {
+    setStatus(err.message, { error: true, near: "facts" });
+  }
+});
+
+factsFile?.addEventListener("change", async () => {
+  const file = factsFile.files?.[0];
+  if (!file) return;
+  try {
+    const text = await readFactsFileAsText(file);
+    // Preview in editor only — does not save until Upload / Save.
+    const payload = parseFactsJson(text);
+    factsJson.value = JSON.stringify(payload, null, 2);
+    setStatus(
+      `Loaded ${file.name} into the editor. Click “Upload JSON file” or Save facts.`,
+      { near: "facts" }
+    );
+  } catch (err) {
+    setStatus(`Could not read ${file.name}: ${err.message}`, {
+      error: true,
+      near: "facts",
+    });
+    // Clear the broken selection so the same file can be re-chosen after a fix.
+    factsFile.value = "";
+  }
+});
+
+uploadFactsFile?.addEventListener("click", async () => {
+  setStatus("Uploading facts JSON…", { loading: true, near: "facts" });
+  try {
+    const id = requirePack();
+    const file = factsFile.files?.[0];
+    if (!file) {
+      // Allow upload from editor contents as a synthetic file.
+      if (!factsJson.value.trim()) {
+        throw new Error("Choose a .json facts file, or paste JSON then Save facts.");
+      }
+      // Validate locally first so we never POST garbage that looks like a drop.
+      const payload = parseFactsJson(factsJson.value);
+      const pack = await fetchJson(`/api/match-packs/${id}/facts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      factsJson.value = JSON.stringify(pack.facts, null, 2);
+      homeTeam.value = pack.facts?.home?.team_name || homeTeam.value;
+      awayTeam.value = pack.facts?.away?.team_name || awayTeam.value;
+      setStatus("Facts saved — computing sheet…", { loading: true, near: "facts" });
+      const computed = await computeSheet(id);
+      const m = computed.sheet?.match || {};
+      setStatus(
+        `Facts saved. Sheet ready: ${m.home_score ?? "?"}–${m.away_score ?? "?"}.`,
+        { near: "both" }
+      );
+      await refreshPacks();
+      return;
+    }
+    const body = new FormData();
+    body.append("file", file, file.name.endsWith(".json") ? file.name : `${file.name}.json`);
+    const pack = await fetchJson(`/api/match-packs/${id}/facts/file`, {
+      method: "POST",
+      body,
+    });
+    factsJson.value = JSON.stringify(pack.facts, null, 2);
+    homeTeam.value = pack.facts?.home?.team_name || homeTeam.value;
+    awayTeam.value = pack.facts?.away?.team_name || awayTeam.value;
+    setStatus(`Uploaded ${file.name} — computing sheet…`, { loading: true, near: "facts" });
+    const computed = await computeSheet(id);
+    const m = computed.sheet?.match || {};
+    setStatus(
+      `Uploaded ${file.name}. Sheet ready: ${m.home_score ?? "?"}–${m.away_score ?? "?"}.`,
+      { near: "both" }
+    );
+    await refreshPacks();
+  } catch (err) {
+    setStatus(err.message, { error: true, near: "facts" });
+  }
+});
+
+saveFacts.addEventListener("click", async () => {
+  setStatus("Saving facts…", { loading: true, near: "facts" });
+  try {
+    const id = requirePack();
+    const payload = parseFactsJson(factsJson.value);
+    const pack = await fetchJson(`/api/match-packs/${id}/facts`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    factsJson.value = JSON.stringify(pack.facts, null, 2);
+    homeTeam.value = pack.facts?.home?.team_name || homeTeam.value;
+    awayTeam.value = pack.facts?.away?.team_name || awayTeam.value;
+    setStatus("Facts saved — computing sheet…", { loading: true, near: "facts" });
+    const computed = await computeSheet(id);
+    const m = computed.sheet?.match || {};
+    setStatus(
+      `Facts saved. Sheet ready: ${m.home_team || "Home"} ${m.home_score ?? "?"}–${m.away_score ?? "?"} ${m.away_team || "Away"}.`,
+      { near: "both" }
+    );
+    await refreshPacks();
+  } catch (err) {
+    setStatus(err.message, { error: true, near: "facts" });
+  }
+});
+
+uploadFormations.addEventListener("click", async () => {
+  setStatus("Uploading formation PDFs…", { loading: true });
+  try {
+    const id = requirePack();
+    for (const [side, input] of [
+      ["home", formationHome],
+      ["away", formationAway],
+    ]) {
+      const file = input.files?.[0];
+      if (!file) continue;
+      const body = new FormData();
+      body.append("side", side);
+      body.append("file", file);
+      await fetchJson(`/api/match-packs/${id}/formation`, { method: "POST", body });
+    }
+    setStatus("Formation PDF(s) stored (text extracted when possible).");
+    await refreshPacks();
+  } catch (err) {
+    setStatus(err.message, { error: true });
+  }
+});
+
+videoInput.addEventListener("change", () => {
+  const file = videoInput.files?.[0];
+  if (!file) {
+    videoLabel.textContent = "Choose full-match video (optional in Phase 1)…";
+    return;
+  }
+  videoLabel.textContent = `${file.name} (${fmtBytes(file.size)})`;
+});
+
+async function putChunk(packId, offset, blob, attempt = 1) {
+  const res = await fetch(
+    `/api/match-packs/${packId}/video/chunk?offset=${offset}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: blob,
+    }
+  );
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      detail = (await res.json()).detail || detail;
+    } catch {
+      /* ignore */
+    }
+    if (attempt < 5 && res.status >= 500) {
+      await new Promise((r) => setTimeout(r, 400 * attempt));
+      return putChunk(packId, offset, blob, attempt + 1);
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+videoForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const file = videoInput.files?.[0];
+  if (!file) {
+    setStatus("Choose a video file first (or skip — facts-only works in Phase 1).", {
+      error: true,
+    });
+    return;
+  }
+  if (file.size > 4 * 1024 * 1024 * 1024) {
+    setStatus("File exceeds 4 GB. Use 720p H.264 (~1–2 GB).", { error: true });
+    return;
+  }
+  setStatus("Uploading video in chunks…", { loading: true });
+  videoProgressWrap.hidden = false;
+  try {
+    const id = requirePack();
+    const initBody = new FormData();
+    initBody.append("filename", file.name);
+    initBody.append("size_bytes", String(file.size));
+    const init = await fetchJson(`/api/match-packs/${id}/video/init`, {
+      method: "POST",
+      body: initBody,
+    });
+    const chunkSize = init.video?.chunk_bytes || 8 * 1024 * 1024;
+    let offset = init.video?.bytes_received || 0;
+    while (offset < file.size) {
+      const end = Math.min(offset + chunkSize, file.size);
+      const meta = await putChunk(id, offset, file.slice(offset, end));
+      offset = meta.video?.bytes_received || end;
+      const pct = meta.video?.upload_pct ?? Math.round((100 * offset) / file.size);
+      videoProgressFill.style.width = `${pct}%`;
+      videoProgressText.textContent = `uploading · ${pct}% · ${fmtBytes(offset)} / ${fmtBytes(file.size)}`;
+      setStatus(`Uploading video… ${pct}%`, { loading: true });
+    }
+    await fetchJson(`/api/match-packs/${id}/video/finish`, { method: "POST" });
+    videoProgressText.textContent = "video ready";
+    setStatus("Video attached to pack.");
+    await refreshPacks();
+  } catch (err) {
+    setStatus(err.message, { error: true });
+  }
+});
+
+computeBtn.addEventListener("click", async () => {
+  setStatus("Computing fact-sourced sheet…", { loading: true, near: "compute" });
+  try {
+    const id = requirePack();
+    // Auto-save facts from editor if present.
+    if (factsJson.value.trim()) {
+      const payload = parseFactsJson(factsJson.value);
+      await fetchJson(`/api/match-packs/${id}/facts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      factsJson.value = JSON.stringify(payload, null, 2);
+    }
+    const pack = await computeSheet(id);
+    const m = pack.sheet?.match || {};
+    setStatus(
+      `Fact-sourced sheet ready: ${m.home_score ?? "?"}–${m.away_score ?? "?"}. Dashes (—) for possession/xG/shots are normal in Phase 1.`,
+      { near: "both" }
+    );
+    await refreshPacks();
+  } catch (err) {
+    setStatus(err.message, { error: true, near: "compute" });
+  }
+});
+
+refreshPacks().catch((err) => setStatus(err.message, { error: true }));
