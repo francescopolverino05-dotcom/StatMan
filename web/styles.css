@@ -706,6 +706,31 @@ tbody tr:hover {
   align-items: center;
 }
 
+/* —— Match pack (Phase 1) —— */
+.facts-editor {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 1rem 1.1rem;
+  border: 1.5px solid rgba(15, 61, 34, 0.22);
+  border-radius: 14px;
+  background: rgba(247, 250, 246, 0.85);
+  font-family: "Figtree", ui-monospace, monospace;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--ink);
+  resize: vertical;
+  min-height: 16rem;
+}
+
+.facts-editor:focus {
+  outline: 2px solid rgba(31, 107, 58, 0.35);
+  outline-offset: 2px;
+}
+
+.page--match-pack .match-bar--stack {
+  align-items: end;
+}
+
 .banner--sticky {
   margin: 0 auto 1.5rem;
   max-width: var(--max);

@@ -28,6 +28,19 @@ from statman.season import (
     team_page,
     tournament_table,
 )
+from statman.match_pack import (
+    append_pack_video_chunk,
+    attach_formation,
+    attach_video_bytes,
+    compute_pack,
+    create_pack,
+    example_facts,
+    finish_pack_video,
+    get_pack,
+    init_pack_video,
+    list_packs,
+    put_facts,
+)
 from statman.video import (
     abort_upload,
     append_upload_chunk,
@@ -46,18 +59,16 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 app = FastAPI(
     title="StatMan match stats",
-    version="0.5.0",
+    version="0.6.0",
     description=(
         "Loads StatsBomb open-data matches, converts events to SPADL "
         "(socceraction), and returns possession, xG, passes, progressive passes, "
         "PPDA, tackles, interceptions, clearances, and aerials as JSON. "
-        "Season endpoints aggregate a full competition into a tournament table, "
-        "team match sheets, and player leaderboards. Pitch maps (mplsoccer) cover "
-        "shots with xG, progressive passes, and tackle/interception locations. "
-        "Video endpoints return SoccerNet-style film tags from a broadcast "
-        "(YOLO person/ball when available). The locked match sheet — xG, PPDA, "
-        "pass accuracy, progressive passes, aerials — comes from StatsBomb open-data "
-        "or event import; Opta F24 only partially fills that sheet."
+        "Match-pack Phase 1 accepts a self-serve upload: full-match video (720p / "
+        "1–2 GB), optional formation PDFs, and match facts JSON (lineups, goals, "
+        "cards, subs, optional set pieces) to build a fact-sourced sheet. "
+        "Dense metrics (possession, PPDA, pass accuracy) stay pending for later "
+        "tracking / ball-action phases. Film tags and StatsBomb import remain available."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -73,6 +84,7 @@ def api_root() -> dict[str, Any]:
         "ui": "/",
         "season_ui": "/season",
         "video_ui": "/video",
+        "match_pack_ui": "/match-pack",
         "import_ui": "/import",
         "endpoints": {
             "health": "/api/health",
@@ -94,6 +106,13 @@ def api_root() -> dict[str, Any]:
             "video_detector": "/api/video/detector",
             "event_import": "/api/imports",
             "event_import_job": "/api/imports/{import_id}",
+            "match_packs": "/api/match-packs",
+            "match_pack": "/api/match-packs/{pack_id}",
+            "match_pack_facts": "PUT /api/match-packs/{pack_id}/facts",
+            "match_pack_formation": "POST /api/match-packs/{pack_id}/formation",
+            "match_pack_video": "POST /api/match-packs/{pack_id}/video/init",
+            "match_pack_compute": "POST /api/match-packs/{pack_id}/compute",
+            "match_pack_example_facts": "/api/match-packs/example-facts",
         },
         "default_game_id": DEFAULT_GAME_ID,
         "default_competition_id": DEFAULT_COMPETITION_ID,
@@ -263,6 +282,11 @@ def ui_import() -> FileResponse:
     return _page("import.html")
 
 
+@app.get("/match-pack")
+def ui_match_pack() -> FileResponse:
+    return _page("match-pack.html")
+
+
 @app.get("/api/video/detector")
 def api_video_detector() -> dict[str, Any]:
     """Report detector backend; loads YOLO on first call so the UI can show readiness."""
@@ -422,6 +446,133 @@ def api_import_get(import_id: str) -> dict[str, Any]:
     if stats is None:
         raise HTTPException(status_code=404, detail=f"Unknown import_id={import_id}")
     return {"import_id": import_id, "stats": stats}
+
+
+@app.get("/api/match-packs/example-facts")
+def api_match_pack_example_facts() -> dict[str, Any]:
+    """Example match-facts JSON (Belgium–England style) for the Phase-1 UI."""
+    return example_facts()
+
+
+@app.get("/api/match-packs")
+def api_match_packs(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+    packs = list_packs(limit=limit)
+    return {"count": len(packs), "packs": packs}
+
+
+@app.post("/api/match-packs")
+def api_match_pack_create(
+    title: str | None = Form(None),
+    home_team: str | None = Form(None),
+    away_team: str | None = Form(None),
+) -> dict[str, Any]:
+    return create_pack(title=title, home_team=home_team, away_team=away_team)
+
+
+@app.get("/api/match-packs/{pack_id}")
+def api_match_pack_get(pack_id: str) -> dict[str, Any]:
+    meta = get_pack(pack_id)
+    if meta is None:
+        raise HTTPException(status_code=404, detail=f"Unknown pack_id={pack_id}")
+    return meta
+
+
+@app.put("/api/match-packs/{pack_id}/facts")
+async def api_match_pack_facts(pack_id: str, request: Request) -> dict[str, Any]:
+    try:
+        payload = await request.json()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc}") from exc
+    try:
+        return put_facts(pack_id, payload)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/formation")
+async def api_match_pack_formation(
+    pack_id: str,
+    side: str = Form(..., description="home or away"),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing formation filename")
+    try:
+        return attach_formation(pack_id, side, file.file, file.filename)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/video")
+async def api_match_pack_video_oneshot(
+    pack_id: str,
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """One-shot video attach (small files / tests). Prefer chunked init/chunk/finish."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing video filename")
+    try:
+        return attach_video_bytes(pack_id, file.file, file.filename)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/video/init")
+async def api_match_pack_video_init(
+    pack_id: str,
+    filename: str = Form(...),
+    size_bytes: int = Form(..., ge=1),
+) -> dict[str, Any]:
+    try:
+        return init_pack_video(
+            pack_id, filename, size_bytes, chunk_bytes=DEFAULT_CHUNK_BYTES
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/match-packs/{pack_id}/video/chunk")
+async def api_match_pack_video_chunk(
+    pack_id: str,
+    request: Request,
+    offset: int = Query(..., ge=0),
+) -> dict[str, Any]:
+    data = await request.body()
+    try:
+        return append_pack_video_chunk(pack_id, data, offset=offset)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/video/finish")
+def api_match_pack_video_finish(pack_id: str) -> dict[str, Any]:
+    try:
+        return finish_pack_video(pack_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/compute")
+def api_match_pack_compute(pack_id: str) -> dict[str, Any]:
+    """Build the Phase-1 fact-sourced sheet (goals/cards/subs/set pieces/lineups)."""
+    try:
+        return compute_pack(pack_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

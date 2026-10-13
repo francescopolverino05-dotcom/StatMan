@@ -18,3 +18,5 @@ matplotlib>=3.8.0
 # YOLO person/ball detector for full-match video spotting (falls back to HOG)
 ultralytics>=8.1,<9
 torch>=2.2.0
+# Formation PDF text extract for match-pack Phase 1
+pypdf>=5.0.0

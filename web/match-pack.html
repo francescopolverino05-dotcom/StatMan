@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StatMan — upload a match pack</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="page page--match-pack">
+    <nav class="topnav">
+      <a class="topnav__brand" href="/">StatMan</a>
+      <div class="topnav__links">
+        <a href="/">Match</a>
+        <a href="/season">Season</a>
+        <a href="/season/players">Players</a>
+        <a class="is-active" href="/match-pack">Match pack</a>
+        <a href="/video">Film tags</a>
+        <a href="/import">Event import</a>
+        <a href="/api/docs">API</a>
+      </div>
+    </nav>
+
+    <header class="page-hero">
+      <p class="eyebrow">Phase 1 · self-serve ingest</p>
+      <h1>Upload a match pack</h1>
+      <p class="lede">
+        Video (720p, ~1–2&nbsp;GB) plus match facts — lineups, formation, goals, cards,
+        substitutions, optional corners / free kicks / offsides. Facts are treated as truth;
+        the sheet fills those fields now. Possession, xG, PPDA and pass accuracy come in later phases.
+      </p>
+    </header>
+
+    <main>
+      <p class="banner banner--info banner--sticky">
+        World Cup open-data on <a href="/">Match</a> stays the gold-standard example.
+        This pack path is how you collect <em>your</em> games without a paid feed.
+      </p>
+
+      <section class="section">
+        <div class="section__head">
+          <h2>1. Create pack</h2>
+          <p>Starts an empty pack folder under <code>.data/match_packs/</code>.</p>
+        </div>
+        <form id="create-form" class="upload-form">
+          <div class="match-bar match-bar--stack">
+            <label class="field">
+              <span>Home team</span>
+              <input id="home-team" name="home_team" type="text" placeholder="Belgium" />
+            </label>
+            <label class="field">
+              <span>Away team</span>
+              <input id="away-team" name="away_team" type="text" placeholder="England" />
+            </label>
+            <button class="btn btn--primary" type="submit">Create match pack</button>
+          </div>
+        </form>
+        <p id="pack-id-line" class="hint" hidden>
+          Active pack: <code id="pack-id"></code>
+        </p>
+      </section>
+
+      <section class="section" id="facts-section">
+        <div class="section__head">
+          <h2>2. Match facts</h2>
+          <p>
+            JSON with home/away lineups + formation, timed events, optional set-piece totals.
+            <button type="button" id="load-example" class="btn btn--ghost">Load example</button>
+          </p>
+        </div>
+        <textarea
+          id="facts-json"
+          class="facts-editor"
+          spellcheck="false"
+          rows="18"
+          placeholder='{ "home": { "team_name": "…", "formation": "4-3-3", "lineup": [] }, "away": {…}, "events": [] }'
+        ></textarea>
+        <div class="match-bar" style="margin-top: 1rem">
+          <button id="save-facts" class="btn btn--primary" type="button">Save facts</button>
+        </div>
+      </section>
+
+      <section class="section" id="files-section">
+        <div class="section__head">
+          <h2>3. Formation PDFs &amp; video</h2>
+          <p>
+            Formation PDFs are optional (stored + text-extracted). Video: MP4/MKV/MOV up to 4&nbsp;GB,
+            chunked 8&nbsp;MB uploads — aim for 720p / 1–2&nbsp;GB.
+          </p>
+        </div>
+        <div class="match-bar match-bar--stack">
+          <label class="field">
+            <span>Home formation PDF</span>
+            <input id="formation-home" type="file" accept="application/pdf,.pdf" />
+          </label>
+          <label class="field">
+            <span>Away formation PDF</span>
+            <input id="formation-away" type="file" accept="application/pdf,.pdf" />
+          </label>
+          <button id="upload-formations" class="btn btn--ghost" type="button">
+            Upload formation PDFs
+          </button>
+        </div>
+        <form id="video-form" class="upload-form" style="margin-top: 1.25rem">
+          <label class="file-drop" for="video-input">
+            <input
+              id="video-input"
+              type="file"
+              accept="video/mp4,video/x-matroska,video/quicktime,video/*"
+            />
+            <span id="video-label">Choose full-match video (optional in Phase 1)…</span>
+          </label>
+          <button id="upload-video" class="btn btn--primary" type="submit">
+            Upload video (chunked)
+          </button>
+        </form>
+        <div id="video-progress-wrap" class="progress-wrap" hidden>
+          <div class="progress-bar"><div id="video-progress-fill" class="progress-bar__fill"></div></div>
+          <p id="video-progress-text" class="progress-text"></p>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section__head">
+          <h2>4. Compute fact-sourced sheet</h2>
+          <p>
+            Builds goals, cards, substitutions, lineups/formations, and optional set pieces from
+            your facts. Other catalog fields stay pending.
+          </p>
+        </div>
+        <button id="compute-btn" class="btn btn--primary" type="button">
+          Compute sheet from facts
+        </button>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="results" class="section" hidden>
+        <div class="section__head">
+          <h2 id="scoreline">Sheet</h2>
+          <p id="match-meta"></p>
+        </div>
+        <p id="coverage-banner" class="banner banner--ok"></p>
+        <div id="team-board" class="team-board"></div>
+
+        <div class="section__head" style="margin-top: 2rem">
+          <h2>Fact events</h2>
+          <p>Goals, cards, and substitutions from your JSON.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="events-table">
+            <thead>
+              <tr>
+                <th>Min</th>
+                <th>Type</th>
+                <th>Team</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="section__head" style="margin-top: 2rem">
+          <h2>Lineups</h2>
+        </div>
+        <div class="table-wrap">
+          <table id="lineup-table">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Team</th>
+                <th>#</th>
+                <th>Pos</th>
+                <th>Goals</th>
+                <th>YC</th>
+                <th>RC</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section__head">
+          <h2>Recent packs</h2>
+        </div>
+        <div class="table-wrap">
+          <table id="packs-table">
+            <thead>
+              <tr>
+                <th>Pack</th>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Video</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Phase 1 fact sheet ≠ provider feed. Compare against the
+        <a href="/">World Cup Match</a> demo for the full catalog shape.
+      </p>
+    </footer>
+
+    <script src="/static/match-pack.js" type="module"></script>
+  </body>
+</html>
