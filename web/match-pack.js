@@ -24,6 +24,7 @@ const videoProgressFill = document.getElementById("video-progress-fill");
 const videoProgressText = document.getElementById("video-progress-text");
 const computeBtn = document.getElementById("compute-btn");
 const analyzeBtn = document.getElementById("analyze-btn");
+const reconcileBtn = document.getElementById("reconcile-btn");
 const analyzeCancel = document.getElementById("analyze-cancel");
 const analyzeStatusEl = document.getElementById("analyze-status");
 const analyzeProgressWrap = document.getElementById("analyze-progress-wrap");
@@ -237,25 +238,40 @@ function renderFilmPanel(film) {
     return;
   }
   const t = film.totals;
+  const c = film.corrected || {};
   const rows = [
     ["Events", t.events],
-    ["Shots", t.shots],
-    ["Passes", t.passes],
+    ["Shots", c.shots ?? t.shots],
+    ["Passes", c.passes ?? t.passes],
     ["Crosses", t.crosses],
     ["Drives", t.drives],
     ["Headers", t.headers],
     ["Tackles", t.tackles],
-    ["Throw-ins", t.throw_ins],
-    ["Free kicks", t.free_kicks],
-    ["Goal tags*", t.goal_tags],
+    ["Throw-ins", c.throw_ins ?? t.throw_ins],
+    ["Free kicks", c.free_kicks ?? t.free_kicks],
+    ["Goals (corrected)", c.goals ?? "—"],
+    ["Goal tags raw*", t.goal_tags],
   ];
+  const anchors = (c.anchored_goals || [])
+    .map((a) => {
+      const filmBit = a.matched
+        ? `film ${a.film_minute}'`
+        : "no film match";
+      return `${a.player_name || "?"} ${a.fact_minute}' (${a.team}) ← ${filmBit}`;
+    })
+    .join(" · ");
   filmPanel.hidden = false;
   filmPanel.innerHTML = `
-    <h3>Film tags (Phase 2)</h3>
+    <h3>Film tags (Phase 2${film.corrected ? " · corrected" : ""})</h3>
     <p class="film-warn">${film.warning || "Approximate broadcast spotting — not a provider feed."}
       Method: <code>${film.method || "—"}</code>${
         film.job_id ? ` · job <code>${film.job_id}</code>` : ""
-      }. *Goal tags from video are noisy; trust the fact score above.</p>
+      }. *Raw Goal tags are noisy; corrected goals follow match facts.</p>
+    ${
+      anchors
+        ? `<p class="film-warn"><strong>Anchored goals:</strong> ${anchors}</p>`
+        : ""
+    }
     <ul class="film-grid">
       ${rows
         .map(
@@ -379,6 +395,31 @@ analyzeCancel?.addEventListener("click", async () => {
     });
     syncAnalyzeUi(pack);
     setAnalyzeStatus("Cancel requested.");
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+reconcileBtn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Correcting film tags against match facts…", { loading: true });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/reconcile?promote=true`, {
+      method: "POST",
+    });
+    setPackId(pack.pack_id);
+    if (pack.facts) {
+      factsJson.value = JSON.stringify(pack.facts, null, 2);
+    }
+    if (pack.sheet) {
+      renderSheet(pack);
+    }
+    const r = pack.reconcile || {};
+    setAnalyzeStatus(
+      `Corrected: ${r.goal_tags_matched ?? 0}/${r.fact_goals ?? 0} fact goals anchored to film. ` +
+        `Summary saved in facts.film_corrected (events list unchanged — still fact truth).`
+    );
+    await refreshPacks();
   } catch (err) {
     setAnalyzeStatus(err.message, { error: true });
   }

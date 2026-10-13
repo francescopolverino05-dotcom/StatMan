@@ -155,7 +155,7 @@ def normalize_facts(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(events_in, list):
         raise ValueError("events must be a list")
     events = [_event(e, i) for i, e in enumerate(events_in)]
-    return {
+    out: dict[str, Any] = {
         "competition": (payload.get("competition") or "").strip() or None,
         "season": (payload.get("season") or "").strip() or None,
         "kickoff": (payload.get("kickoff") or payload.get("game_date") or "").strip() or None,
@@ -165,6 +165,10 @@ def normalize_facts(payload: dict[str, Any]) -> dict[str, Any]:
         "events": events,
         "notes": (payload.get("notes") or "").strip() or None,
     }
+    # Phase 2 reconcile: match-level corrected film summary (not timed fact events).
+    if isinstance(payload.get("film_corrected"), dict):
+        out["film_corrected"] = payload["film_corrected"]
+    return out
 
 
 EXAMPLE_FACTS: dict[str, Any] = {

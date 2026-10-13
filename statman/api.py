@@ -44,6 +44,7 @@ from statman.match_pack import (
     list_packs,
     put_facts,
     put_facts_file,
+    reconcile_pack,
     start_pack_analyze,
 )
 from statman.video import (
@@ -118,6 +119,7 @@ def api_root() -> dict[str, Any]:
             "match_pack_compute": "POST /api/match-packs/{pack_id}/compute",
             "match_pack_analyze": "POST /api/match-packs/{pack_id}/analyze",
             "match_pack_analyze_import": "POST /api/match-packs/{pack_id}/analyze/import",
+            "match_pack_reconcile": "POST /api/match-packs/{pack_id}/reconcile",
             "match_pack_example_facts": "/api/match-packs/example-facts",
         },
         "default_game_id": DEFAULT_GAME_ID,
@@ -644,6 +646,23 @@ def api_match_pack_analyze_cancel(pack_id: str) -> dict[str, Any]:
         return cancel_pack_analyze(pack_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/reconcile")
+def api_match_pack_reconcile(
+    pack_id: str,
+    promote: bool = Query(
+        True,
+        description="Write corrected film summary into facts.film_corrected",
+    ),
+) -> dict[str, Any]:
+    """Anchor film Goal tags to fact goals and promote a corrected summary into facts."""
+    try:
+        return reconcile_pack(pack_id, promote=promote)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

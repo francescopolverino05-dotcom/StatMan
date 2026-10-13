@@ -8,6 +8,7 @@ from statman.match_pack.analyze import (
     import_matching_film_job,
     start_pack_analyze,
 )
+from statman.match_pack.reconcile import reconcile_pack
 from statman.match_pack.pipeline import (
     append_pack_video_chunk,
     attach_formation,
@@ -46,4 +47,5 @@ __all__ = [
     "import_matching_film_job",
     "apply_film_to_sheet",
     "find_matching_video_job",
+    "reconcile_pack",
 ]

@@ -174,10 +174,19 @@
           <button id="analyze-btn" class="btn btn--primary" type="button">
             Analyze video / import film tags
           </button>
+          <button id="reconcile-btn" class="btn btn--primary" type="button">
+            Correct film using facts
+          </button>
           <button id="analyze-cancel" class="btn btn--ghost" type="button">
             Cancel analyze
           </button>
         </div>
+        <p class="hint">
+          Film tags have no team/player — they cannot be pasted into
+          <code>facts.events</code>. <strong>Correct film using facts</strong> anchors Goal
+          tags to your fact goals (score stays truth) and writes
+          <code>facts.film_corrected</code> with the reconciled summary.
+        </p>
         <p id="analyze-status" class="status" role="status" aria-live="polite"></p>
         <div id="analyze-progress-wrap" class="progress-wrap" hidden>
           <div class="progress-bar"><div id="analyze-progress-fill" class="progress-bar__fill"></div></div>
