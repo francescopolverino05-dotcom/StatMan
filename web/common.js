@@ -39,6 +39,13 @@ export function seasonBase(competitionId = DEFAULT_COMPETITION_ID, seasonId = DE
 /** Format 1H / 2H / total period splits. */
 export function fmtSplit(split) {
   if (!split || typeof split !== "object") return "—";
+  if (
+    split.first_half == null &&
+    split.second_half == null &&
+    split.total == null
+  ) {
+    return "—";
+  }
   return `${fmt(split.first_half, 0)} / ${fmt(split.second_half, 0)} / ${fmt(split.total, 0)}`;
 }
 
@@ -179,12 +186,17 @@ export function catalogSections(team) {
   ];
 }
 
-export function renderTeamCatalogHtml(team, sideLabel) {
+export function renderTeamCatalogHtml(team, sideLabel, options = {}) {
   const sections = catalogSections(team);
+  const formation =
+    options.showFormation && team.formation
+      ? `<p class="formation-line">${team.formation}</p>`
+      : "";
   return `
     <div class="team-col team-col--catalog">
       <p class="side">${sideLabel}</p>
       <h3>${team.team_name}</h3>
+      ${formation}
       ${sections
         .map(
           (sec) => `
@@ -192,13 +204,14 @@ export function renderTeamCatalogHtml(team, sideLabel) {
           <h4 class="stat-section__title">${sec.title}</h4>
           <ul class="stat-list">
             ${sec.rows
-              .map(
-                ([label, value]) => `
-              <li>
+              .map(([label, value]) => {
+                const empty = value === "—";
+                return `
+              <li class="${empty ? "is-empty" : "is-filled"}">
                 <span class="label">${label}</span>
-                <span class="value">${value}</span>
-              </li>`
-              )
+                <span class="value${empty ? " value--empty" : ""}">${value}</span>
+              </li>`;
+              })
               .join("")}
           </ul>
         </div>`

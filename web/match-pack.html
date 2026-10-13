@@ -99,6 +99,7 @@
         <div class="match-bar" style="margin-top: 1rem">
           <button id="save-facts" class="btn btn--primary" type="button">Save facts</button>
         </div>
+        <p id="facts-status" class="status" role="status" aria-live="polite"></p>
       </section>
 
       <section class="section" id="files-section">
@@ -145,8 +146,9 @@
         <div class="section__head">
           <h2>4. Compute fact-sourced sheet</h2>
           <p>
-            Builds goals, cards, substitutions, lineups/formations, and optional set pieces from
-            your facts. Other catalog fields stay pending.
+            Phase&nbsp;1 fills goals, cards, substitutions, lineups/formations, and any set-piece
+            totals you put in the JSON. Possession, xG, shots, passes, PPDA stay as
+            <code>—</code> until later video phases — that is expected, not a bug.
           </p>
         </div>
         <button id="compute-btn" class="btn btn--primary" type="button">

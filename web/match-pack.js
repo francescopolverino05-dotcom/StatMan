@@ -21,6 +21,7 @@ const videoProgressFill = document.getElementById("video-progress-fill");
 const videoProgressText = document.getElementById("video-progress-text");
 const computeBtn = document.getElementById("compute-btn");
 const statusEl = document.getElementById("status");
+const factsStatusEl = document.getElementById("facts-status");
 const results = document.getElementById("results");
 const scoreline = document.getElementById("scoreline");
 const matchMeta = document.getElementById("match-meta");
@@ -32,10 +33,27 @@ const packsBody = document.querySelector("#packs-table tbody");
 
 let activePackId = null;
 
-function setStatus(text, { error = false, loading = false } = {}) {
-  statusEl.textContent = text;
-  statusEl.classList.toggle("is-error", error);
-  statusEl.classList.toggle("is-loading", loading);
+function setStatus(text, { error = false, loading = false, near = "both" } = {}) {
+  const targets = [];
+  if (near === "facts" || near === "both") {
+    if (factsStatusEl) targets.push(factsStatusEl);
+  }
+  if (near === "compute" || near === "both") {
+    if (statusEl) targets.push(statusEl);
+  }
+  // Always keep the compute-area status in sync for screen readers / scroll.
+  if (!targets.length && statusEl) targets.push(statusEl);
+  for (const el of targets) {
+    el.textContent = text;
+    el.classList.toggle("is-error", error);
+    el.classList.toggle("is-loading", loading);
+  }
+}
+
+async function computeSheet(id) {
+  const pack = await fetchJson(`/api/match-packs/${id}/compute`, { method: "POST" });
+  renderSheet(pack);
+  return pack;
 }
 
 function setPackId(id) {
@@ -116,24 +134,30 @@ function renderSheet(pack) {
 
   const cov = sheet.source?.coverage || pack.coverage || {};
   const factList = (cov.fact || []).join(", ") || "—";
+  const missing = (cov.missing_optional || []).join(", ");
   const pending = (cov.pending_later_phases || []).slice(0, 8).join(", ");
+  const counts = cov.fact_event_counts || {};
   coverageBanner.innerHTML = `
-    <strong>Fact-sourced:</strong> ${factList}.
-    <br /><strong>Pending (later phases):</strong> ${pending}${
+    <strong>Phase 1 — filled from your JSON:</strong> ${factList}
+    (${counts.goals ?? 0} goals, ${counts.cards ?? 0} cards, ${counts.substitutions ?? 0} subs).
+    Scroll to <em>Fact events</em> and <em>Lineups</em> below for the full list.
+    <br /><strong>Blank (—) on purpose:</strong>
+    ${missing ? `not in your JSON yet (${missing}); ` : ""}
+    later video phases (${pending}${
       (cov.pending_later_phases || []).length > 8 ? "…" : ""
-    }.
+    }).
   `;
 
   const teams = sheet.teams || [];
   const home = teams[0];
   const away = teams[1];
   teamBoard.innerHTML = `
-    ${home ? renderTeamCatalogHtml(home, "Home") : ""}
+    ${home ? renderTeamCatalogHtml(home, "Home", { showFormation: true }) : ""}
     <div class="score-stack">
       <div class="score">${m.home_score}–${m.away_score}</div>
       <div class="vs">fact sheet</div>
     </div>
-    ${away ? renderTeamCatalogHtml(away, "Away") : ""}
+    ${away ? renderTeamCatalogHtml(away, "Away", { showFormation: true }) : ""}
   `;
 
   const events = sheet.events || [];
@@ -277,7 +301,7 @@ uploadFactsFile?.addEventListener("click", async () => {
 });
 
 saveFacts.addEventListener("click", async () => {
-  setStatus("Saving facts…", { loading: true });
+  setStatus("Saving facts…", { loading: true, near: "facts" });
   try {
     const id = requirePack();
     let payload;
@@ -292,10 +316,18 @@ saveFacts.addEventListener("click", async () => {
       body: JSON.stringify(payload),
     });
     factsJson.value = JSON.stringify(pack.facts, null, 2);
-    setStatus("Facts saved.");
+    homeTeam.value = pack.facts?.home?.team_name || homeTeam.value;
+    awayTeam.value = pack.facts?.away?.team_name || awayTeam.value;
+    setStatus("Facts saved — computing sheet…", { loading: true, near: "facts" });
+    const computed = await computeSheet(id);
+    const m = computed.sheet?.match || {};
+    setStatus(
+      `Facts saved. Sheet ready: ${m.home_team || "Home"} ${m.home_score ?? "?"}–${m.away_score ?? "?"} ${m.away_team || "Away"}.`,
+      { near: "both" }
+    );
     await refreshPacks();
   } catch (err) {
-    setStatus(err.message, { error: true });
+    setStatus(err.message, { error: true, near: "facts" });
   }
 });
 
@@ -400,24 +432,27 @@ videoForm.addEventListener("submit", async (e) => {
 });
 
 computeBtn.addEventListener("click", async () => {
-  setStatus("Computing fact-sourced sheet…", { loading: true });
+  setStatus("Computing fact-sourced sheet…", { loading: true, near: "compute" });
   try {
     const id = requirePack();
     // Auto-save facts from editor if present.
     if (factsJson.value.trim()) {
-      const payload = JSON.parse(factsJson.value);
+      const payload = JSON.parse(stripBom(factsJson.value));
       await fetchJson(`/api/match-packs/${id}/facts`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
     }
-    const pack = await fetchJson(`/api/match-packs/${id}/compute`, { method: "POST" });
-    renderSheet(pack);
-    setStatus("Fact-sourced sheet ready.");
+    const pack = await computeSheet(id);
+    const m = pack.sheet?.match || {};
+    setStatus(
+      `Fact-sourced sheet ready: ${m.home_score ?? "?"}–${m.away_score ?? "?"}. Dashes (—) for possession/xG/shots are normal in Phase 1.`,
+      { near: "both" }
+    );
     await refreshPacks();
   } catch (err) {
-    setStatus(err.message, { error: true });
+    setStatus(err.message, { error: true, near: "compute" });
   }
 });
 

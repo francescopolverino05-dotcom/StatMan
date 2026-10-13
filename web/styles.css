@@ -305,6 +305,19 @@ select {
   white-space: nowrap;
 }
 
+.stat-list .value--empty {
+  font-weight: 500;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+.formation-line {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
 .team-col--catalog {
   min-width: 0;
 }
