@@ -39,7 +39,7 @@ Then open:
 - http://127.0.0.1:8000/ — match UI (tables + pitch maps)
 - http://127.0.0.1:8000/season — tournament table (build first)
 - http://127.0.0.1:8000/season/players — player leaderboards
-- http://127.0.0.1:8000/match-pack — **Match pack** Phases 1–4: facts, film tags, kit tracking/possession, rescored shots
+- http://127.0.0.1:8000/match-pack — **Match pack** Phases 1–5: facts, film tags, kit tracking/possession, rescored shots, approximate SoT
 - http://127.0.0.1:8000/video — upload a **full match** video (90–120′+, film tags only)
 - http://127.0.0.1:8000/import — import StatsBomb / Opta event JSON (provider-grade path)
 - http://127.0.0.1:8000/api/docs — interactive API docs

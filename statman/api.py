@@ -49,6 +49,7 @@ from statman.match_pack import (
     start_phase3,
     cancel_phase3,
     start_phase4,
+    start_phase5,
 )
 from statman.match_pack.phase3 import refresh_team_splits
 from statman.video import (
@@ -75,8 +76,9 @@ app = FastAPI(
         "(socceraction), and returns possession, xG, passes, progressive passes, "
         "PPDA, tackles, interceptions, clearances, and aerials as JSON. "
         "Match-pack Phase 1: facts. Phase 2: film tags. Phase 3: kit tracking / "
-        "possession. Phase 4: rescored approximate shots/SoT. PPDA, xG, and pass "
-        "completion stay pending."
+        "possession. Phase 4: rescored approximate shots. Phase 5: approximate SoT "
+        "(goalmouth/save + deflection/corner). PPDA, xG, and pass completion stay "
+        "pending."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -125,6 +127,7 @@ def api_root() -> dict[str, Any]:
             "match_pack_reconcile": "POST /api/match-packs/{pack_id}/reconcile",
             "match_pack_phase3": "POST /api/match-packs/{pack_id}/phase3",
             "match_pack_phase4": "POST /api/match-packs/{pack_id}/phase4",
+            "match_pack_phase5": "POST /api/match-packs/{pack_id}/phase5",
             "match_pack_example_facts": "/api/match-packs/example-facts",
         },
         "default_game_id": DEFAULT_GAME_ID,
@@ -721,11 +724,22 @@ def api_match_pack_phase4(
     max_shots_per_90: float = Query(16.0, ge=6.0, le=40.0),
     min_gap_sec: float = Query(45.0, ge=20.0, le=120.0),
 ) -> dict[str, Any]:
-    """Phase 4: rescore film Shot tags → approximate board shots / SoT."""
+    """Phase 4: rescore film Shot tags → approximate board shots (SoT via Phase 5)."""
     try:
         return start_phase4(
             pack_id, max_shots_per_90=max_shots_per_90, min_gap_sec=min_gap_sec
         )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/phase5")
+def api_match_pack_phase5(pack_id: str) -> dict[str, Any]:
+    """Phase 5: classify approximate SoT on Phase 4 shots (saves + deflections)."""
+    try:
+        return start_phase5(pack_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
