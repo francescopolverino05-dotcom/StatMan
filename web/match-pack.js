@@ -261,7 +261,7 @@ factsFile?.addEventListener("change", async () => {
 });
 
 uploadFactsFile?.addEventListener("click", async () => {
-  setStatus("Uploading facts JSON…", { loading: true });
+  setStatus("Uploading facts JSON…", { loading: true, near: "facts" });
   try {
     const id = requirePack();
     const file = factsFile.files?.[0];
@@ -280,7 +280,13 @@ uploadFactsFile?.addEventListener("click", async () => {
       factsJson.value = JSON.stringify(pack.facts, null, 2);
       homeTeam.value = pack.facts?.home?.team_name || homeTeam.value;
       awayTeam.value = pack.facts?.away?.team_name || awayTeam.value;
-      setStatus("Facts saved from editor.");
+      setStatus("Facts saved — computing sheet…", { loading: true, near: "facts" });
+      const computed = await computeSheet(id);
+      const m = computed.sheet?.match || {};
+      setStatus(
+        `Facts saved. Sheet ready: ${m.home_score ?? "?"}–${m.away_score ?? "?"}.`,
+        { near: "both" }
+      );
       await refreshPacks();
       return;
     }
@@ -293,10 +299,16 @@ uploadFactsFile?.addEventListener("click", async () => {
     factsJson.value = JSON.stringify(pack.facts, null, 2);
     homeTeam.value = pack.facts?.home?.team_name || homeTeam.value;
     awayTeam.value = pack.facts?.away?.team_name || awayTeam.value;
-    setStatus(`Uploaded ${file.name} — facts ready (score ${pack.facts?.home?.team_name} facts saved).`);
+    setStatus(`Uploaded ${file.name} — computing sheet…`, { loading: true, near: "facts" });
+    const computed = await computeSheet(id);
+    const m = computed.sheet?.match || {};
+    setStatus(
+      `Uploaded ${file.name}. Sheet ready: ${m.home_score ?? "?"}–${m.away_score ?? "?"}.`,
+      { near: "both" }
+    );
     await refreshPacks();
   } catch (err) {
-    setStatus(err.message, { error: true });
+    setStatus(err.message, { error: true, near: "facts" });
   }
 });
 
