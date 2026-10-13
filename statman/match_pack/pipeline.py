@@ -311,11 +311,21 @@ def compute_pack(pack_id: str) -> dict[str, Any]:
     if not facts:
         raise ValueError("Upload match facts JSON before computing the sheet")
     sheet = sheet_from_facts(facts, pack_id=pack_id)
+    # Re-attach Phase-2 film tags when present so recompute does not drop them.
+    film_path = store.pack_dir(pack_id) / "film_stats.json"
+    if film_path.exists():
+        from statman.match_pack.film_merge import merge_film_into_sheet
+
+        film_stats = json.loads(film_path.read_text(encoding="utf-8"))
+        sheet = merge_film_into_sheet(sheet, film_stats, pack_id=pack_id)
+        meta["status"] = "phase2_ready"
+        meta["phase"] = "match-pack-phase2"
+    else:
+        meta["status"] = "sheet_ready"
     sheet_path = store.pack_dir(pack_id) / "sheet.json"
     sheet_path.write_text(json.dumps(sheet, indent=2, default=str), encoding="utf-8")
     meta["sheet"] = sheet
     meta["sheet_path"] = str(sheet_path)
-    meta["status"] = "sheet_ready"
     meta["error"] = None
     # Coverage summary at top level for the UI.
     meta["coverage"] = sheet["source"]["coverage"]

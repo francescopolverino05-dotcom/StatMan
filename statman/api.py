@@ -32,15 +32,19 @@ from statman.match_pack import (
     append_pack_video_chunk,
     attach_formation,
     attach_video_bytes,
+    cancel_pack_analyze,
     compute_pack,
     create_pack,
     example_facts,
     finish_pack_video,
     get_pack,
+    import_film_job,
+    import_matching_film_job,
     init_pack_video,
     list_packs,
     put_facts,
     put_facts_file,
+    start_pack_analyze,
 )
 from statman.video import (
     abort_upload,
@@ -65,11 +69,10 @@ app = FastAPI(
         "Loads StatsBomb open-data matches, converts events to SPADL "
         "(socceraction), and returns possession, xG, passes, progressive passes, "
         "PPDA, tackles, interceptions, clearances, and aerials as JSON. "
-        "Match-pack Phase 1 accepts a self-serve upload: full-match video (720p / "
-        "1–2 GB), optional formation PDFs, and match facts JSON (lineups, goals, "
-        "cards, subs, optional set pieces) to build a fact-sourced sheet. "
-        "Dense metrics (possession, PPDA, pass accuracy) stay pending for later "
-        "tracking / ball-action phases. Film tags and StatsBomb import remain available."
+        "Match-pack Phase 1: video + formation PDFs + match facts JSON → fact-sourced "
+        "sheet (goals/cards/subs/lineups). Phase 2: YOLO film tags on the pack video "
+        "(or import a finished /video job) attached under sheet.film. Possession, "
+        "PPDA, pass accuracy, and team-split shots stay pending for tracking phases."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -113,6 +116,8 @@ def api_root() -> dict[str, Any]:
             "match_pack_formation": "POST /api/match-packs/{pack_id}/formation",
             "match_pack_video": "POST /api/match-packs/{pack_id}/video/init",
             "match_pack_compute": "POST /api/match-packs/{pack_id}/compute",
+            "match_pack_analyze": "POST /api/match-packs/{pack_id}/analyze",
+            "match_pack_analyze_import": "POST /api/match-packs/{pack_id}/analyze/import",
             "match_pack_example_facts": "/api/match-packs/example-facts",
         },
         "default_game_id": DEFAULT_GAME_ID,
@@ -596,6 +601,49 @@ def api_match_pack_compute(pack_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/analyze")
+def api_match_pack_analyze(
+    pack_id: str,
+    sample_fps: float = Query(0.5, ge=0.05, le=2.0),
+    reuse_matching_job: bool = Query(True),
+) -> dict[str, Any]:
+    """Phase 2: spot film tags on the pack video (or import a matching /video job)."""
+    try:
+        return start_pack_analyze(
+            pack_id,
+            sample_fps=sample_fps,
+            reuse_matching_job=reuse_matching_job,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/analyze/import")
+def api_match_pack_analyze_import(
+    pack_id: str,
+    video_job_id: str | None = Query(None),
+) -> dict[str, Any]:
+    """Import film tags from a finished /video job (or auto-match by filename)."""
+    try:
+        if video_job_id:
+            return import_film_job(pack_id, video_job_id)
+        return import_matching_film_job(pack_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/analyze/cancel")
+def api_match_pack_analyze_cancel(pack_id: str) -> dict[str, Any]:
+    try:
+        return cancel_pack_analyze(pack_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

@@ -23,6 +23,12 @@ const videoProgressWrap = document.getElementById("video-progress-wrap");
 const videoProgressFill = document.getElementById("video-progress-fill");
 const videoProgressText = document.getElementById("video-progress-text");
 const computeBtn = document.getElementById("compute-btn");
+const analyzeBtn = document.getElementById("analyze-btn");
+const analyzeCancel = document.getElementById("analyze-cancel");
+const analyzeStatusEl = document.getElementById("analyze-status");
+const analyzeProgressWrap = document.getElementById("analyze-progress-wrap");
+const analyzeProgressFill = document.getElementById("analyze-progress-fill");
+const analyzeProgressText = document.getElementById("analyze-progress-text");
 const statusEl = document.getElementById("status");
 const factsStatusEl = document.getElementById("facts-status");
 const results = document.getElementById("results");
@@ -30,11 +36,13 @@ const scoreline = document.getElementById("scoreline");
 const matchMeta = document.getElementById("match-meta");
 const coverageBanner = document.getElementById("coverage-banner");
 const teamBoard = document.getElementById("team-board");
+const filmPanel = document.getElementById("film-panel");
 const eventsBody = document.querySelector("#events-table tbody");
 const lineupBody = document.querySelector("#lineup-table tbody");
 const packsBody = document.querySelector("#packs-table tbody");
 
 let activePackId = null;
+let analyzePollTimer = null;
 
 function setStatus(text, { error = false, loading = false, near = "both" } = {}) {
   const targets = [];
@@ -106,12 +114,24 @@ async function openPack(packId) {
     if (pack.facts) {
       factsJson.value = JSON.stringify(pack.facts, null, 2);
     }
+    syncAnalyzeUi(pack);
     if (pack.sheet) {
       renderSheet(pack);
-      setStatus(`Loaded pack ${packId} (sheet ready).`);
+      setStatus(
+        pack.sheet.film
+          ? `Loaded pack ${packId} (facts + Phase 2 film tags).`
+          : `Loaded pack ${packId} (sheet ready).`
+      );
     } else {
       results.hidden = true;
+      if (filmPanel) {
+        filmPanel.hidden = true;
+        filmPanel.innerHTML = "";
+      }
       setStatus(`Loaded pack ${packId} — save facts and compute when ready.`);
+    }
+    if (["queued", "running", "cancelling"].includes(pack.analyze?.status)) {
+      pollAnalyze(packId);
     }
   } catch (err) {
     setStatus(err.message, { error: true });
@@ -140,15 +160,21 @@ function renderSheet(pack) {
   const missing = (cov.missing_optional || []).join(", ");
   const pending = (cov.pending_later_phases || []).slice(0, 8).join(", ");
   const counts = cov.fact_event_counts || {};
+  const filmCounts = cov.film_event_counts || sheet.film?.totals || {};
+  const hasFilm = Boolean(sheet.film?.totals);
   coverageBanner.innerHTML = `
     <strong>Phase 1 — filled from your JSON:</strong> ${factList}
     (${counts.goals ?? 0} goals, ${counts.cards ?? 0} cards, ${counts.substitutions ?? 0} subs).
-    Scroll to <em>Fact events</em> and <em>Lineups</em> below for the full list.
-    <br /><strong>Blank (—) on purpose:</strong>
-    ${missing ? `not in your JSON yet (${missing}); ` : ""}
-    later video phases (${pending}${
+    <br /><strong>Blank (—) on the team board:</strong>
+    ${missing ? `not in your JSON (${missing}); ` : ""}
+    team-split possession / xG / shots / pass accuracy need later phases (${pending}${
       (cov.pending_later_phases || []).length > 8 ? "…" : ""
     }).
+    ${
+      hasFilm
+        ? `<br /><strong>Phase 2 — match-level film tags:</strong> ${filmCounts.events ?? "—"} events · ${filmCounts.shots ?? "—"} shots · ${filmCounts.passes ?? "—"} passes (approximate, no team split).`
+        : `<br /><strong>Phase 2:</strong> click <em>Analyze video / import film tags</em> after the video is ready.`
+    }
   `;
 
   const teams = sheet.teams || [];
@@ -158,10 +184,12 @@ function renderSheet(pack) {
     ${home ? renderTeamCatalogHtml(home, "Home", { showFormation: true }) : ""}
     <div class="score-stack">
       <div class="score">${m.home_score}–${m.away_score}</div>
-      <div class="vs">fact sheet</div>
+      <div class="vs">${hasFilm ? "facts + film" : "fact sheet"}</div>
     </div>
     ${away ? renderTeamCatalogHtml(away, "Away", { showFormation: true }) : ""}
   `;
+
+  renderFilmPanel(sheet.film);
 
   const events = sheet.events || [];
   eventsBody.innerHTML = events
@@ -198,7 +226,163 @@ function renderSheet(pack) {
     .join("");
 
   results.scrollIntoView({ behavior: "smooth", block: "start" });
+  syncAnalyzeUi(pack);
 }
+
+function renderFilmPanel(film) {
+  if (!filmPanel) return;
+  if (!film?.totals) {
+    filmPanel.hidden = true;
+    filmPanel.innerHTML = "";
+    return;
+  }
+  const t = film.totals;
+  const rows = [
+    ["Events", t.events],
+    ["Shots", t.shots],
+    ["Passes", t.passes],
+    ["Crosses", t.crosses],
+    ["Drives", t.drives],
+    ["Headers", t.headers],
+    ["Tackles", t.tackles],
+    ["Throw-ins", t.throw_ins],
+    ["Free kicks", t.free_kicks],
+    ["Goal tags*", t.goal_tags],
+  ];
+  filmPanel.hidden = false;
+  filmPanel.innerHTML = `
+    <h3>Film tags (Phase 2)</h3>
+    <p class="film-warn">${film.warning || "Approximate broadcast spotting — not a provider feed."}
+      Method: <code>${film.method || "—"}</code>${
+        film.job_id ? ` · job <code>${film.job_id}</code>` : ""
+      }. *Goal tags from video are noisy; trust the fact score above.</p>
+    <ul class="film-grid">
+      ${rows
+        .map(
+          ([label, value]) => `
+        <li>
+          <span class="label">${label}</span>
+          <span class="value">${fmt(value, 0)}</span>
+        </li>`
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
+function setAnalyzeStatus(text, { error = false, loading = false } = {}) {
+  if (!analyzeStatusEl) return;
+  analyzeStatusEl.textContent = text;
+  analyzeStatusEl.classList.toggle("is-error", error);
+  analyzeStatusEl.classList.toggle("is-loading", loading);
+}
+
+function stopAnalyzePoll() {
+  if (analyzePollTimer) {
+    clearInterval(analyzePollTimer);
+    analyzePollTimer = null;
+  }
+}
+
+function syncAnalyzeUi(pack) {
+  const a = pack?.analyze;
+  if (!a) {
+    if (analyzeProgressWrap) analyzeProgressWrap.hidden = true;
+    return;
+  }
+  const prog = a.progress || {};
+  const pct = prog.pct ?? 0;
+  if (analyzeProgressWrap) {
+    const busy = ["queued", "running", "cancelling"].includes(a.status);
+    analyzeProgressWrap.hidden = !busy && a.status !== "done";
+    if (analyzeProgressFill) analyzeProgressFill.style.width = `${pct}%`;
+    if (analyzeProgressText) {
+      analyzeProgressText.textContent = busy
+        ? `${a.status} · ${pct}% · ${prog.events_so_far ?? a.event_count ?? 0} events`
+        : a.status === "done"
+          ? `done · ${a.event_count ?? 0} film events`
+          : a.status || "";
+    }
+  }
+  if (a.status === "done") {
+    setAnalyzeStatus(
+      `Phase 2 ready — ${a.event_count ?? 0} film events${
+        a.video_job_id ? ` (imported job ${a.video_job_id})` : ""
+      }.`
+    );
+    stopAnalyzePoll();
+  } else if (a.status === "error") {
+    setAnalyzeStatus(a.error || "Analyze failed", { error: true });
+    stopAnalyzePoll();
+  } else if (a.status === "cancelled") {
+    setAnalyzeStatus("Analyze cancelled.");
+    stopAnalyzePoll();
+  } else if (["queued", "running", "cancelling"].includes(a.status)) {
+    setAnalyzeStatus(`Analyzing video… ${pct}%`, { loading: true });
+  }
+}
+
+async function pollAnalyze(packId) {
+  stopAnalyzePoll();
+  analyzePollTimer = setInterval(async () => {
+    try {
+      const pack = await fetchJson(`/api/match-packs/${packId}`);
+      if (pack.pack_id === activePackId) {
+        syncAnalyzeUi(pack);
+        if (pack.sheet?.film) {
+          renderSheet(pack);
+        }
+      }
+      const st = pack.analyze?.status;
+      if (st && !["queued", "running", "cancelling"].includes(st)) {
+        stopAnalyzePoll();
+        await refreshPacks();
+      }
+    } catch (err) {
+      setAnalyzeStatus(err.message, { error: true });
+      stopAnalyzePoll();
+    }
+  }, 2000);
+}
+
+analyzeBtn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Starting Phase 2 analyze…", { loading: true });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(
+      `/api/match-packs/${id}/analyze?reuse_matching_job=true`,
+      { method: "POST" }
+    );
+    setPackId(pack.pack_id);
+    if (pack.sheet) {
+      renderSheet(pack);
+      setAnalyzeStatus(
+        pack.analyze?.source === "imported_video_job"
+          ? `Imported film tags from job ${pack.analyze.video_job_id}.`
+          : "Phase 2 sheet updated."
+      );
+    } else {
+      syncAnalyzeUi(pack);
+      pollAnalyze(id);
+    }
+    await refreshPacks();
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+analyzeCancel?.addEventListener("click", async () => {
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/analyze/cancel`, {
+      method: "POST",
+    });
+    syncAnalyzeUi(pack);
+    setAnalyzeStatus("Cancel requested.");
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
 
 createForm.addEventListener("submit", async (e) => {
   e.preventDefault();

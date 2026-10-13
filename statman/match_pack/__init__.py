@@ -1,5 +1,13 @@
-"""Phase-1 match pack: video + formation + match facts → fact-sourced sheet."""
+"""Match pack: video + formation + match facts → fact sheet (+ Phase 2 film tags)."""
 
+from statman.match_pack.analyze import (
+    apply_film_to_sheet,
+    cancel_pack_analyze,
+    find_matching_video_job,
+    import_film_job,
+    import_matching_film_job,
+    start_pack_analyze,
+)
 from statman.match_pack.pipeline import (
     append_pack_video_chunk,
     attach_formation,
@@ -32,4 +40,10 @@ __all__ = [
     "get_pack",
     "list_packs",
     "example_facts",
+    "start_pack_analyze",
+    "cancel_pack_analyze",
+    "import_film_job",
+    "import_matching_film_job",
+    "apply_film_to_sheet",
+    "find_matching_video_job",
 ]

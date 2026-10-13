@@ -27,7 +27,7 @@
     </nav>
 
     <header class="page-hero">
-      <p class="eyebrow">Phase 1 · self-serve ingest</p>
+      <p class="eyebrow">Phase 1–2 · facts + film tags</p>
       <h1>Upload a match pack</h1>
       <p class="lede">
         Video (720p, ~1–2&nbsp;GB) plus match facts — lineups, formation, goals, cards,
@@ -160,6 +160,31 @@
         <p id="status" class="status" role="status" aria-live="polite"></p>
       </section>
 
+      <section class="section" id="analyze-section">
+        <div class="section__head">
+          <h2>5. Analyze video (Phase 2)</h2>
+          <p>
+            Runs YOLO person/ball spotting on the pack video (or imports a finished
+            <a href="/video">Film tags</a> job with the same filename). Match-level
+            film counts appear below the fact board — not Opta-accurate, and not split
+            by team yet.
+          </p>
+        </div>
+        <div class="match-bar">
+          <button id="analyze-btn" class="btn btn--primary" type="button">
+            Analyze video / import film tags
+          </button>
+          <button id="analyze-cancel" class="btn btn--ghost" type="button">
+            Cancel analyze
+          </button>
+        </div>
+        <p id="analyze-status" class="status" role="status" aria-live="polite"></p>
+        <div id="analyze-progress-wrap" class="progress-wrap" hidden>
+          <div class="progress-bar"><div id="analyze-progress-fill" class="progress-bar__fill"></div></div>
+          <p id="analyze-progress-text" class="progress-text"></p>
+        </div>
+      </section>
+
       <section id="results" class="section" hidden>
         <div class="section__head">
           <h2 id="scoreline">Sheet</h2>
@@ -167,6 +192,7 @@
         </div>
         <p id="coverage-banner" class="banner banner--ok"></p>
         <div id="team-board" class="team-board"></div>
+        <div id="film-panel" class="film-panel" hidden></div>
 
         <div class="section__head" style="margin-top: 2rem">
           <h2>Fact events</h2>
