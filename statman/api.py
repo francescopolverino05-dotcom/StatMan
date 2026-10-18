@@ -53,6 +53,7 @@ from statman.match_pack import (
     start_phase6,
     start_phase7,
     start_phase8,
+    start_phase9,
 )
 from statman.match_pack.phase3 import refresh_team_splits
 from statman.video import (
@@ -82,7 +83,7 @@ app = FastAPI(
         "possession. Phase 4: rescored approximate shots. Phase 5: approximate SoT "
         "(goalmouth/save + deflection/corner). Phase 6: GK shots faced / saves from "
         "SoT. Phase 7: pass completion + tackle rescore. Phase 8: progressive "
-        "passes, aerials, interceptions, clearances. xG and PPDA stay pending."
+        "passes, aerials, interceptions, clearances. Phase 9: approximate xG + PPDA."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -135,6 +136,7 @@ def api_root() -> dict[str, Any]:
             "match_pack_phase6": "POST /api/match-packs/{pack_id}/phase6",
             "match_pack_phase7": "POST /api/match-packs/{pack_id}/phase7",
             "match_pack_phase8": "POST /api/match-packs/{pack_id}/phase8",
+            "match_pack_phase9": "POST /api/match-packs/{pack_id}/phase9",
             "match_pack_example_facts": "/api/match-packs/example-facts",
         },
         "default_game_id": DEFAULT_GAME_ID,
@@ -788,6 +790,17 @@ def api_match_pack_phase8(pack_id: str) -> dict[str, Any]:
     """Phase 8: progressive passes, aerials, interceptions, clearances."""
     try:
         return start_phase8(pack_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/phase9")
+def api_match_pack_phase9(pack_id: str) -> dict[str, Any]:
+    """Phase 9: approximate xG from shots + rough PPDA."""
+    try:
+        return start_phase9(pack_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

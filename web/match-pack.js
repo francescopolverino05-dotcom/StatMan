@@ -31,6 +31,7 @@ const phase5Btn = document.getElementById("phase5-btn");
 const phase6Btn = document.getElementById("phase6-btn");
 const phase7Btn = document.getElementById("phase7-btn");
 const phase8Btn = document.getElementById("phase8-btn");
+const phase9Btn = document.getElementById("phase9-btn");
 const analyzeCancel = document.getElementById("analyze-cancel");
 const analyzeStatusEl = document.getElementById("analyze-status");
 const analyzeProgressWrap = document.getElementById("analyze-progress-wrap");
@@ -144,7 +145,8 @@ async function openPack(packId) {
       ["queued", "running"].includes(pack.phase5?.status) ||
       ["queued", "running"].includes(pack.phase6?.status) ||
       ["queued", "running"].includes(pack.phase7?.status) ||
-      ["queued", "running"].includes(pack.phase8?.status)
+      ["queued", "running"].includes(pack.phase8?.status) ||
+      ["queued", "running"].includes(pack.phase9?.status)
     ) {
       pollAnalyze(packId);
     }
@@ -183,12 +185,14 @@ function renderSheet(pack) {
   const p6 = cov.phase6 || null;
   const p7 = cov.phase7 || null;
   const p8 = cov.phase8 || null;
+  const p9 = cov.phase9 || null;
   const hasP3 = Boolean(sheet.tracking?.possession);
   const hasP4 = Boolean(sheet.shots?.totals || p4);
   const hasP5 = Boolean(p5 || sheet.source?.phase === "match-pack-phase5");
   const hasP6 = Boolean(p6 || sheet.source?.phase === "match-pack-phase6");
   const hasP7 = Boolean(p7 || sheet.source?.phase === "match-pack-phase7");
   const hasP8 = Boolean(p8 || sheet.source?.phase === "match-pack-phase8");
+  const hasP9 = Boolean(p9 || sheet.source?.phase === "match-pack-phase9");
   coverageBanner.innerHTML = `
     <strong>Phase 1 — filled from your JSON:</strong> ${factList}
     (${counts.goals ?? 0} goals, ${counts.cards ?? 0} cards, ${counts.substitutions ?? 0} subs).
@@ -230,14 +234,21 @@ function renderSheet(pack) {
         ? `<br /><strong>Phase 8 — secondary:</strong> prog ${p8?.prog_home ?? "—"}–${p8?.prog_away ?? "—"} · aerials ${p8?.aerials_home ?? "—"}–${p8?.aerials_away ?? "—"} · ints ${p8?.ints_home ?? "—"}–${p8?.ints_away ?? "—"} · clr ${p8?.clr_home ?? "—"}–${p8?.clr_away ?? "—"} (approximate).`
         : `<br /><strong>Phase 8:</strong> Defence + progressive after Phase 7.`
     }
+    ${
+      hasP9
+        ? `<br /><strong>Phase 9 — xG/PPDA:</strong> xG ${p9?.xg_home ?? sheet.teams?.[0]?.xg ?? "—"}–${p9?.xg_away ?? sheet.teams?.[1]?.xg ?? "—"} · PPDA ${p9?.ppda_home ?? sheet.teams?.[0]?.ppda ?? "—"}–${p9?.ppda_away ?? sheet.teams?.[1]?.ppda ?? "—"} (approximate).`
+        : `<br /><strong>Phase 9:</strong> xG + PPDA after Phase 8.`
+    }
   `;
 
   const teams = sheet.teams || [];
   const home = teams[0];
   const away = teams[1];
-  const vsLabel = hasP8
+  const vsLabel = hasP9
     ? "full approximate board"
-    : hasP7
+    : hasP8
+      ? "board minus xG/PPDA"
+      : hasP7
       ? "facts + track + shots + SoT + GK + actions"
       : hasP6
       ? "facts + track + shots + SoT + GK"
@@ -265,7 +276,8 @@ function renderSheet(pack) {
     sheet.shots,
     sheet.goalkeeper,
     sheet.actions,
-    sheet.secondary
+    sheet.secondary,
+    sheet.xg_ppda
   );
 
   const events = sheet.events || [];
@@ -306,7 +318,7 @@ function renderSheet(pack) {
   syncAnalyzeUi(pack);
 }
 
-function renderFilmPanel(film, tracking, shots, goalkeeper, actions, secondary) {
+function renderFilmPanel(film, tracking, shots, goalkeeper, actions, secondary, xgPpda) {
   if (!filmPanel) return;
   if (
     !film?.totals &&
@@ -314,7 +326,8 @@ function renderFilmPanel(film, tracking, shots, goalkeeper, actions, secondary) 
     !shots?.totals &&
     !goalkeeper?.totals &&
     !actions?.passes &&
-    !secondary?.totals
+    !secondary?.totals &&
+    !xgPpda?.xg
   ) {
     filmPanel.hidden = true;
     filmPanel.innerHTML = "";
@@ -458,6 +471,18 @@ function renderFilmPanel(film, tracking, shots, goalkeeper, actions, secondary) 
     </ul>`
         : ""
     }
+    ${
+      xgPpda?.xg
+        ? `<h4 class="stat-section__title" style="margin-top:1.25rem">Phase 9 xG + PPDA</h4>
+    <p class="film-warn">${xgPpda.warning || ""}</p>
+    <ul class="film-grid">
+      <li><span class="label">xG home</span><span class="value">${fmt(xgPpda.xg?.home?.xg, 2)}</span></li>
+      <li><span class="label">xG away</span><span class="value">${fmt(xgPpda.xg?.away?.xg, 2)}</span></li>
+      <li><span class="label">PPDA home</span><span class="value">${fmt(xgPpda.ppda?.home?.ppda, 2)}</span></li>
+      <li><span class="label">PPDA away</span><span class="value">${fmt(xgPpda.ppda?.away?.ppda, 2)}</span></li>
+    </ul>`
+        : ""
+    }
   `;
 }
 
@@ -483,6 +508,7 @@ function syncAnalyzeUi(pack) {
   const p6 = pack?.phase6;
   const p7 = pack?.phase7;
   const p8 = pack?.phase8;
+  const p9 = pack?.phase9;
   const busyA = a && ["queued", "running", "cancelling"].includes(a.status);
   const busy3 = p3 && ["queued", "running", "cancelling"].includes(p3.status);
   const busy4 = p4 && ["queued", "running"].includes(p4.status);
@@ -490,10 +516,13 @@ function syncAnalyzeUi(pack) {
   const busy6 = p6 && ["queued", "running"].includes(p6.status);
   const busy7 = p7 && ["queued", "running"].includes(p7.status);
   const busy8 = p8 && ["queued", "running"].includes(p8.status);
+  const busy9 = p9 && ["queued", "running"].includes(p9.status);
   const prog =
-    (busy8
-      ? p8?.progress
-      : busy7
+    (busy9
+      ? p9?.progress
+      : busy8
+        ? p8?.progress
+        : busy7
         ? p7?.progress
         : busy6
         ? p6?.progress
@@ -514,6 +543,7 @@ function syncAnalyzeUi(pack) {
       !busy6 &&
       !busy7 &&
       !busy8 &&
+      !busy9 &&
       !(
         a?.status === "done" ||
         p3?.status === "done" ||
@@ -521,11 +551,14 @@ function syncAnalyzeUi(pack) {
         p5?.status === "done" ||
         p6?.status === "done" ||
         p7?.status === "done" ||
-        p8?.status === "done"
+        p8?.status === "done" ||
+        p9?.status === "done"
       );
     if (analyzeProgressFill) analyzeProgressFill.style.width = `${pct}%`;
     if (analyzeProgressText) {
-      if (busy8) {
+      if (busy9) {
+        analyzeProgressText.textContent = `phase9 ${p9.status} · ${pct}% · xG/PPDA`;
+      } else if (busy8) {
         analyzeProgressText.textContent = `phase8 ${p8.status} · ${pct}% · secondary`;
       } else if (busy7) {
         analyzeProgressText.textContent = `phase7 ${p7.status} · ${pct}% · passes/tackles`;
@@ -539,6 +572,8 @@ function syncAnalyzeUi(pack) {
         analyzeProgressText.textContent = `phase3 ${p3.status} · ${pct}% · ${prog.stage || ""} · ${prog.samples ?? ""} samples`;
       } else if (busyA) {
         analyzeProgressText.textContent = `phase2 ${a.status} · ${pct}% · ${prog.events_so_far ?? a.event_count ?? 0} events`;
+      } else if (p9?.status === "done") {
+        analyzeProgressText.textContent = `phase9 done · xG ${p9.xg?.home?.xg ?? "—"}–${p9.xg?.away?.xg ?? "—"}`;
       } else if (p8?.status === "done") {
         const tot = p8.totals || {};
         analyzeProgressText.textContent = `phase8 done · ints ${(tot.home && tot.home.interceptions) ?? "—"}–${(tot.away && tot.away.interceptions) ?? "—"}`;
@@ -564,12 +599,22 @@ function syncAnalyzeUi(pack) {
       }
     }
   }
-  if (busy8) {
+  if (busy9) {
+    setAnalyzeStatus(`Phase 9 xG + PPDA… ${pct}%`, { loading: true });
+  } else if (p9?.status === "done") {
+    setAnalyzeStatus(
+      `Phase 9 ready — xG ${p9.xg?.home?.xg ?? "—"}–${p9.xg?.away?.xg ?? "—"} · PPDA ${p9.ppda?.home ?? "—"}–${p9.ppda?.away ?? "—"}. Board filled for audit.`
+    );
+    stopAnalyzePoll();
+  } else if (p9?.status === "error") {
+    setAnalyzeStatus(p9.error || "Phase 9 failed", { error: true });
+    stopAnalyzePoll();
+  } else if (busy8) {
     setAnalyzeStatus(`Phase 8 defence + progressive… ${pct}%`, { loading: true });
-  } else if (p8?.status === "done") {
+  } else if (p8?.status === "done" && !p9) {
     const tot = p8.totals || {};
     setAnalyzeStatus(
-      `Phase 8 ready — prog ${tot.home?.progressive_passes_completed ?? "—"}–${tot.away?.progressive_passes_completed ?? "—"} · ints ${tot.home?.interceptions ?? "—"}–${tot.away?.interceptions ?? "—"} · clr ${tot.home?.clearances ?? "—"}–${tot.away?.clearances ?? "—"}.`
+      `Phase 8 ready — prog ${tot.home?.progressive_passes_completed ?? "—"}–${tot.away?.progressive_passes_completed ?? "—"} · ints ${tot.home?.interceptions ?? "—"}–${tot.away?.interceptions ?? "—"}. Run Phase 9.`
     );
     stopAnalyzePoll();
   } else if (p8?.status === "error") {
@@ -664,6 +709,7 @@ async function pollAnalyze(packId) {
       const st6 = pack.phase6?.status;
       const st7 = pack.phase7?.status;
       const st8 = pack.phase8?.status;
+      const st9 = pack.phase9?.status;
       const busy2 = st2 && ["queued", "running", "cancelling"].includes(st2);
       const busy3 = st3 && ["queued", "running", "cancelling"].includes(st3);
       const busy4 = st4 && ["queued", "running"].includes(st4);
@@ -671,7 +717,8 @@ async function pollAnalyze(packId) {
       const busy6 = st6 && ["queued", "running"].includes(st6);
       const busy7 = st7 && ["queued", "running"].includes(st7);
       const busy8 = st8 && ["queued", "running"].includes(st8);
-      if (!busy2 && !busy3 && !busy4 && !busy5 && !busy6 && !busy7 && !busy8) {
+      const busy9 = st9 && ["queued", "running"].includes(st9);
+      if (!busy2 && !busy3 && !busy4 && !busy5 && !busy6 && !busy7 && !busy8 && !busy9) {
         stopAnalyzePoll();
         await refreshPacks();
       }
@@ -830,6 +877,24 @@ phase8Btn?.addEventListener("click", async () => {
     setPackId(pack.pack_id);
     syncAnalyzeUi(pack);
     if (pack.phase8?.status === "done" && pack.sheet) {
+      renderSheet(pack);
+    } else {
+      pollAnalyze(id);
+    }
+    await refreshPacks();
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+phase9Btn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Starting Phase 9 xG + PPDA…", { loading: true });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/phase9`, { method: "POST" });
+    setPackId(pack.pack_id);
+    syncAnalyzeUi(pack);
+    if (pack.phase9?.status === "done" && pack.sheet) {
       renderSheet(pack);
     } else {
       pollAnalyze(id);
