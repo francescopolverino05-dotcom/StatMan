@@ -23,6 +23,7 @@ const videoProgressWrap = document.getElementById("video-progress-wrap");
 const videoProgressFill = document.getElementById("video-progress-fill");
 const videoProgressText = document.getElementById("video-progress-text");
 const computeBtn = document.getElementById("compute-btn");
+const runFullBtn = document.getElementById("run-full-btn");
 const analyzeBtn = document.getElementById("analyze-btn");
 const reconcileBtn = document.getElementById("reconcile-btn");
 const phase3Btn = document.getElementById("phase3-btn");
@@ -139,6 +140,7 @@ async function openPack(packId) {
       setStatus(`Loaded pack ${packId} — save facts and compute when ready.`);
     }
     if (
+      ["queued", "running", "cancelling"].includes(pack.pipeline?.status) ||
       ["queued", "running", "cancelling"].includes(pack.analyze?.status) ||
       ["queued", "running", "cancelling"].includes(pack.phase3?.status) ||
       ["queued", "running"].includes(pack.phase4?.status) ||
@@ -501,6 +503,41 @@ function stopAnalyzePoll() {
 }
 
 function syncAnalyzeUi(pack) {
+  const pipe = pack?.pipeline;
+  const busyPipe = pipe && ["queued", "running", "cancelling"].includes(pipe.status);
+  if (busyPipe || pipe?.status === "done" || pipe?.status === "error") {
+    const prog = pipe?.progress || {};
+    const pct = prog.pct ?? 0;
+    if (analyzeProgressWrap) {
+      analyzeProgressWrap.hidden = false;
+      if (analyzeProgressFill) analyzeProgressFill.style.width = `${pct}%`;
+      if (analyzeProgressText) {
+        analyzeProgressText.textContent = busyPipe
+          ? `full run · ${pipe.label || prog.label || pipe.step || pipe.status} · ${pct}%`
+          : pipe.status === "done"
+            ? "full analysis done — board ready"
+            : `full run ${pipe.status}`;
+      }
+    }
+    if (busyPipe) {
+      setAnalyzeStatus(
+        `Running full analysis… ${pipe.label || prog.label || pipe.step || ""} (${pct}%)`,
+        { loading: true }
+      );
+      return;
+    }
+    if (pipe?.status === "done") {
+      setAnalyzeStatus("Full analysis ready — board filled (approximate).");
+      stopAnalyzePoll();
+      return;
+    }
+    if (pipe?.status === "error") {
+      setAnalyzeStatus(pipe.error || "Full analysis failed", { error: true });
+      stopAnalyzePoll();
+      return;
+    }
+  }
+
   const a = pack?.analyze;
   const p3 = pack?.phase3;
   const p4 = pack?.phase4;
@@ -710,6 +747,7 @@ async function pollAnalyze(packId) {
       const st7 = pack.phase7?.status;
       const st8 = pack.phase8?.status;
       const st9 = pack.phase9?.status;
+      const stPipe = pack.pipeline?.status;
       const busy2 = st2 && ["queued", "running", "cancelling"].includes(st2);
       const busy3 = st3 && ["queued", "running", "cancelling"].includes(st3);
       const busy4 = st4 && ["queued", "running"].includes(st4);
@@ -718,7 +756,8 @@ async function pollAnalyze(packId) {
       const busy7 = st7 && ["queued", "running"].includes(st7);
       const busy8 = st8 && ["queued", "running"].includes(st8);
       const busy9 = st9 && ["queued", "running"].includes(st9);
-      if (!busy2 && !busy3 && !busy4 && !busy5 && !busy6 && !busy7 && !busy8 && !busy9) {
+      const busyPipe = stPipe && ["queued", "running", "cancelling"].includes(stPipe);
+      if (!busyPipe && !busy2 && !busy3 && !busy4 && !busy5 && !busy6 && !busy7 && !busy8 && !busy9) {
         stopAnalyzePoll();
         await refreshPacks();
       }
@@ -728,6 +767,24 @@ async function pollAnalyze(packId) {
     }
   }, 2500);
 }
+
+runFullBtn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Starting full analysis…", { loading: true });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/run`, { method: "POST" });
+    setPackId(pack.pack_id);
+    syncAnalyzeUi(pack);
+    if (pack.pipeline?.status === "done" && pack.sheet) {
+      renderSheet(pack);
+    } else {
+      pollAnalyze(id);
+    }
+    await refreshPacks();
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
 
 analyzeBtn?.addEventListener("click", async () => {
   setAnalyzeStatus("Starting Phase 2 analyze…", { loading: true });
@@ -758,9 +815,12 @@ analyzeBtn?.addEventListener("click", async () => {
 analyzeCancel?.addEventListener("click", async () => {
   try {
     const id = requirePack();
-    let pack = await fetchJson(`/api/match-packs/${id}/analyze/cancel`, {
+    let pack = await fetchJson(`/api/match-packs/${id}/run/cancel`, {
       method: "POST",
     }).catch(() => null);
+    pack = await fetchJson(`/api/match-packs/${id}/analyze/cancel`, {
+      method: "POST",
+    }).catch(() => pack);
     pack = await fetchJson(`/api/match-packs/${id}/phase3/cancel`, {
       method: "POST",
     });

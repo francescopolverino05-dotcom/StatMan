@@ -162,48 +162,56 @@
 
       <section class="section" id="analyze-section">
         <div class="section__head">
-          <h2>5. Analyze video (Phase 2–9)</h2>
+          <h2>5. Analyze video</h2>
           <p>
-            Phases&nbsp;2–8 fill the board; Phase&nbsp;9 adds approximate xG + PPDA.
-            Still approximate — not Opta/StatsBomb. Ready for an accuracy audit.
+            One run fills the board from the pack video (film → possession →
+            shots/SoT/GK → passes/tackles → defence → xG/PPDA). Approximate —
+            not Opta/StatsBomb.
           </p>
         </div>
         <div class="match-bar">
-          <button id="analyze-btn" class="btn btn--primary" type="button">
-            Analyze video / import film tags
-          </button>
-          <button id="reconcile-btn" class="btn btn--primary" type="button">
-            Correct film using facts
-          </button>
-          <button id="phase3-btn" class="btn btn--primary" type="button">
-            Run Phase 3 tracking
-          </button>
-          <button id="phase4-btn" class="btn btn--primary" type="button">
-            Score shots (Phase 4)
-          </button>
-          <button id="phase5-btn" class="btn btn--primary" type="button">
-            Score SoT (Phase 5)
-          </button>
-          <button id="phase6-btn" class="btn btn--primary" type="button">
-            Fill GK (Phase 6)
-          </button>
-          <button id="phase7-btn" class="btn btn--primary" type="button">
-            Passes + tackles (Phase 7)
-          </button>
-          <button id="phase8-btn" class="btn btn--primary" type="button">
-            Defence + progressive (Phase 8)
-          </button>
-          <button id="phase9-btn" class="btn btn--primary" type="button">
-            xG + PPDA (Phase 9)
+          <button id="run-full-btn" class="btn btn--primary" type="button">
+            Run full analysis
           </button>
           <button id="analyze-cancel" class="btn btn--ghost" type="button">
             Cancel
           </button>
         </div>
         <p class="hint">
-          Order: Analyze → Correct film → 3…8 → xG/PPDA (9).
-          Phase&nbsp;3/4 can take a while on CPU — keep this tab open.
+          Needs facts + video first. Keep this tab open — tracking can take a while on CPU.
         </p>
+        <details class="advanced-steps" id="advanced-steps">
+          <summary>Advanced: run steps one at a time</summary>
+          <div class="match-bar" style="margin-top: 0.75rem; flex-wrap: wrap">
+            <button id="analyze-btn" class="btn btn--ghost" type="button">
+              Film tags
+            </button>
+            <button id="reconcile-btn" class="btn btn--ghost" type="button">
+              Correct film
+            </button>
+            <button id="phase3-btn" class="btn btn--ghost" type="button">
+              Tracking
+            </button>
+            <button id="phase4-btn" class="btn btn--ghost" type="button">
+              Shots
+            </button>
+            <button id="phase5-btn" class="btn btn--ghost" type="button">
+              SoT
+            </button>
+            <button id="phase6-btn" class="btn btn--ghost" type="button">
+              GK
+            </button>
+            <button id="phase7-btn" class="btn btn--ghost" type="button">
+              Passes + tackles
+            </button>
+            <button id="phase8-btn" class="btn btn--ghost" type="button">
+              Defence + progressive
+            </button>
+            <button id="phase9-btn" class="btn btn--ghost" type="button">
+              xG + PPDA
+            </button>
+          </div>
+        </details>
         <p id="analyze-status" class="status" role="status" aria-live="polite"></p>
         <div id="analyze-progress-wrap" class="progress-wrap" hidden>
           <div class="progress-bar"><div id="analyze-progress-fill" class="progress-bar__fill"></div></div>

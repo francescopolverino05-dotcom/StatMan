@@ -54,6 +54,8 @@ from statman.match_pack import (
     start_phase7,
     start_phase8,
     start_phase9,
+    start_full_pipeline,
+    cancel_full_pipeline,
 )
 from statman.match_pack.phase3 import refresh_team_splits
 from statman.video import (
@@ -137,6 +139,8 @@ def api_root() -> dict[str, Any]:
             "match_pack_phase7": "POST /api/match-packs/{pack_id}/phase7",
             "match_pack_phase8": "POST /api/match-packs/{pack_id}/phase8",
             "match_pack_phase9": "POST /api/match-packs/{pack_id}/phase9",
+            "match_pack_run": "POST /api/match-packs/{pack_id}/run",
+            "match_pack_run_cancel": "POST /api/match-packs/{pack_id}/run/cancel",
             "match_pack_example_facts": "/api/match-packs/example-facts",
         },
         "default_game_id": DEFAULT_GAME_ID,
@@ -805,6 +809,32 @@ def api_match_pack_phase9(pack_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/run")
+def api_match_pack_run(
+    pack_id: str,
+    force: bool = Query(False),
+    sample_fps: float = Query(0.25, ge=0.05, le=2.0),
+) -> dict[str, Any]:
+    """One-click pipeline: film → reconcile → tracking → phases 4–9."""
+    try:
+        return start_full_pipeline(
+            pack_id, sample_fps=sample_fps, force=force
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/match-packs/{pack_id}/run/cancel")
+def api_match_pack_run_cancel(pack_id: str) -> dict[str, Any]:
+    """Cancel an in-flight full pipeline run."""
+    try:
+        return cancel_full_pipeline(pack_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
