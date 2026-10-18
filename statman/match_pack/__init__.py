@@ -15,6 +15,7 @@ from statman.match_pack.phase6 import start_phase6
 from statman.match_pack.phase7 import start_phase7
 from statman.match_pack.phase8 import start_phase8
 from statman.match_pack.phase9 import start_phase9
+from statman.match_pack.phase10 import start_phase10
 from statman.match_pack.full_pipeline import cancel_full_pipeline, start_full_pipeline
 from statman.match_pack.reconcile import reconcile_pack
 from statman.match_pack.pipeline import (
@@ -65,6 +66,7 @@ __all__ = [
     "start_phase7",
     "start_phase8",
     "start_phase9",
+    "start_phase10",
     "start_full_pipeline",
     "cancel_full_pipeline",
 ]

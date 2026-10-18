@@ -1,4 +1,4 @@
-"""One-click match-pack pipeline: film → reconcile → tracking → phases 4–9.
+"""One-click match-pack pipeline: facts sheet → film → … → phases 4–9.
 
 Runs steps sequentially in a background thread and records progress on
 ``meta["pipeline"]`` so the UI can show a single progress bar instead of
@@ -20,6 +20,7 @@ from statman.match_pack.analyze import (
 )
 from statman.match_pack.gk import run_phase6
 from statman.match_pack.phase3 import _process as _process_phase3
+from statman.match_pack.pipeline import compute_pack
 from statman.match_pack.tracking import TrackingConfig
 from statman.match_pack.reconcile import reconcile_pack
 from statman.match_pack.secondary import run_phase8
@@ -27,6 +28,7 @@ from statman.match_pack.shots import run_phase4
 from statman.match_pack.sot import run_phase5
 from statman.match_pack.actions import run_phase7
 from statman.match_pack.xg_ppda import run_phase9
+from statman.match_pack.remnants import run_phase10
 from statman.video.detector import yolo_status
 from statman.video.pipeline import DEFAULT_SAMPLE_FPS
 
@@ -37,15 +39,17 @@ StepCb = Callable[[dict[str, Any]], None]
 
 # (id, label, weight) — weights sum used for overall pct.
 STEPS: list[tuple[str, str, float]] = [
-    ("film", "Film tags", 25.0),
+    ("facts", "Fact sheet", 3.0),
+    ("film", "Film tags", 23.0),
     ("reconcile", "Correct film with facts", 5.0),
-    ("tracking", "Kit tracking / possession", 30.0),
-    ("shots", "Score shots", 12.0),
+    ("tracking", "Kit tracking / possession", 27.0),
+    ("shots", "Score shots", 11.0),
     ("sot", "Shots on target", 5.0),
     ("gk", "Goalkeeper", 3.0),
     ("actions", "Passes + tackles", 8.0),
-    ("secondary", "Defence + progressive", 7.0),
-    ("xg_ppda", "xG + PPDA", 5.0),
+    ("secondary", "Defence + progressive", 6.0),
+    ("xg_ppda", "xG + PPDA", 4.0),
+    ("remnants", "Fill remaining board", 5.0),
 ]
 
 
@@ -80,6 +84,15 @@ def _has_tracking(pack_id: str) -> bool:
 
 def _has_shots(pack_id: str) -> bool:
     return (store.pack_dir(pack_id) / "shots.json").exists()
+
+
+def _step_facts(pack_id: str) -> None:
+    """Ensure a fact-sourced sheet exists before video steps."""
+    meta = store.read_meta(pack_id) or {}
+    if not meta.get("facts"):
+        raise ValueError("Save match facts before running full analysis")
+    # Always refresh so goals/cards/lineups stay authoritative on re-runs.
+    compute_pack(pack_id)
 
 
 def _step_film(pack_id: str, *, sample_fps: float, force: bool) -> None:
@@ -153,6 +166,7 @@ def run_full_pipeline(
         raise FileNotFoundError(f"Unknown pack_id={pack_id}")
 
     runners: dict[str, Callable[[], None]] = {
+        "facts": lambda: _step_facts(pack_id),
         "film": lambda: _step_film(pack_id, sample_fps=film_sample_fps, force=force),
         "reconcile": lambda: _step_reconcile(pack_id),
         "tracking": lambda: _step_tracking(pack_id, sample_fps=sample_fps, force=force),
@@ -162,6 +176,7 @@ def run_full_pipeline(
         "actions": lambda: run_phase7(pack_id),
         "secondary": lambda: run_phase8(pack_id),
         "xg_ppda": lambda: run_phase9(pack_id),
+        "remnants": lambda: run_phase10(pack_id),
     }
 
     completed: list[str] = []
@@ -222,8 +237,8 @@ def run_full_pipeline(
             )
 
         meta = store.read_meta(pack_id) or meta
-        meta["status"] = "phase9_ready"
-        meta["phase"] = "match-pack-phase9"
+        meta["status"] = "phase10_ready"
+        meta["phase"] = "match-pack-phase10"
         store.write_meta(pack_id, meta)
         _set_pipeline(
             pack_id,

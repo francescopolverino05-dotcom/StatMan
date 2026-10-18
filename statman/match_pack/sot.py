@@ -8,6 +8,9 @@ selected shot:
 - nearby film ``Goal`` with a non-wide ball → goalmouth / save proxy
 - nearby film ``Out`` with the ball on the goal line → deflection / corner after
   an on-target attempt (e.g. blocked/deflected for a corner)
+- any film event with the ball tight in the goalmouth *after* the shot (longer
+  post window for long-range attempts) → save / woodwork / rebound proxy
+  (e.g. Favicchio-style long-range save tagged as Cross/Shot near the posts)
 
 Still approximate — not Opta. Designed to recover saves and close-range
 deflections without flipping every high-score shot to SoT.
@@ -17,7 +20,6 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
 from typing import Any, Callable
 
 from statman.match_pack import store
@@ -26,13 +28,23 @@ from statman.match_pack.shots import PHASE as PHASE4, merge_shots_into_sheet
 PHASE = "match-pack-phase5"
 ProgressCb = Callable[[dict[str, Any]], None]
 
-DEFAULT_WINDOW_SEC = 6.0
+# Look a little before the shot tag (spotter lag) and further after it so the
+# ball has time to travel — especially on long-range attempts.
+DEFAULT_PRE_WINDOW_SEC = 4.0
+DEFAULT_POST_WINDOW_SEC = 6.0
+# Extra post-shot seconds when the ball starts far from a goal line.
+LONG_RANGE_EXTRA_POST_SEC = 8.0
+LONG_RANGE_GD_MIN = 100.0  # pixels from nearest goal line ≈ long attempt
+
 # Ball y-distance to nearest frame edge (broadcast goal line proxy).
 OUT_NEAR_GOAL_LINE = 16.0
 SHOT_GD_FOR_OUT = 50.0
 # Film "Goal" tags are often saves; reject obvious wide misses.
 GOAL_TAG_LAT_MAX = 0.78
 GOAL_TAG_GD_MAX = 60.0
+# Tight goalmouth for label-agnostic ball-at-posts (save / rebound).
+GOALMOUTH_LAT_MAX = 0.42
+GOALMOUTH_GD_MAX = 36.0
 DEFAULT_FRAME_W = 1280.0
 DEFAULT_FRAME_H = 720.0
 
@@ -54,25 +66,89 @@ def _lateral(x: float, frame_w: float) -> float:
     return float(abs(x - frame_w / 2.0) / max(frame_w / 2.0, 1.0))
 
 
+def _shot_goal_dist(shot: dict[str, Any]) -> float:
+    if shot.get("goal_dist") is not None:
+        return float(shot["goal_dist"])
+    # Phase-4 long-range probes sometimes store horizontal distance instead.
+    if shot.get("hdist") is not None:
+        return float(shot["hdist"])
+    return 999.0
+
+
+def post_window_for_shot(
+    shot: dict[str, Any],
+    *,
+    post_window_sec: float = DEFAULT_POST_WINDOW_SEC,
+    long_range_extra_sec: float = LONG_RANGE_EXTRA_POST_SEC,
+    long_range_gd_min: float = LONG_RANGE_GD_MIN,
+) -> float:
+    """Longer post-shot look-ahead when the attempt starts far from goal."""
+    gd = _shot_goal_dist(shot)
+    if gd >= long_range_gd_min:
+        return float(post_window_sec + long_range_extra_sec)
+    return float(post_window_sec)
+
+
+def _in_window(
+    event_t: float,
+    shot_t: float,
+    *,
+    pre_sec: float,
+    post_sec: float,
+) -> bool:
+    dt = event_t - shot_t
+    return -pre_sec <= dt <= post_sec
+
+
+def _ball_in_goalmouth(
+    bx: float,
+    by: float,
+    *,
+    frame_w: float,
+    frame_h: float,
+    lat_max: float,
+    gd_max: float,
+) -> bool:
+    return _lateral(bx, frame_w) <= lat_max and _goal_dist(by, frame_h) <= gd_max
+
+
 def classify_shot_sot(
     shot: dict[str, Any],
     film_events: list[dict[str, Any]],
     *,
     frame_w: float = DEFAULT_FRAME_W,
     frame_h: float = DEFAULT_FRAME_H,
-    window_sec: float = DEFAULT_WINDOW_SEC,
+    window_sec: float | None = None,
+    pre_window_sec: float = DEFAULT_PRE_WINDOW_SEC,
+    post_window_sec: float = DEFAULT_POST_WINDOW_SEC,
 ) -> tuple[bool, str | None]:
-    """Return (on_target, reason) for one Phase-4 selected shot."""
+    """Return (on_target, reason) for one Phase-4 selected shot.
+
+    ``window_sec`` (legacy) sets a symmetric ± window when provided; otherwise
+    uses asymmetric pre/post windows, with post stretched for long-range shots.
+    """
     if shot.get("fact_goal"):
         return True, "fact_goal"
 
     t = float(shot.get("time_sec") or 0.0)
-    shot_gd = float(shot.get("goal_dist") if shot.get("goal_dist") is not None else 999.0)
+    shot_gd = _shot_goal_dist(shot)
+    if window_sec is not None:
+        pre_sec = float(window_sec)
+        post_sec = float(window_sec)
+    else:
+        pre_sec = float(pre_window_sec)
+        post_sec = post_window_for_shot(shot, post_window_sec=post_window_sec)
+
     nearby = [
         e
         for e in film_events
         if e.get("ball_xy")
-        and abs(float(e.get("time_sec") or 0.0) - t) <= window_sec
+        and _in_window(
+            float(e.get("time_sec") or 0.0),
+            t,
+            pre_sec=pre_sec,
+            post_sec=post_sec,
+        )
     ]
 
     # Save / goalmouth: spotter "Goal" with ball not stuck wide of the posts.
@@ -80,9 +156,14 @@ def classify_shot_sot(
         if e.get("label") != "Goal":
             continue
         bx, by = e["ball_xy"]
-        lat = _lateral(float(bx), frame_w)
-        gd = _goal_dist(float(by), frame_h)
-        if lat <= GOAL_TAG_LAT_MAX and gd <= GOAL_TAG_GD_MAX:
+        if _ball_in_goalmouth(
+            float(bx),
+            float(by),
+            frame_w=frame_w,
+            frame_h=frame_h,
+            lat_max=GOAL_TAG_LAT_MAX,
+            gd_max=GOAL_TAG_GD_MAX,
+        ):
             return True, "film_goalmouth_or_save"
 
     # Deflection / corner: Out with ball on the goal line near a close shot.
@@ -94,6 +175,24 @@ def classify_shot_sot(
             if _goal_dist(float(by), frame_h) <= OUT_NEAR_GOAL_LINE:
                 return True, "deflected_or_corner"
 
+    # Long-range (and medium) saves often lack a Goal/Out tag — the spotter may
+    # leave Cross/Shot/Pass while the ball is already at the posts. Require the
+    # cue *after* the shot so we don't count pre-shot buildup.
+    for e in nearby:
+        et = float(e.get("time_sec") or 0.0)
+        if et < t - 0.05:
+            continue
+        bx, by = e["ball_xy"]
+        if _ball_in_goalmouth(
+            float(bx),
+            float(by),
+            frame_w=frame_w,
+            frame_h=frame_h,
+            lat_max=GOALMOUTH_LAT_MAX,
+            gd_max=GOALMOUTH_GD_MAX,
+        ):
+            return True, "film_ball_at_goalmouth"
+
     return False, None
 
 
@@ -103,7 +202,9 @@ def apply_sot_to_shots(
     *,
     frame_w: float = DEFAULT_FRAME_W,
     frame_h: float = DEFAULT_FRAME_H,
-    window_sec: float = DEFAULT_WINDOW_SEC,
+    window_sec: float | None = None,
+    pre_window_sec: float = DEFAULT_PRE_WINDOW_SEC,
+    post_window_sec: float = DEFAULT_POST_WINDOW_SEC,
 ) -> dict[str, Any]:
     """Copy a Phase-4 shot result and rewrite on_target / SoT totals."""
     out = dict(shot_result)
@@ -116,6 +217,8 @@ def apply_sot_to_shots(
             frame_w=frame_w,
             frame_h=frame_h,
             window_sec=window_sec,
+            pre_window_sec=pre_window_sec,
+            post_window_sec=post_window_sec,
         )
         row["on_target"] = bool(on)
         row["sot_reason"] = reason
@@ -138,17 +241,25 @@ def apply_sot_to_shots(
         },
     }
     out["phase"] = PHASE
-    out["method"] = "film-sot-goalmouth-v1"
+    out["method"] = "film-sot-goalmouth-v2"
     out["sot"] = {
-        "window_sec": window_sec,
+        "pre_window_sec": pre_window_sec,
+        "post_window_sec": post_window_sec,
+        "long_range_extra_post_sec": LONG_RANGE_EXTRA_POST_SEC,
+        "long_range_gd_min": LONG_RANGE_GD_MIN,
         "out_near_goal_line": OUT_NEAR_GOAL_LINE,
         "goal_tag_lat_max": GOAL_TAG_LAT_MAX,
+        "goalmouth_lat_max": GOALMOUTH_LAT_MAX,
+        "goalmouth_gd_max": GOALMOUTH_GD_MAX,
         "frame_w": frame_w,
         "frame_h": frame_h,
+        # Keep legacy key for older UI / tests.
+        "window_sec": window_sec if window_sec is not None else post_window_sec,
     }
     out["warning"] = (
         "Approximate SoT: fact goals + film Goal (non-wide) as save/goalmouth + "
-        "Out on the goal line near a close shot (deflection/corner). Not Opta."
+        "Out on the goal line near a close shot + ball-at-goalmouth after the "
+        "shot (longer post window for long-range). Not Opta."
     )
     return out
 
@@ -166,7 +277,8 @@ def merge_sot_into_sheet(sheet: dict[str, Any], shot_result: dict[str, Any]) -> 
                 "status": "approximate_video",
                 "phase": PHASE,
                 "detail": (
-                    "SoT ≈ fact goals + film goalmouth/save + deflection-to-corner"
+                    "SoT ≈ fact goals + film goalmouth/save + deflection-to-corner "
+                    "+ post-shot ball-at-goalmouth"
                 ),
             }
         if "shots" in prov:
@@ -209,7 +321,8 @@ def merge_sot_into_sheet(sheet: dict[str, Any], shot_result: dict[str, Any]) -> 
     # Avoid stacking duplicate Phase 5 notes on re-runs.
     if "Phase 5:" not in note:
         src["note"] = (
-            f"{note} Phase 5: approximate SoT (goalmouth/save + deflection/corner)."
+            f"{note} Phase 5: approximate SoT (goalmouth/save + deflection/corner "
+            "+ long-range post-shot ball)."
         ).strip()
     out["source"] = src
     return out

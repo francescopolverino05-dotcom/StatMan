@@ -27,12 +27,12 @@
     </nav>
 
     <header class="page-hero">
-      <p class="eyebrow">Phase 1–2 · facts + film tags</p>
+      <p class="eyebrow">Match pack · one-click board</p>
       <h1>Upload a match pack</h1>
       <p class="lede">
-        Video (720p, ~1–2&nbsp;GB) plus match facts — lineups, formation, goals, cards,
-        substitutions, optional corners / free kicks / offsides. Facts are treated as truth;
-        the sheet fills those fields now. Possession, xG, PPDA and pass accuracy come in later phases.
+        Add facts + video, then hit <strong>Run full analysis</strong>. One run fills the
+        board (goals from facts, then film possession, shots, SoT, passes, defence, xG).
+        Approximate — not Opta — but you do not need to click through each step.
       </p>
     </header>
 
@@ -145,28 +145,12 @@
         </div>
       </section>
 
-      <section class="section">
-        <div class="section__head">
-          <h2>4. Compute fact-sourced sheet</h2>
-          <p>
-            Phase&nbsp;1 fills goals, cards, substitutions, lineups/formations, and any set-piece
-            totals you put in the JSON. Possession, xG, shots, passes, PPDA stay as
-            <code>—</code> until later video phases — that is expected, not a bug.
-          </p>
-        </div>
-        <button id="compute-btn" class="btn btn--primary" type="button">
-          Compute sheet from facts
-        </button>
-        <p id="status" class="status" role="status" aria-live="polite"></p>
-      </section>
-
       <section class="section" id="analyze-section">
         <div class="section__head">
-          <h2>5. Analyze video</h2>
+          <h2>4. Run full analysis</h2>
           <p>
-            One run fills the board from the pack video (film → possession →
-            shots/SoT/GK → passes/tackles → defence → xG/PPDA). Approximate —
-            not Opta/StatsBomb.
+            Builds the fact sheet, then fills the rest from video in one go.
+            Keep this tab open — kit tracking can take a while on CPU.
           </p>
         </div>
         <div class="match-bar">
@@ -178,11 +162,21 @@
           </button>
         </div>
         <p class="hint">
-          Needs facts + video first. Keep this tab open — tracking can take a while on CPU.
+          Needs facts + video first. One button → one board. Open Advanced only if
+          you need to re-run a single step while debugging.
         </p>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <p id="analyze-status" class="status" role="status" aria-live="polite"></p>
+        <div id="analyze-progress-wrap" class="progress-wrap" hidden>
+          <div class="progress-bar"><div id="analyze-progress-fill" class="progress-bar__fill"></div></div>
+          <p id="analyze-progress-text" class="progress-text"></p>
+        </div>
         <details class="advanced-steps" id="advanced-steps">
-          <summary>Advanced: run steps one at a time</summary>
+          <summary>Advanced: facts-only sheet or single steps</summary>
           <div class="match-bar" style="margin-top: 0.75rem; flex-wrap: wrap">
+            <button id="compute-btn" class="btn btn--ghost" type="button">
+              Facts sheet only
+            </button>
             <button id="analyze-btn" class="btn btn--ghost" type="button">
               Film tags
             </button>
@@ -210,13 +204,11 @@
             <button id="phase9-btn" class="btn btn--ghost" type="button">
               xG + PPDA
             </button>
+            <button id="phase10-btn" class="btn btn--ghost" type="button">
+              Fill remaining
+            </button>
           </div>
         </details>
-        <p id="analyze-status" class="status" role="status" aria-live="polite"></p>
-        <div id="analyze-progress-wrap" class="progress-wrap" hidden>
-          <div class="progress-bar"><div id="analyze-progress-fill" class="progress-bar__fill"></div></div>
-          <p id="analyze-progress-text" class="progress-text"></p>
-        </div>
       </section>
 
       <section id="results" class="section" hidden>

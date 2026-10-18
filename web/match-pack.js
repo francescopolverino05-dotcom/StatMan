@@ -33,6 +33,7 @@ const phase6Btn = document.getElementById("phase6-btn");
 const phase7Btn = document.getElementById("phase7-btn");
 const phase8Btn = document.getElementById("phase8-btn");
 const phase9Btn = document.getElementById("phase9-btn");
+const phase10Btn = document.getElementById("phase10-btn");
 const analyzeCancel = document.getElementById("analyze-cancel");
 const analyzeStatusEl = document.getElementById("analyze-status");
 const analyzeProgressWrap = document.getElementById("analyze-progress-wrap");
@@ -148,7 +149,8 @@ async function openPack(packId) {
       ["queued", "running"].includes(pack.phase6?.status) ||
       ["queued", "running"].includes(pack.phase7?.status) ||
       ["queued", "running"].includes(pack.phase8?.status) ||
-      ["queued", "running"].includes(pack.phase9?.status)
+      ["queued", "running"].includes(pack.phase9?.status) ||
+      ["queued", "running"].includes(pack.phase10?.status)
     ) {
       pollAnalyze(packId);
     }
@@ -188,6 +190,7 @@ function renderSheet(pack) {
   const p7 = cov.phase7 || null;
   const p8 = cov.phase8 || null;
   const p9 = cov.phase9 || null;
+  const p10 = cov.phase10 || null;
   const hasP3 = Boolean(sheet.tracking?.possession);
   const hasP4 = Boolean(sheet.shots?.totals || p4);
   const hasP5 = Boolean(p5 || sheet.source?.phase === "match-pack-phase5");
@@ -195,6 +198,7 @@ function renderSheet(pack) {
   const hasP7 = Boolean(p7 || sheet.source?.phase === "match-pack-phase7");
   const hasP8 = Boolean(p8 || sheet.source?.phase === "match-pack-phase8");
   const hasP9 = Boolean(p9 || sheet.source?.phase === "match-pack-phase9");
+  const hasP10 = Boolean(p10 || sheet.source?.phase === "match-pack-phase10" || sheet.remnants);
   coverageBanner.innerHTML = `
     <strong>Phase 1 — filled from your JSON:</strong> ${factList}
     (${counts.goals ?? 0} goals, ${counts.cards ?? 0} cards, ${counts.substitutions ?? 0} subs).
@@ -241,28 +245,35 @@ function renderSheet(pack) {
         ? `<br /><strong>Phase 9 — xG/PPDA:</strong> xG ${p9?.xg_home ?? sheet.teams?.[0]?.xg ?? "—"}–${p9?.xg_away ?? sheet.teams?.[1]?.xg ?? "—"} · PPDA ${p9?.ppda_home ?? sheet.teams?.[0]?.ppda ?? "—"}–${p9?.ppda_away ?? sheet.teams?.[1]?.ppda ?? "—"} (approximate).`
         : `<br /><strong>Phase 9:</strong> xG + PPDA after Phase 8.`
     }
+    ${
+      hasP10
+        ? `<br /><strong>Phase 10 — remnants:</strong> throw-ins ${p10?.throw_ins_home ?? sheet.teams?.[0]?.throw_ins ?? "—"}–${p10?.throw_ins_away ?? sheet.teams?.[1]?.throw_ins ?? "—"} · recoveries ${p10?.recoveries_home ?? sheet.teams?.[0]?.recoveries ?? "—"}–${p10?.recoveries_away ?? sheet.teams?.[1]?.recoveries ?? "—"} · crosses ${p10?.crosses_home ?? "—"}–${p10?.crosses_away ?? "—"} (approximate). Fouls still pending.`
+        : `<br /><strong>Phase 10:</strong> Fill remaining catalog rows after Phase 9.`
+    }
   `;
 
   const teams = sheet.teams || [];
   const home = teams[0];
   const away = teams[1];
-  const vsLabel = hasP9
+  const vsLabel = hasP10
     ? "full approximate board"
-    : hasP8
-      ? "board minus xG/PPDA"
-      : hasP7
-      ? "facts + track + shots + SoT + GK + actions"
-      : hasP6
-      ? "facts + track + shots + SoT + GK"
-      : hasP5
-        ? "facts + track + shots + SoT"
-        : hasP4
-          ? "facts + track + shots"
-          : hasP3
-            ? "facts + film + track"
-            : hasFilm
-              ? "facts + film"
-              : "fact sheet";
+    : hasP9
+      ? "board minus remnants"
+      : hasP8
+        ? "board minus xG/PPDA"
+        : hasP7
+          ? "facts + track + shots + SoT + GK + actions"
+          : hasP6
+            ? "facts + track + shots + SoT + GK"
+            : hasP5
+              ? "facts + track + shots + SoT"
+              : hasP4
+                ? "facts + track + shots"
+                : hasP3
+                  ? "facts + film + track"
+                  : hasFilm
+                    ? "facts + film"
+                    : "fact sheet";
   teamBoard.innerHTML = `
     ${home ? renderTeamCatalogHtml(home, "Home", { showFormation: true }) : ""}
     <div class="score-stack">
@@ -546,6 +557,7 @@ function syncAnalyzeUi(pack) {
   const p7 = pack?.phase7;
   const p8 = pack?.phase8;
   const p9 = pack?.phase9;
+  const p10 = pack?.phase10;
   const busyA = a && ["queued", "running", "cancelling"].includes(a.status);
   const busy3 = p3 && ["queued", "running", "cancelling"].includes(p3.status);
   const busy4 = p4 && ["queued", "running"].includes(p4.status);
@@ -554,8 +566,11 @@ function syncAnalyzeUi(pack) {
   const busy7 = p7 && ["queued", "running"].includes(p7.status);
   const busy8 = p8 && ["queued", "running"].includes(p8.status);
   const busy9 = p9 && ["queued", "running"].includes(p9.status);
+  const busy10 = p10 && ["queued", "running"].includes(p10.status);
   const prog =
-    (busy9
+    (busy10
+      ? p10?.progress
+      : busy9
       ? p9?.progress
       : busy8
         ? p8?.progress
@@ -581,6 +596,7 @@ function syncAnalyzeUi(pack) {
       !busy7 &&
       !busy8 &&
       !busy9 &&
+      !busy10 &&
       !(
         a?.status === "done" ||
         p3?.status === "done" ||
@@ -589,11 +605,14 @@ function syncAnalyzeUi(pack) {
         p6?.status === "done" ||
         p7?.status === "done" ||
         p8?.status === "done" ||
-        p9?.status === "done"
+        p9?.status === "done" ||
+        p10?.status === "done"
       );
     if (analyzeProgressFill) analyzeProgressFill.style.width = `${pct}%`;
     if (analyzeProgressText) {
-      if (busy9) {
+      if (busy10) {
+        analyzeProgressText.textContent = `phase10 ${p10.status} · ${pct}% · remnants`;
+      } else if (busy9) {
         analyzeProgressText.textContent = `phase9 ${p9.status} · ${pct}% · xG/PPDA`;
       } else if (busy8) {
         analyzeProgressText.textContent = `phase8 ${p8.status} · ${pct}% · secondary`;
@@ -609,6 +628,9 @@ function syncAnalyzeUi(pack) {
         analyzeProgressText.textContent = `phase3 ${p3.status} · ${pct}% · ${prog.stage || ""} · ${prog.samples ?? ""} samples`;
       } else if (busyA) {
         analyzeProgressText.textContent = `phase2 ${a.status} · ${pct}% · ${prog.events_so_far ?? a.event_count ?? 0} events`;
+      } else if (p10?.status === "done") {
+        const tot = p10.totals || {};
+        analyzeProgressText.textContent = `phase10 done · recoveries ${(tot.home && tot.home.recoveries) ?? "—"}–${(tot.away && tot.away.recoveries) ?? "—"}`;
       } else if (p9?.status === "done") {
         analyzeProgressText.textContent = `phase9 done · xG ${p9.xg?.home?.xg ?? "—"}–${p9.xg?.away?.xg ?? "—"}`;
       } else if (p8?.status === "done") {
@@ -747,6 +769,7 @@ async function pollAnalyze(packId) {
       const st7 = pack.phase7?.status;
       const st8 = pack.phase8?.status;
       const st9 = pack.phase9?.status;
+      const st10 = pack.phase10?.status;
       const stPipe = pack.pipeline?.status;
       const busy2 = st2 && ["queued", "running", "cancelling"].includes(st2);
       const busy3 = st3 && ["queued", "running", "cancelling"].includes(st3);
@@ -756,8 +779,9 @@ async function pollAnalyze(packId) {
       const busy7 = st7 && ["queued", "running"].includes(st7);
       const busy8 = st8 && ["queued", "running"].includes(st8);
       const busy9 = st9 && ["queued", "running"].includes(st9);
+      const busy10 = st10 && ["queued", "running"].includes(st10);
       const busyPipe = stPipe && ["queued", "running", "cancelling"].includes(stPipe);
-      if (!busyPipe && !busy2 && !busy3 && !busy4 && !busy5 && !busy6 && !busy7 && !busy8 && !busy9) {
+      if (!busyPipe && !busy2 && !busy3 && !busy4 && !busy5 && !busy6 && !busy7 && !busy8 && !busy9 && !busy10) {
         stopAnalyzePoll();
         await refreshPacks();
       }
@@ -955,6 +979,24 @@ phase9Btn?.addEventListener("click", async () => {
     setPackId(pack.pack_id);
     syncAnalyzeUi(pack);
     if (pack.phase9?.status === "done" && pack.sheet) {
+      renderSheet(pack);
+    } else {
+      pollAnalyze(id);
+    }
+    await refreshPacks();
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+phase10Btn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Starting Phase 10 remnant board fill…", { loading: true });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/phase10`, { method: "POST" });
+    setPackId(pack.pack_id);
+    syncAnalyzeUi(pack);
+    if (pack.phase10?.status === "done" && pack.sheet) {
       renderSheet(pack);
     } else {
       pollAnalyze(id);
