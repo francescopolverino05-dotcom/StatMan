@@ -28,6 +28,7 @@ from statman.match_pack.shots import run_phase4
 from statman.match_pack.sot import run_phase5
 from statman.match_pack.actions import run_phase7
 from statman.match_pack.xg_ppda import run_phase9
+from statman.match_pack.remnants import run_phase10
 from statman.video.detector import yolo_status
 from statman.video.pipeline import DEFAULT_SAMPLE_FPS
 
@@ -39,15 +40,16 @@ StepCb = Callable[[dict[str, Any]], None]
 # (id, label, weight) — weights sum used for overall pct.
 STEPS: list[tuple[str, str, float]] = [
     ("facts", "Fact sheet", 3.0),
-    ("film", "Film tags", 24.0),
+    ("film", "Film tags", 23.0),
     ("reconcile", "Correct film with facts", 5.0),
-    ("tracking", "Kit tracking / possession", 28.0),
-    ("shots", "Score shots", 12.0),
+    ("tracking", "Kit tracking / possession", 27.0),
+    ("shots", "Score shots", 11.0),
     ("sot", "Shots on target", 5.0),
     ("gk", "Goalkeeper", 3.0),
     ("actions", "Passes + tackles", 8.0),
-    ("secondary", "Defence + progressive", 7.0),
-    ("xg_ppda", "xG + PPDA", 5.0),
+    ("secondary", "Defence + progressive", 6.0),
+    ("xg_ppda", "xG + PPDA", 4.0),
+    ("remnants", "Fill remaining board", 5.0),
 ]
 
 
@@ -174,6 +176,7 @@ def run_full_pipeline(
         "actions": lambda: run_phase7(pack_id),
         "secondary": lambda: run_phase8(pack_id),
         "xg_ppda": lambda: run_phase9(pack_id),
+        "remnants": lambda: run_phase10(pack_id),
     }
 
     completed: list[str] = []
@@ -234,8 +237,8 @@ def run_full_pipeline(
             )
 
         meta = store.read_meta(pack_id) or meta
-        meta["status"] = "phase9_ready"
-        meta["phase"] = "match-pack-phase9"
+        meta["status"] = "phase10_ready"
+        meta["phase"] = "match-pack-phase10"
         store.write_meta(pack_id, meta)
         _set_pipeline(
             pack_id,
