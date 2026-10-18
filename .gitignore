@@ -21,3 +21,6 @@ build/
 *.h5
 .DS_Store
 .env
+
+yolov8n.pt
+*.pt
