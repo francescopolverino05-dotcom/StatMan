@@ -13,6 +13,7 @@ from statman.match_pack.phase4 import start_phase4
 from statman.match_pack.phase5 import start_phase5
 from statman.match_pack.phase6 import start_phase6
 from statman.match_pack.phase7 import start_phase7
+from statman.match_pack.phase8 import start_phase8
 from statman.match_pack.reconcile import reconcile_pack
 from statman.match_pack.pipeline import (
     append_pack_video_chunk,
@@ -60,4 +61,5 @@ __all__ = [
     "start_phase5",
     "start_phase6",
     "start_phase7",
+    "start_phase8",
 ]

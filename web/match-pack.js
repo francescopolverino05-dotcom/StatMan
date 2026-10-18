@@ -30,6 +30,7 @@ const phase4Btn = document.getElementById("phase4-btn");
 const phase5Btn = document.getElementById("phase5-btn");
 const phase6Btn = document.getElementById("phase6-btn");
 const phase7Btn = document.getElementById("phase7-btn");
+const phase8Btn = document.getElementById("phase8-btn");
 const analyzeCancel = document.getElementById("analyze-cancel");
 const analyzeStatusEl = document.getElementById("analyze-status");
 const analyzeProgressWrap = document.getElementById("analyze-progress-wrap");
@@ -142,7 +143,8 @@ async function openPack(packId) {
       ["queued", "running"].includes(pack.phase4?.status) ||
       ["queued", "running"].includes(pack.phase5?.status) ||
       ["queued", "running"].includes(pack.phase6?.status) ||
-      ["queued", "running"].includes(pack.phase7?.status)
+      ["queued", "running"].includes(pack.phase7?.status) ||
+      ["queued", "running"].includes(pack.phase8?.status)
     ) {
       pollAnalyze(packId);
     }
@@ -180,11 +182,13 @@ function renderSheet(pack) {
   const p5 = cov.phase5 || null;
   const p6 = cov.phase6 || null;
   const p7 = cov.phase7 || null;
+  const p8 = cov.phase8 || null;
   const hasP3 = Boolean(sheet.tracking?.possession);
   const hasP4 = Boolean(sheet.shots?.totals || p4);
   const hasP5 = Boolean(p5 || sheet.source?.phase === "match-pack-phase5");
   const hasP6 = Boolean(p6 || sheet.source?.phase === "match-pack-phase6");
   const hasP7 = Boolean(p7 || sheet.source?.phase === "match-pack-phase7");
+  const hasP8 = Boolean(p8 || sheet.source?.phase === "match-pack-phase8");
   coverageBanner.innerHTML = `
     <strong>Phase 1 — filled from your JSON:</strong> ${factList}
     (${counts.goals ?? 0} goals, ${counts.cards ?? 0} cards, ${counts.substitutions ?? 0} subs).
@@ -221,14 +225,21 @@ function renderSheet(pack) {
         ? `<br /><strong>Phase 7 — passes/tackles:</strong> pass acc ${p7?.pass_acc_home ?? sheet.teams?.[0]?.pass_accuracy ?? "—"}%–${p7?.pass_acc_away ?? sheet.teams?.[1]?.pass_accuracy ?? "—"}% · tackles ${p7?.tackles_home ?? sheet.teams?.[0]?.tackles ?? "—"}–${p7?.tackles_away ?? sheet.teams?.[1]?.tackles ?? "—"} (approximate).`
         : `<br /><strong>Phase 7:</strong> Pass completion + tackles after Phase 6.`
     }
+    ${
+      hasP8
+        ? `<br /><strong>Phase 8 — secondary:</strong> prog ${p8?.prog_home ?? "—"}–${p8?.prog_away ?? "—"} · aerials ${p8?.aerials_home ?? "—"}–${p8?.aerials_away ?? "—"} · ints ${p8?.ints_home ?? "—"}–${p8?.ints_away ?? "—"} · clr ${p8?.clr_home ?? "—"}–${p8?.clr_away ?? "—"} (approximate).`
+        : `<br /><strong>Phase 8:</strong> Defence + progressive after Phase 7.`
+    }
   `;
 
   const teams = sheet.teams || [];
   const home = teams[0];
   const away = teams[1];
-  const vsLabel = hasP7
-    ? "facts + track + shots + SoT + GK + actions"
-    : hasP6
+  const vsLabel = hasP8
+    ? "full approximate board"
+    : hasP7
+      ? "facts + track + shots + SoT + GK + actions"
+      : hasP6
       ? "facts + track + shots + SoT + GK"
       : hasP5
         ? "facts + track + shots + SoT"
@@ -253,7 +264,8 @@ function renderSheet(pack) {
     sheet.tracking,
     sheet.shots,
     sheet.goalkeeper,
-    sheet.actions
+    sheet.actions,
+    sheet.secondary
   );
 
   const events = sheet.events || [];
@@ -294,14 +306,15 @@ function renderSheet(pack) {
   syncAnalyzeUi(pack);
 }
 
-function renderFilmPanel(film, tracking, shots, goalkeeper, actions) {
+function renderFilmPanel(film, tracking, shots, goalkeeper, actions, secondary) {
   if (!filmPanel) return;
   if (
     !film?.totals &&
     !tracking?.possession &&
     !shots?.totals &&
     !goalkeeper?.totals &&
-    !actions?.passes
+    !actions?.passes &&
+    !secondary?.totals
   ) {
     filmPanel.hidden = true;
     filmPanel.innerHTML = "";
@@ -429,6 +442,22 @@ function renderFilmPanel(film, tracking, shots, goalkeeper, actions) {
     </ul>`
         : ""
     }
+    ${
+      secondary?.totals
+        ? `<h4 class="stat-section__title" style="margin-top:1.25rem">Phase 8 defence + progressive</h4>
+    <p class="film-warn">${secondary.warning || ""}</p>
+    <ul class="film-grid">
+      <li><span class="label">Prog c home</span><span class="value">${fmt(secondary.totals.home?.progressive_passes_completed, 0)}</span></li>
+      <li><span class="label">Prog c away</span><span class="value">${fmt(secondary.totals.away?.progressive_passes_completed, 0)}</span></li>
+      <li><span class="label">Aerials w home</span><span class="value">${fmt(secondary.totals.home?.aerials_won, 0)}</span></li>
+      <li><span class="label">Aerials w away</span><span class="value">${fmt(secondary.totals.away?.aerials_won, 0)}</span></li>
+      <li><span class="label">Ints home</span><span class="value">${fmt(secondary.totals.home?.interceptions, 0)}</span></li>
+      <li><span class="label">Ints away</span><span class="value">${fmt(secondary.totals.away?.interceptions, 0)}</span></li>
+      <li><span class="label">Clear home</span><span class="value">${fmt(secondary.totals.home?.clearances, 0)}</span></li>
+      <li><span class="label">Clear away</span><span class="value">${fmt(secondary.totals.away?.clearances, 0)}</span></li>
+    </ul>`
+        : ""
+    }
   `;
 }
 
@@ -453,16 +482,20 @@ function syncAnalyzeUi(pack) {
   const p5 = pack?.phase5;
   const p6 = pack?.phase6;
   const p7 = pack?.phase7;
+  const p8 = pack?.phase8;
   const busyA = a && ["queued", "running", "cancelling"].includes(a.status);
   const busy3 = p3 && ["queued", "running", "cancelling"].includes(p3.status);
   const busy4 = p4 && ["queued", "running"].includes(p4.status);
   const busy5 = p5 && ["queued", "running"].includes(p5.status);
   const busy6 = p6 && ["queued", "running"].includes(p6.status);
   const busy7 = p7 && ["queued", "running"].includes(p7.status);
+  const busy8 = p8 && ["queued", "running"].includes(p8.status);
   const prog =
-    (busy7
-      ? p7?.progress
-      : busy6
+    (busy8
+      ? p8?.progress
+      : busy7
+        ? p7?.progress
+        : busy6
         ? p6?.progress
         : busy5
           ? p5?.progress
@@ -480,17 +513,21 @@ function syncAnalyzeUi(pack) {
       !busy5 &&
       !busy6 &&
       !busy7 &&
+      !busy8 &&
       !(
         a?.status === "done" ||
         p3?.status === "done" ||
         p4?.status === "done" ||
         p5?.status === "done" ||
         p6?.status === "done" ||
-        p7?.status === "done"
+        p7?.status === "done" ||
+        p8?.status === "done"
       );
     if (analyzeProgressFill) analyzeProgressFill.style.width = `${pct}%`;
     if (analyzeProgressText) {
-      if (busy7) {
+      if (busy8) {
+        analyzeProgressText.textContent = `phase8 ${p8.status} · ${pct}% · secondary`;
+      } else if (busy7) {
         analyzeProgressText.textContent = `phase7 ${p7.status} · ${pct}% · passes/tackles`;
       } else if (busy6) {
         analyzeProgressText.textContent = `phase6 ${p6.status} · ${pct}% · GK`;
@@ -502,6 +539,9 @@ function syncAnalyzeUi(pack) {
         analyzeProgressText.textContent = `phase3 ${p3.status} · ${pct}% · ${prog.stage || ""} · ${prog.samples ?? ""} samples`;
       } else if (busyA) {
         analyzeProgressText.textContent = `phase2 ${a.status} · ${pct}% · ${prog.events_so_far ?? a.event_count ?? 0} events`;
+      } else if (p8?.status === "done") {
+        const tot = p8.totals || {};
+        analyzeProgressText.textContent = `phase8 done · ints ${(tot.home && tot.home.interceptions) ?? "—"}–${(tot.away && tot.away.interceptions) ?? "—"}`;
       } else if (p7?.status === "done") {
         const tk = p7.tackles || {};
         analyzeProgressText.textContent = `phase7 done · tackles ${(tk.home && tk.home.tackles) ?? "—"}–${(tk.away && tk.away.tackles) ?? "—"}`;
@@ -524,13 +564,24 @@ function syncAnalyzeUi(pack) {
       }
     }
   }
-  if (busy7) {
+  if (busy8) {
+    setAnalyzeStatus(`Phase 8 defence + progressive… ${pct}%`, { loading: true });
+  } else if (p8?.status === "done") {
+    const tot = p8.totals || {};
+    setAnalyzeStatus(
+      `Phase 8 ready — prog ${tot.home?.progressive_passes_completed ?? "—"}–${tot.away?.progressive_passes_completed ?? "—"} · ints ${tot.home?.interceptions ?? "—"}–${tot.away?.interceptions ?? "—"} · clr ${tot.home?.clearances ?? "—"}–${tot.away?.clearances ?? "—"}.`
+    );
+    stopAnalyzePoll();
+  } else if (p8?.status === "error") {
+    setAnalyzeStatus(p8.error || "Phase 8 failed", { error: true });
+    stopAnalyzePoll();
+  } else if (busy7) {
     setAnalyzeStatus(`Phase 7 passes + tackles… ${pct}%`, { loading: true });
-  } else if (p7?.status === "done") {
+  } else if (p7?.status === "done" && !p8) {
     const tk = p7.tackles || {};
     const pa = p7.passes || {};
     setAnalyzeStatus(
-      `Phase 7 ready — pass acc ${pa.home?.pass_accuracy ?? "—"}%–${pa.away?.pass_accuracy ?? "—"}% · tackles ${tk.home?.tackles ?? "—"}–${tk.away?.tackles ?? "—"}.`
+      `Phase 7 ready — pass acc ${pa.home?.pass_accuracy ?? "—"}%–${pa.away?.pass_accuracy ?? "—"}% · tackles ${tk.home?.tackles ?? "—"}–${tk.away?.tackles ?? "—"}. Run Phase 8.`
     );
     stopAnalyzePoll();
   } else if (p7?.status === "error") {
@@ -612,13 +663,15 @@ async function pollAnalyze(packId) {
       const st5 = pack.phase5?.status;
       const st6 = pack.phase6?.status;
       const st7 = pack.phase7?.status;
+      const st8 = pack.phase8?.status;
       const busy2 = st2 && ["queued", "running", "cancelling"].includes(st2);
       const busy3 = st3 && ["queued", "running", "cancelling"].includes(st3);
       const busy4 = st4 && ["queued", "running"].includes(st4);
       const busy5 = st5 && ["queued", "running"].includes(st5);
       const busy6 = st6 && ["queued", "running"].includes(st6);
       const busy7 = st7 && ["queued", "running"].includes(st7);
-      if (!busy2 && !busy3 && !busy4 && !busy5 && !busy6 && !busy7) {
+      const busy8 = st8 && ["queued", "running"].includes(st8);
+      if (!busy2 && !busy3 && !busy4 && !busy5 && !busy6 && !busy7 && !busy8) {
         stopAnalyzePoll();
         await refreshPacks();
       }
@@ -759,6 +812,24 @@ phase7Btn?.addEventListener("click", async () => {
     setPackId(pack.pack_id);
     syncAnalyzeUi(pack);
     if (pack.phase7?.status === "done" && pack.sheet) {
+      renderSheet(pack);
+    } else {
+      pollAnalyze(id);
+    }
+    await refreshPacks();
+  } catch (err) {
+    setAnalyzeStatus(err.message, { error: true });
+  }
+});
+
+phase8Btn?.addEventListener("click", async () => {
+  setAnalyzeStatus("Starting Phase 8 defence + progressive…", { loading: true });
+  try {
+    const id = requirePack();
+    const pack = await fetchJson(`/api/match-packs/${id}/phase8`, { method: "POST" });
+    setPackId(pack.pack_id);
+    syncAnalyzeUi(pack);
+    if (pack.phase8?.status === "done" && pack.sheet) {
       renderSheet(pack);
     } else {
       pollAnalyze(id);
