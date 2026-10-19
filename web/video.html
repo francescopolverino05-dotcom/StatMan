@@ -13,18 +13,7 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body class="page page--video">
-    <nav class="topnav">
-      <a class="topnav__brand" href="/">StatMan</a>
-      <div class="topnav__links">
-        <a href="/">Match</a>
-        <a href="/season">Season</a>
-        <a href="/season/players">Players</a>
-        <a href="/match-pack">Match pack</a>
-        <a class="is-active" href="/video">Film tags</a>
-        <a href="/import">Event import</a>
-        <a href="/api/docs">API</a>
-      </div>
-    </nav>
+    <div id="app-nav"></div>
 
     <header class="page-hero">
       <p class="eyebrow">Film ingest · SoccerNet tags</p>
@@ -164,5 +153,9 @@
     </footer>
 
     <script src="/static/video.js" type="module"></script>
+      <script type="module">
+      import { mountAppNav } from "/static/app-shell.js";
+      mountAppNav({ active: "video" });
+    </script>
   </body>
 </html>

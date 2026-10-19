@@ -100,9 +100,11 @@ def api_root() -> dict[str, Any]:
         "service": "statman",
         "docs": "/api/docs",
         "ui": "/",
+        "demo_ui": "/demo",
+        "match_ui": "/match",
         "season_ui": "/season",
         "video_ui": "/video",
-        "match_pack_ui": "/match-pack",
+        "match_pack_ui": "/match",
         "import_ui": "/import",
         "endpoints": {
             "health": "/api/health",
@@ -285,7 +287,14 @@ def _page(name: str) -> FileResponse:
 
 @app.get("/")
 def ui() -> FileResponse:
+    """Product home — your match packs (EnjoyFootball-style Matches entry)."""
     return _page("index.html")
+
+
+@app.get("/demo")
+def ui_demo() -> FileResponse:
+    """Legacy World Cup open-data demo (gold-standard catalog shape)."""
+    return _page("demo.html")
 
 
 @app.get("/season")
@@ -313,8 +322,10 @@ def ui_import() -> FileResponse:
     return _page("import.html")
 
 
+@app.get("/match")
 @app.get("/match-pack")
 def ui_match_pack() -> FileResponse:
+    """Match workspace — upload facts + video and run full analysis."""
     return _page("match-pack.html")
 
 

@@ -1,0 +1,11 @@
+{
+  "name": "StatMan",
+  "short_name": "StatMan",
+  "description": "Turn match film and facts into a full stats board.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f7f2",
+  "theme_color": "#1f6b3a",
+  "lang": "en",
+  "categories": ["sports", "productivity"]
+}

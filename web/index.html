@@ -2,8 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>StatMan — match stats from the event stream</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1f6b3a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="description"
+      content="StatMan — turn your match film and facts into a full stats board."
+    />
+    <link rel="manifest" href="/static/manifest.webmanifest" />
+    <title>StatMan — your matches</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,161 +19,45 @@
     />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
-  <body>
-    <header class="hero">
-      <div class="hero__pitch" aria-hidden="true"></div>
-      <div class="hero__inner">
+  <body class="page page--home">
+    <div id="app-nav"></div>
+
+    <header class="app-hero">
+      <div class="app-hero__atmosphere" aria-hidden="true"></div>
+      <div class="app-hero__inner">
         <p class="brand">StatMan</p>
-        <h1>Read the match from the events, not the scoreboard.</h1>
+        <h1>Your matches, from film.</h1>
         <p class="lede">
-          Open StatsBomb data, converted to SPADL — possession, xG, progressive
-          passes, PPDA, and defensive actions in one view.
+          Upload video and match facts — one run fills the board. Approximate, but built for
+          your games, not a paid provider feed.
         </p>
         <div class="cta">
-          <a class="btn btn--primary" href="#match">Load demo match</a>
-          <a class="btn btn--ghost" href="/season">Season view</a>
-          <a class="btn btn--ghost" href="/match-pack">Match pack</a>
-          <a class="btn btn--ghost" href="/video">Film tags</a>
-          <a class="btn btn--ghost" href="/import">Import events</a>
+          <a class="btn btn--primary" href="/match#new">New match</a>
         </div>
       </div>
     </header>
 
-    <main>
-      <section id="match" class="section section--match">
+    <main class="app-main">
+      <section class="section" id="matches">
         <div class="section__head">
-          <h2>Pick a World Cup 2018 open match</h2>
-          <p>Demo list from StatsBomb open data. Default is Belgium–England.</p>
+          <h2>Matches</h2>
+          <p>Open a pack to keep working, or start a new one above.</p>
         </div>
-        <div class="match-bar">
-          <label class="sr-only" for="game-select">Match</label>
-          <select id="game-select" disabled>
-            <option>Loading matches…</option>
-          </select>
-          <button id="load-btn" class="btn btn--primary" type="button" disabled>
-            Compute stats
-          </button>
-        </div>
-        <p id="status" class="status" role="status" aria-live="polite"></p>
-      </section>
-
-      <section id="board" class="section section--board" hidden>
-        <div class="section__head">
-          <h2 id="scoreline">Match</h2>
-          <p id="match-meta"></p>
-        </div>
-        <div id="team-board" class="team-board"></div>
-      </section>
-
-      <section id="maps" class="section section--maps" hidden>
-        <div class="section__head">
-          <h2>Pitch maps</h2>
-          <p>
-            SPADL / StatsBomb coordinates via mplsoccer — shots sized by xG,
-            progressive-pass arrows, tackle and interception locations.
-          </p>
-        </div>
-        <div class="map-filters">
-          <label class="sr-only" for="map-team">Team filter</label>
-          <select id="map-team">
-            <option value="">Both teams</option>
-          </select>
-        </div>
-        <div class="map-grid">
-          <figure class="map-card">
-            <figcaption>Shots · xG</figcaption>
-            <img id="map-shots" alt="Shot map with xG" />
-          </figure>
-          <figure class="map-card">
-            <figcaption>Progressive passes</figcaption>
-            <img id="map-progressive" alt="Progressive pass map" />
-          </figure>
-          <figure class="map-card">
-            <figcaption>Tackles &amp; interceptions</figcaption>
-            <img id="map-defence" alt="Defence location map" />
-          </figure>
-        </div>
-      </section>
-
-      <section id="keepers" class="section section--keepers" hidden>
-        <div class="section__head">
-          <h2>Goalkeepers</h2>
-          <p>Shots faced, saves, save %, and keeper passing.</p>
-        </div>
-        <div class="table-wrap">
-          <table id="keeper-table">
-            <thead>
-              <tr>
-                <th>Keeper</th>
-                <th>Team</th>
-                <th>Shots faced</th>
-                <th>SoT faced</th>
-                <th>Goals conc.</th>
-                <th>Saves</th>
-                <th>Save %</th>
-                <th>Passes / acc.</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="players" class="section section--players" hidden>
-        <div class="section__head">
-          <h2>Player sheet</h2>
-          <p>Individual match stats — sorted by xG, then passing volume.</p>
-        </div>
-        <div class="table-wrap table-wrap--wide">
-          <table id="player-table" class="player-sheet">
-            <thead>
-              <tr>
-                <th>Player</th>
-                <th>Team</th>
-                <th>Passes</th>
-                <th>Pass %</th>
-                <th>Prog</th>
-                <th>Key</th>
-                <th>Shots</th>
-                <th>SoT</th>
-                <th>G</th>
-                <th>xG</th>
-                <th>Tkl</th>
-                <th>Int</th>
-                <th>Rec</th>
-                <th>Clr</th>
-                <th>Blk</th>
-                <th>Duels</th>
-                <th>Fouls</th>
-                <th>Lost</th>
-                <th>Saves</th>
-                <th>Yel</th>
-                <th>Red</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="section section--defs">
-        <div class="section__head">
-          <h2>How the numbers are built</h2>
-          <p>Definitions travel with every API response.</p>
-        </div>
-        <dl id="definitions" class="defs"></dl>
+        <p id="home-status" class="status" role="status" aria-live="polite"></p>
+        <ul id="match-list" class="match-list" hidden></ul>
+        <p id="match-empty" class="hint" hidden>
+          No packs yet. Hit <a href="/match#new">New match</a> to create one.
+        </p>
       </section>
     </main>
 
     <footer class="footer">
       <p>
-        Event data from
-        <a href="https://github.com/statsbomb/open-data">StatsBomb open data</a>.
-        Actions tagged with
-        <a href="https://github.com/ML-KULeuven/socceraction">socceraction / SPADL</a>.
+        Staff-style match workspace on this repo. World Cup open-data still lives under
+        <a href="/demo">Labs → Open-data demo</a> as the gold-standard catalog shape.
       </p>
     </footer>
 
-    <script src="/static/app.js" type="module"></script>
+    <script src="/static/home.js" type="module"></script>
   </body>
 </html>

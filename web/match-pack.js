@@ -1,4 +1,7 @@
 import { fetchJson, fmt, renderTeamCatalogHtml } from "./common.js";
+import { mountAppNav } from "./app-shell.js";
+
+mountAppNav({ active: "match" });
 
 const createForm = document.getElementById("create-form");
 const homeTeam = document.getElementById("home-team");
@@ -1041,6 +1044,11 @@ createForm.addEventListener("submit", async (e) => {
     if (awayTeam.value) body.append("away_team", awayTeam.value);
     const pack = await fetchJson("/api/match-packs", { method: "POST", body });
     setPackId(pack.pack_id);
+    const url = new URL(window.location.href);
+    url.pathname = "/match";
+    url.searchParams.set("pack", pack.pack_id);
+    url.hash = "";
+    window.history.replaceState({}, "", url);
     // Do not clobber an example / draft already in the editor.
     if (pack.facts && !factsJson.value.trim()) {
       factsJson.value = JSON.stringify(pack.facts, null, 2);
@@ -1381,4 +1389,19 @@ computeBtn.addEventListener("click", async () => {
   }
 });
 
-refreshPacks().catch((err) => setStatus(err.message, { error: true }));
+async function bootWorkspace() {
+  await refreshPacks().catch((err) => setStatus(err.message, { error: true }));
+  const params = new URLSearchParams(window.location.search);
+  const packParam = params.get("pack");
+  if (packParam) {
+    await openPack(packParam);
+    return;
+  }
+  if (window.location.hash === "#new") {
+    const create = document.getElementById("create-form");
+    create?.scrollIntoView({ behavior: "smooth", block: "start" });
+    homeTeam?.focus();
+  }
+}
+
+bootWorkspace();
