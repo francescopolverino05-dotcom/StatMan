@@ -12,10 +12,31 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import cv2
 import numpy as np
 
 log = logging.getLogger(__name__)
+
+# Lazy OpenCV import — GUI wheels need libGL; Railway must ship it (see Dockerfile).
+# Deferring import keeps `import statman.api` from crashing before healthcheck if
+# system libs are missing (video paths then report unavailable).
+_cv2: Any | None = None
+_CV2_ERROR: str | None = None
+
+
+def _get_cv2() -> Any:
+    global _cv2, _CV2_ERROR
+    if _cv2 is not None:
+        return _cv2
+    if _CV2_ERROR is not None:
+        raise ImportError(_CV2_ERROR)
+    try:
+        import cv2 as _cv2_mod
+
+        _cv2 = _cv2_mod
+        return _cv2
+    except Exception as exc:  # noqa: BLE001
+        _CV2_ERROR = str(exc)
+        raise ImportError(_CV2_ERROR) from exc
 
 # COCO class ids
 _PERSON = 0
@@ -48,12 +69,29 @@ def detector_backend() -> str:
 def yolo_status(*, ensure_loaded: bool = False) -> dict[str, Any]:
     if ensure_loaded:
         _load_yolo()
+    cv2_ok = True
+    try:
+        _get_cv2()
+    except ImportError as exc:
+        cv2_ok = False
+        if _YOLO_ERROR is None:
+            # Surface OpenCV failure when YOLO was never tried.
+            pass
+        return {
+            "available": False,
+            "tried": _YOLO_TRIED,
+            "error": _YOLO_ERROR or str(exc),
+            "backend": "unavailable",
+            "weights": str(_WEIGHTS) if _WEIGHTS.exists() else "yolov8n.pt",
+            "opencv": False,
+        }
     return {
         "available": _YOLO_MODEL is not None,
         "tried": _YOLO_TRIED,
         "error": _YOLO_ERROR,
         "backend": "yolo" if _YOLO_MODEL is not None else "opencv-hog",
         "weights": str(_WEIGHTS) if _WEIGHTS.exists() else "yolov8n.pt",
+        "opencv": cv2_ok,
     }
 
 
@@ -88,7 +126,7 @@ def detect_frame(
     *,
     prev_gray: np.ndarray | None,
     gray_blur: np.ndarray,
-    hog: cv2.HOGDescriptor | None,
+    hog: Any | None,
     hog_scale: float,
     hog_win_stride: tuple[int, int],
     prefer_yolo: bool = True,
@@ -135,7 +173,7 @@ def _detect_yolo(model: Any, frame_bgr: np.ndarray) -> Detections:
 
 
 def _detect_people_hog(
-    hog: cv2.HOGDescriptor | None,
+    hog: Any | None,
     frame: np.ndarray,
     hog_scale: float,
     hog_win_stride: tuple[int, int],
@@ -163,6 +201,7 @@ def _detect_ball_proxy(
 ) -> tuple[float, float] | None:
     if prev_gray is None:
         return None
+    cv2 = _get_cv2()
     diff = cv2.absdiff(gray, prev_gray)
     _, thr = cv2.threshold(diff, 22, 255, cv2.THRESH_BINARY)
     thr = cv2.morphologyEx(thr, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
