@@ -6,8 +6,9 @@ statsbombpy>=1.13.0
 multimethod>=1.10,<2
 # socceraction needs numpy 1.x; OpenCV 4.x matches that pin
 numpy>=1.26.0,<2
-# ultralytics imports cv2.imshow at load time — use full opencv-python, not headless
-opencv-python>=4.8,<5
+# Headless on Railway (no libGL GUI). Local YOLO still works; Aptfile/nixpacks
+# also installs libgl1 as a fallback if a GUI wheel is pulled in.
+opencv-python-headless>=4.8,<5
 python-multipart>=0.0.9
 pandas>=2.0.0
 pydantic>=2.0.0

@@ -2,8 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>StatMan — upload a match pack</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1f6b3a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="/static/manifest.webmanifest" />
+    <title>StatMan — match workspace</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -13,33 +16,22 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body class="page page--match-pack">
-    <nav class="topnav">
-      <a class="topnav__brand" href="/">StatMan</a>
-      <div class="topnav__links">
-        <a href="/">Match</a>
-        <a href="/season">Season</a>
-        <a href="/season/players">Players</a>
-        <a class="is-active" href="/match-pack">Match pack</a>
-        <a href="/video">Film tags</a>
-        <a href="/import">Event import</a>
-        <a href="/api/docs">API</a>
-      </div>
-    </nav>
+    <div id="app-nav"></div>
 
     <header class="page-hero">
-      <p class="eyebrow">Match pack · one-click board</p>
-      <h1>Upload a match pack</h1>
+      <p class="eyebrow"><a href="/">Matches</a> · workspace</p>
+      <h1>Match workspace</h1>
       <p class="lede">
-        Add facts + video, then hit <strong>Run full analysis</strong>. One run fills the
-        board (goals from facts, then film possession, shots, SoT, passes, defence, xG).
-        Approximate — not Opta — but you do not need to click through each step.
+        Add facts + video, then hit Run full analysis. One run fills the board —
+        approximate, but built for your games.
       </p>
     </header>
 
     <main>
       <p class="banner banner--info banner--sticky">
-        World Cup open-data on <a href="/">Match</a> stays the gold-standard example.
-        This pack path is how you collect <em>your</em> games without a paid feed.
+        Open a match from <a href="/">Matches</a>, or create one below.
+        Gold-standard catalog shape still lives on the
+        <a href="/demo">open-data demo</a>.
       </p>
 
       <section class="section">
@@ -262,6 +254,7 @@
       <section class="section">
         <div class="section__head">
           <h2>Recent packs</h2>
+          <p>Also listed on the <a href="/">Matches</a> home.</p>
         </div>
         <div class="table-wrap">
           <table id="packs-table">
@@ -281,8 +274,8 @@
 
     <footer class="footer">
       <p>
-        Phase 1 fact sheet ≠ provider feed. Compare against the
-        <a href="/">World Cup Match</a> demo for the full catalog shape.
+        Workspace board ≠ provider feed. Compare against the
+        <a href="/demo">open-data demo</a> for the full catalog shape.
       </p>
     </footer>
 
