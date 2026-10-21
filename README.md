@@ -83,3 +83,22 @@ Jobs and uploads live under `.data/videos/`. YOLO weights cache under `.data/mod
 For a game you already have as StatsBomb open-data JSON or Opta F24 JSON, use `/import` (or `POST /api/imports`). That path converts to SPADL and returns the same possession / xG / PPDA / progressive-pass stats as the open-data match view. Imports live under `.data/imports/`.
 
 Data is from [StatsBomb open data](https://github.com/statsbomb/open-data) for the event path. Attribute StatsBomb if you publish analysis based on it, and read their licence before putting numbers on a public product site.
+
+## Persistent storage (Phase 1)
+
+All JSON stores (match packs, event imports, video jobs, season caches) go
+through `statman/persistence`:
+
+- `DATABASE_URL` unset: unchanged `.data/` JSON files.
+- `DATABASE_URL` set: Postgres. On startup migrations run
+  (`statman/persistence/migrations/`), then every stored JSON document is
+  restored to `.data/`. New/changed JSON files are synced to Postgres after
+  each write request, every `STATMAN_SYNC_INTERVAL_S` seconds (default 5, for
+  background pipeline threads) and on shutdown.
+- Video binaries never go to Postgres. Set `STATMAN_VIDEO_DIR` to a mounted
+  volume (e.g. `/data/videos`) so they survive redeploys.
+- Phase 2 tables (`matches`, `squads`, `players`, `lineups`, `events`,
+  `corrections`, view `event_review_queue`) are created but not used yet.
+
+Postgres tests: `STATMAN_TEST_DATABASE_URL=postgresql://... pytest tests/test_persistence.py`
+(they drop and recreate the `public` schema of that database).

@@ -21,6 +21,16 @@ from statman.load import MatchBundle
 ROOT = Path(__file__).resolve().parent.parent / ".data" / "imports"
 
 
+from statman.persistence.mirror import register as _register_collection
+
+# Only the import results persist; the raw provider tree is rebuilt per import.
+_register_collection(
+    "imports",
+    lambda: ROOT,
+    include=lambda key: key.count("/") == 1 and key.endswith(("/stats.json", "/meta.json")),
+)
+
+
 def ensure_root() -> Path:
     ROOT.mkdir(parents=True, exist_ok=True)
     return ROOT

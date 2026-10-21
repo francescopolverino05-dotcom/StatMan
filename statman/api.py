@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
+from starlette.concurrency import run_in_threadpool
+
+from statman import persistence
+
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -75,6 +81,16 @@ from statman.video.pipeline import DEFAULT_CHUNK_BYTES, DEFAULT_SAMPLE_FPS
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
+
+@asynccontextmanager
+async def _lifespan(_app: Any):
+    # Postgres (DATABASE_URL): run migrations, restore JSON to disk, start sync.
+    persistence.bootstrap()
+    try:
+        yield
+    finally:
+        persistence.shutdown()
+
 app = FastAPI(
     title="StatMan match stats",
     version="0.6.0",
@@ -91,7 +107,21 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
+    lifespan=_lifespan,
 )
+
+
+@app.middleware("http")
+async def _persist_after_request(request: Request, call_next: Any) -> Any:
+    response = await call_next(request)
+    if persistence.postgres_enabled() and request.method not in ("GET", "HEAD", "OPTIONS"):
+        await run_in_threadpool(persistence.sync_all)
+    return response
+
+
+@app.get("/api/storage")
+def api_storage() -> dict[str, Any]:
+    return persistence.storage_status()
 
 
 @app.get("/api")

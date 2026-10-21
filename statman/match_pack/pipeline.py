@@ -178,7 +178,7 @@ def attach_video_bytes(
     if meta is None:
         raise FileNotFoundError(f"Unknown pack_id={pack_id}")
     safe = Path(filename).name or "match.mp4"
-    dest = store.pack_dir(pack_id) / f"video_{safe}"
+    dest = _pack_video_path(pack_id, safe)
     written = 0
     with dest.open("wb") as out:
         while True:
@@ -239,7 +239,7 @@ def init_pack_video(
             f"Video exceeds max size ({max_bytes // (1024**3)} GB). Compress to 720p (~1–2 GB)."
         )
     safe = Path(filename).name or "match.mp4"
-    dest = store.pack_dir(pack_id) / f"video_{safe}"
+    dest = _pack_video_path(pack_id, safe)
     dest.write_bytes(b"")
     meta["video"] = {
         "filename": safe,
@@ -355,3 +355,15 @@ def compute_pack(pack_id: str) -> dict[str, Any]:
 
 def example_facts() -> dict[str, Any]:
     return EXAMPLE_FACTS
+
+
+def _pack_video_path(pack_id: str, safe: str) -> Path:
+    """Pack video binary: STATMAN_VIDEO_DIR/match_packs/<id>/ if set, else the pack dir."""
+    from statman.persistence.paths import configured_video_dir
+
+    video_dir = configured_video_dir()
+    if video_dir is None:
+        return store.pack_dir(pack_id) / f"video_{safe}"
+    path = video_dir / "match_packs" / pack_id
+    path.mkdir(parents=True, exist_ok=True)
+    return path / f"video_{safe}"
