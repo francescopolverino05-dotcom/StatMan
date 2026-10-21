@@ -102,3 +102,22 @@ through `statman/persistence`:
 
 Postgres tests: `STATMAN_TEST_DATABASE_URL=postgresql://... pytest tests/test_persistence.py`
 (they drop and recreate the `public` schema of that database).
+
+## Phase 2: automatic tagging + review
+
+`statman/autotag/` cuts an uploaded match video into overlapping clips (15 s, 5 s
+overlap, ffmpeg) under `STATMAN_VIDEO_DIR/clips/<match_id>/`, tags each clip with a
+pluggable `Tagger`, merges duplicates across overlaps, and routes events below
+`STATMAN_REVIEW_THRESHOLD` (default 0.75) or with validation issues to the review
+queue. Review at `/review?match=<id>`; stats at `/api/autotag/matches/<id>/stats`
+(+ `team.csv`, `players.csv`).
+
+| Env var | Purpose |
+| --- | --- |
+| `TAGGER_API_URL`, `TAGGER_MODEL`, `TAGGER_API_KEY` | OpenAI-compatible vision chat endpoint. Tagger is disabled (job ends `tagger_disabled`, clips kept) when URL or model is unset. |
+| `TAGGER_FRAMES` (10), `TAGGER_RESPONSE_FORMAT` (`json_schema`\|`json_object`\|`none`), `TAGGER_TIMEOUT` (120) | Tagger tuning |
+| `STATMAN_TAGGER` (`vision_llm`\|`fixture`), `STATMAN_TAGGER_FIXTURE` | Fixture backend for tests/offline demos only |
+| `STATMAN_REVIEW_THRESHOLD` | Confidence below which events need review (0.75) |
+
+With `DATABASE_URL` set, events and corrections are rows in the `events` /
+`corrections` tables (migration `002_autotag.sql`); otherwise JSON under `.data/autotag/`.

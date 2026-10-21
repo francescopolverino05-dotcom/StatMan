@@ -1,0 +1,20 @@
+{
+  "_comment": "TEST DATA ONLY. Synthetic tagger output for unit tests; not from any real match.",
+  "clips": {
+    "0": [
+      {"type": "pass", "team": "home", "shirt": 8, "t_clip_seconds": 3.0, "x": 40, "y": 50,
+       "attributes": {"completed": true}, "confidence": 0.9},
+      {"type": "pass", "team": "home", "shirt": 10, "t_clip_seconds": 7.0, "x": 70, "y": 40,
+       "attributes": {"completed": true, "progressive": true, "line_broken": "midfield"}, "confidence": 0.8},
+      {"type": "shot", "team": "home", "shirt": 9, "t_clip_seconds": 9.5, "x": 90, "y": 50,
+       "attributes": {"xg": 0.3, "outcome": "saved", "inside_box": true}, "confidence": 0.85}
+    ],
+    "1": [
+      {"type": "shot", "team": "home", "shirt": 9, "t_clip_seconds": 0.0, "x": 90, "y": 50,
+       "attributes": {"xg": 0.3, "outcome": "saved", "inside_box": true, "headed": false}, "confidence": 0.95},
+      {"type": "save", "team": "away", "shirt": 1, "t_clip_seconds": 0.3, "attributes": {}, "confidence": 0.6},
+      {"type": "ball_lost", "team": "away", "shirt": 4, "t_clip_seconds": 6.0, "x": 30,
+       "attributes": {"reason": "miscontrol"}, "confidence": 0.9}
+    ]
+  }
+}
