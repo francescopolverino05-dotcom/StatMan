@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StatMan — review tagged events</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="page page--review">
+    <div id="app-nav"></div>
+
+    <header class="page-hero">
+      <p class="eyebrow">Auto-tag · review</p>
+      <h1>Review tagged events</h1>
+      <p class="lede">
+        Every event was tagged automatically. Only events below the confidence threshold
+        (<code id="threshold">…</code>) or with a problem wait for you. Click any event to jump the video there.
+      </p>
+    </header>
+
+    <main>
+      <section class="section">
+        <form id="match-form" class="match-bar">
+          <label class="field">
+            <span>Match id</span>
+            <input id="match-id" name="match" required placeholder="match-pack or video job id" />
+          </label>
+          <button class="btn btn--primary" type="submit">Load</button>
+          <a class="btn btn--ghost" id="csv-team" href="#">Team CSV</a>
+          <a class="btn btn--ghost" id="csv-players" href="#">Player CSV</a>
+        </form>
+        <p class="status" id="status"></p>
+      </section>
+
+      <section class="section review-layout" id="review" hidden>
+        <div class="review-video">
+          <video id="video" controls preload="metadata"></video>
+          <div class="review-track" id="track" aria-label="Event timeline"></div>
+          <div class="match-bar review-filters">
+            <label class="field"><span>Type</span><select id="f-type"><option value="">All</option></select></label>
+            <label class="field"><span>Team</span>
+              <select id="f-team"><option value="">Both</option><option value="home">Home</option><option value="away">Away</option></select>
+            </label>
+            <label class="field"><span>Show</span>
+              <select id="f-status">
+                <option value="">All events</option>
+                <option value="pending" selected>Needs review</option>
+                <option value="auto">Auto-accepted</option>
+                <option value="confirmed,corrected">Reviewed</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="review-side">
+          <h2>Events <small id="counts"></small></h2>
+          <ol class="review-list" id="list"></ol>
+        </div>
+      </section>
+
+      <dialog id="editor" class="review-editor">
+        <form method="dialog" id="edit-form">
+          <h3>Edit event <span id="edit-id"></span></h3>
+          <label class="field"><span>Type</span><select id="e-type" name="type"></select></label>
+          <label class="field"><span>Team</span>
+            <select id="e-team" name="team"><option value="home">Home</option><option value="away">Away</option></select>
+          </label>
+          <label class="field"><span>Shirt</span><input id="e-shirt" name="shirt" type="number" min="1" max="99" /></label>
+          <label class="field"><span>Player</span><input id="e-player" name="player" /></label>
+          <fieldset id="e-attrs" class="review-attrs"><legend>Attributes</legend></fieldset>
+          <label class="field"><span>Note</span><input id="e-note" name="note" /></label>
+          <div class="cta">
+            <button class="btn btn--primary" value="save">Save correction</button>
+            <button class="btn btn--ghost" value="cancel">Cancel</button>
+          </div>
+        </form>
+      </dialog>
+    </main>
+
+    <script src="/static/review.js" type="module"></script>
+    <script type="module">
+      import { mountAppNav } from "/static/app-shell.js";
+      mountAppNav({ active: "review" });
+    </script>
+  </body>
+</html>

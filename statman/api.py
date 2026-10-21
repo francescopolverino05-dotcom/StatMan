@@ -136,6 +136,7 @@ def api_root() -> dict[str, Any]:
         "video_ui": "/video",
         "match_pack_ui": "/match",
         "import_ui": "/import",
+        "review_ui": "/review?match={match_id}",
         "endpoints": {
             "health": "/api/health",
             "demo_games": "/api/games/demo",
@@ -176,6 +177,15 @@ def api_root() -> dict[str, Any]:
             "match_pack_run": "POST /api/match-packs/{pack_id}/run",
             "match_pack_run_cancel": "POST /api/match-packs/{pack_id}/run/cancel",
             "match_pack_example_facts": "/api/match-packs/example-facts",
+            "autotag_tagger": "/api/autotag/tagger",
+            "autotag_run": "POST /api/autotag/matches/{match_id}/run",
+            "autotag_job": "/api/autotag/matches/{match_id}",
+            "autotag_events": "/api/autotag/matches/{match_id}/events",
+            "autotag_review_queue": "/api/autotag/matches/{match_id}/review-queue",
+            "autotag_review": "POST /api/autotag/matches/{match_id}/events/{event_id}/review",
+            "autotag_stats": "/api/autotag/matches/{match_id}/stats",
+            "autotag_team_csv": "/api/autotag/matches/{match_id}/stats/team.csv",
+            "autotag_player_csv": "/api/autotag/matches/{match_id}/stats/players.csv",
         },
         "default_game_id": DEFAULT_GAME_ID,
         "default_competition_id": DEFAULT_COMPETITION_ID,
@@ -889,6 +899,272 @@ def api_match_pack_run_cancel(pack_id: str) -> dict[str, Any]:
         return cancel_full_pipeline(pack_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: auto-tagging, review portal, event stats
+# ---------------------------------------------------------------------------
+
+
+@app.get("/review")
+def ui_review() -> FileResponse:
+    """Review portal: video + event timeline + review queue (?match=ID)."""
+    return _page("review.html")
+
+
+def _autotag_video_path(match_id: str, video_job_id: str | None, pack_id: str | None) -> Path:
+    from statman.match_pack.store import read_meta as read_pack
+    from statman.video.store import read_job as read_video_job
+
+    candidates: list[str] = []
+    for jid in [video_job_id] if video_job_id else ([] if pack_id else [match_id]):
+        job = read_video_job(jid) if jid and jid.isalnum() else None
+        if job and job.get("video_path"):
+            candidates.append(job["video_path"])
+    for pid in [pack_id] if pack_id else ([] if video_job_id else [match_id]):
+        try:
+            pack = read_pack(pid) if pid and pid.isalnum() else None
+        except (OSError, ValueError):
+            pack = None
+        if pack and (pack.get("video") or {}).get("path"):
+            candidates.append(pack["video"]["path"])
+    for c in candidates:
+        if Path(c).is_file():
+            return Path(c)
+    raise HTTPException(
+        status_code=404,
+        detail="No uploaded video found. Pass video_job_id (from /api/video) or pack_id with a finished video upload.",
+    )
+
+
+def _autotag_match(match_id: str) -> str:
+    from statman.autotag.store import check_match_id
+
+    try:
+        return check_match_id(match_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/autotag/tagger")
+def api_autotag_tagger() -> dict[str, Any]:
+    from statman.autotag import tagger_status
+    from statman.autotag.merge import review_threshold
+
+    return {**tagger_status(), "review_threshold": review_threshold()}
+
+
+@app.get("/api/autotag/matches")
+def api_autotag_matches() -> dict[str, Any]:
+    from statman.autotag import get_autotag_job
+    from statman.autotag.store import list_match_ids
+
+    jobs = [get_autotag_job(m) for m in list_match_ids()]
+    return {"count": len(jobs), "matches": [j for j in jobs if j]}
+
+
+@app.post("/api/autotag/matches/{match_id}/run")
+async def api_autotag_run(match_id: str, request: Request) -> dict[str, Any]:
+    """Cut overlapping clips and tag them in the background job queue.
+
+    JSON body (all optional): video_job_id, pack_id, clip_seconds (15),
+    overlap_seconds (5), segments [{video_start, match_start}], teams
+    {home, away} kit descriptions, tagger ("vision_llm" | "fixture").
+    """
+    from statman.autotag import start_autotag
+
+    _autotag_match(match_id)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001 - empty body is fine
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body must be a JSON object")
+    path = _autotag_video_path(match_id, body.get("video_job_id"), body.get("pack_id"))
+    try:
+        return start_autotag(
+            match_id, path,
+            clip_seconds=float(body.get("clip_seconds") or 15.0),
+            overlap_seconds=float(body.get("overlap_seconds") if body.get("overlap_seconds") is not None else 5.0),
+            segments=body.get("segments") or None,
+            teams=body.get("teams") or None,
+            tagger=body.get("tagger") or None,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/autotag/matches/{match_id}/cancel")
+def api_autotag_cancel(match_id: str) -> dict[str, Any]:
+    from statman.autotag import cancel_autotag
+
+    _autotag_match(match_id)
+    try:
+        return cancel_autotag(match_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/autotag/matches/{match_id}")
+def api_autotag_job(match_id: str) -> dict[str, Any]:
+    from statman.autotag import get_autotag_job
+
+    job = get_autotag_job(_autotag_match(match_id))
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"No auto-tag job for {match_id}")
+    job = {k: v for k, v in job.items() if k != "traceback"}
+    return job
+
+
+@app.get("/api/autotag/matches/{match_id}/video")
+def api_autotag_video(match_id: str) -> FileResponse:
+    from statman.autotag import get_autotag_job
+
+    job = get_autotag_job(_autotag_match(match_id)) or {}
+    path = Path(job.get("video_path") or "")
+    if not job or not path.is_file():
+        raise HTTPException(status_code=404, detail="video not available")
+    return FileResponse(path)
+
+
+@app.get("/api/autotag/matches/{match_id}/clips")
+def api_autotag_clips(match_id: str) -> dict[str, Any]:
+    from statman.autotag.store import read_doc
+
+    clips = read_doc(_autotag_match(match_id), "clips", [])
+    return {"count": len(clips), "clips": clips}
+
+
+@app.get("/api/autotag/matches/{match_id}/events")
+def api_autotag_events(
+    match_id: str,
+    type: str | None = Query(None),
+    team: str | None = Query(None),
+    status: str | None = Query(None),
+    include_rejected: bool = Query(False),
+) -> dict[str, Any]:
+    from statman.autotag.merge import review_threshold
+    from statman.autotag.repo import get_repo
+
+    events = get_repo().list_events(_autotag_match(match_id))
+    if not include_rejected and status != "rejected":
+        events = [e for e in events if e["review_status"] != "rejected"]
+    if type:
+        events = [e for e in events if e["type"] in set(type.split(","))]
+    if team:
+        events = [e for e in events if e["team"] == team]
+    if status:
+        events = [e for e in events if e["review_status"] in set(status.split(","))]
+    return {"count": len(events), "review_threshold": review_threshold(), "events": events}
+
+
+@app.get("/api/autotag/matches/{match_id}/review-queue")
+def api_autotag_queue(match_id: str) -> dict[str, Any]:
+    from statman.autotag import review_queue
+
+    rows = review_queue(_autotag_match(match_id))
+    return {"count": len(rows), "events": rows}
+
+
+@app.post("/api/autotag/matches/{match_id}/events")
+async def api_autotag_add_event(match_id: str, request: Request) -> dict[str, Any]:
+    """Reviewer adds a missed event: {type, team, shirt, t_match_seconds, video_ts_seconds, x, y, attributes}."""
+    from statman.autotag import add_human_event
+
+    _autotag_match(match_id)
+    body = await request.json()
+    try:
+        return add_human_event(match_id, body, reviewer=body.get("reviewer"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/autotag/matches/{match_id}/events/{event_id}/review")
+async def api_autotag_review(match_id: str, event_id: int, request: Request) -> dict[str, Any]:
+    """{action: accept|edit|delete, changes: {type, team, shirt, player, attributes, ...}, reviewer, note}."""
+    from statman.autotag import apply_review
+
+    _autotag_match(match_id)
+    body = await request.json()
+    try:
+        return apply_review(
+            match_id, event_id, str(body.get("action") or ""),
+            changes=body.get("changes"), reviewer=body.get("reviewer"), note=body.get("note"),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/autotag/matches/{match_id}/corrections")
+def api_autotag_corrections(match_id: str) -> dict[str, Any]:
+    from statman.autotag.repo import get_repo
+
+    rows = get_repo().list_corrections(_autotag_match(match_id))
+    return {"count": len(rows), "corrections": rows}
+
+
+@app.get("/api/autotag/matches/{match_id}/lineup")
+def api_autotag_lineup(match_id: str) -> dict[str, Any]:
+    from statman.autotag.store import read_doc
+
+    return read_doc(_autotag_match(match_id), "lineup", {"players": []})
+
+
+@app.put("/api/autotag/matches/{match_id}/lineup")
+async def api_autotag_lineup_put(match_id: str, request: Request) -> dict[str, Any]:
+    """{match_minutes?, players: [{team, shirt, name, position, starter, on_minute, off_minute}]}."""
+    from statman.autotag.store import write_doc
+
+    _autotag_match(match_id)
+    body = await request.json()
+    players = body.get("players") if isinstance(body, dict) else None
+    if not isinstance(players, list):
+        raise HTTPException(status_code=400, detail="body needs a players list")
+    for p in players:
+        if not isinstance(p, dict) or p.get("team") not in ("home", "away") or p.get("shirt") is None:
+            raise HTTPException(status_code=400, detail="each player needs team (home|away) and shirt")
+    write_doc(match_id, "lineup", body)
+    return body
+
+
+def _autotag_stats(match_id: str, confirmed_only: bool) -> dict[str, Any]:
+    from statman.autotag import match_stats
+    from statman.autotag.repo import get_repo
+    from statman.autotag.store import read_doc
+
+    _autotag_match(match_id)
+    return match_stats(
+        get_repo().list_events(match_id), read_doc(match_id, "lineup", None), confirmed_only=confirmed_only
+    )
+
+
+@app.get("/api/autotag/matches/{match_id}/stats")
+def api_autotag_stats(match_id: str, confirmed_only: bool = Query(False)) -> dict[str, Any]:
+    return _autotag_stats(match_id, confirmed_only)
+
+
+@app.get("/api/autotag/matches/{match_id}/stats/team.csv")
+def api_autotag_team_csv(match_id: str, confirmed_only: bool = Query(False)) -> Response:
+    from statman.autotag import team_csv
+
+    return Response(
+        team_csv(_autotag_stats(match_id, confirmed_only)), media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{match_id}_team_stats.csv"'},
+    )
+
+
+@app.get("/api/autotag/matches/{match_id}/stats/players.csv")
+def api_autotag_player_csv(match_id: str, confirmed_only: bool = Query(False)) -> Response:
+    from statman.autotag import player_csv
+
+    return Response(
+        player_csv(_autotag_stats(match_id, confirmed_only)), media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{match_id}_player_stats.csv"'},
+    )
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

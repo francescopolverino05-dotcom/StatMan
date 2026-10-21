@@ -9,6 +9,7 @@ const LABS = [
   { href: "/demo", id: "demo", label: "Open-data demo" },
   { href: "/season", id: "season", label: "Season" },
   { href: "/video", id: "video", label: "Film tags" },
+  { href: "/review", id: "review", label: "Review" },
   { href: "/import", id: "import", label: "Import" },
   { href: "/api/docs", id: "api", label: "API" },
 ];
