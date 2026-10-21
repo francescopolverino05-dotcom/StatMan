@@ -54,6 +54,7 @@ def _register_stores() -> None:
     import statman.match_pack.store  # noqa: F401
     import statman.store  # noqa: F401
     import statman.video.store  # noqa: F401
+    import statman.autotag.store  # noqa: F401
 
 
 def bootstrap(*, background: bool = True) -> dict[str, Any]:
