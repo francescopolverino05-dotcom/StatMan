@@ -34,7 +34,7 @@ export function mountAppNav({ active = "home" } = {}) {
 
   host.innerHTML = `
     <nav class="topnav topnav--app" aria-label="StatMan">
-      <a class="topnav__brand" href="/">StatMan</a>
+      <a class="topnav__brand" href="/"><img class="topnav__logo" src="/static/assets/statman-logo.png" alt="" width="32" height="32" />StatMan</a>
       <div class="topnav__links">${primary}</div>
       <details class="topnav__labs">
         <summary>Labs</summary>
@@ -59,6 +59,21 @@ export function applyAppMeta() {
     m.name = "apple-mobile-web-app-capable";
     m.content = "yes";
     head.appendChild(m);
+  }
+  const icons = [
+    ["icon", "/static/assets/favicon-32.png", "32x32"],
+    ["icon", "/static/assets/favicon-16.png", "16x16"],
+    ["apple-touch-icon", "/static/assets/apple-touch-icon.png", "180x180"],
+  ];
+  for (const [rel, href, sizes] of icons) {
+    if (!document.querySelector(`link[rel="${rel}"][sizes="${sizes}"]`)) {
+      const link = document.createElement("link");
+      link.rel = rel;
+      link.type = "image/png";
+      link.sizes = sizes;
+      link.href = href;
+      head.appendChild(link);
+    }
   }
   if (!document.querySelector('link[rel="manifest"]')) {
     const link = document.createElement("link");

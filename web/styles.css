@@ -551,6 +551,16 @@ tbody tr:hover {
   letter-spacing: -0.03em;
   color: var(--turf-deep);
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.topnav__logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .topnav__links {

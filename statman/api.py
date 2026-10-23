@@ -1167,6 +1167,11 @@ def api_autotag_player_csv(match_id: str, confirmed_only: bool = Query(False)) -
     )
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> FileResponse:
+    return FileResponse(WEB_DIR / "assets" / "favicon.ico", media_type="image/x-icon")
+
+
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 
