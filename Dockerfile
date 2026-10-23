@@ -15,7 +15,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
     && pip uninstall -y opencv-python || true \
-    && pip install --no-cache-dir --force-reinstall "opencv-python-headless>=4.8,<5"
+    && pip install --no-cache-dir --force-reinstall "opencv-python-headless>=4.8,<5" "numpy<2"
 
 COPY . .
 
