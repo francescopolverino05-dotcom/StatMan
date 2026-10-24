@@ -401,3 +401,38 @@ def test_postgres_repo_events_and_corrections(autotag_root, monkeypatch):
         assert match_stats(rows)["teams"]["home"]["shots"] == 1
     finally:
         backend_mod.reset_backend()
+
+
+def test_tuning_normalize_collapse_and_repetition():
+    from statman.autotag import tagger as T
+
+    assert T.normalize_event({"event_type": "Free Kick", "t": 2})["type"] == "free_kick"
+    assert T.VisionLLMTagger.is_collapsed({"usage": {"completion_tokens": 5}})
+    assert not T.VisionLLMTagger.is_collapsed({"usage": {"completion_tokens": 400}})
+    ft = [0.75 + 1.5 * i for i in range(10)]
+    ev = [{"type": "shot", "team": "home", "t_clip_seconds": t} for t in ft]
+    ev += [{"type": "pass", "team": "home", "t_clip_seconds": t, "confidence": 0.9} for t in ft]
+    out = T.suppress_repetition(ev, ft)
+    shots = [e for e in out if e["type"] == "shot"]
+    assert len(shots) == 5  # one per >=2 s window
+    assert all(e.get("suspect") == "one_per_frame" and e["confidence"] <= 0.2 for e in out if e["type"] == "pass")
+
+
+def test_tuning_collapse_retries_with_json_object(tmp_path, monkeypatch):
+    from statman.autotag import tagger as T
+    from statman.autotag.clips import Clip
+
+    calls = []
+    payloads = [
+        {"choices": [{"message": {"content": '{"events": []}'}}], "usage": {"completion_tokens": 5, "cost": 0.001}},
+        {"choices": [{"message": {"content": '{"events": [{"event_type": "corner", "team": "home", "t_clip_seconds": 4}]}'}}],
+         "usage": {"completion_tokens": 80, "cost": 0.002}},
+    ]
+    tg = T.VisionLLMTagger(api_url="http://x", model="m", frames=3, response_format="json_schema")
+    monkeypatch.setattr(T, "extract_frames", lambda *a, **k: [(0.5, b"j"), (5.0, b"j"), (10.0, b"j")])
+    monkeypatch.setattr(tg, "_post", lambda body: (calls.append(body.get("response_format", {}).get("type")), payloads[len(calls) - 1])[1])
+    clip = Clip.from_dict({"index": 0, "video_start": 0, "video_end": 15, "match_start": 0, "half": 1, "path": str(tmp_path / "c.mp4")})
+    out = tg.tag_clip(clip, {"home_attacks": "right"})
+    assert calls == ["json_schema", "json_object"]
+    assert [e["type"] for e in out] == ["corner"]
+    assert abs(tg.total_cost - 0.003) < 1e-9

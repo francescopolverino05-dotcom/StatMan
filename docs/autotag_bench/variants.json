@@ -1,0 +1,171 @@
+{
+ "A_base_flash25": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 10,
+  "width": 768,
+  "src_h": 480,
+  "prompt": "base",
+  "fmt": "json_schema"
+ },
+ "B_f30_flash25": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 30,
+  "width": 768,
+  "src_h": 480,
+  "prompt": "base",
+  "fmt": "json_schema"
+ },
+ "C_f10_1280_flash25": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 10,
+  "width": 1280,
+  "prompt": "base",
+  "fmt": "json_schema"
+ },
+ "D_f30_1280_flash25": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 30,
+  "width": 1280,
+  "prompt": "base",
+  "fmt": "json_schema"
+ },
+ "E_v2_f30_1280_flash25": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 30,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_schema"
+ },
+ "F_v2_f30_1280_flash25_jobj": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 30,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_object"
+ },
+ "G_v2_fps3_1280_flash25": {
+  "model": "google/gemini-2.5-flash",
+  "fps": 3,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_schema"
+ },
+ "H_v2_crop_flash25": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 30,
+  "width": 1280,
+  "crop": "crop=1280:400:0:240",
+  "prompt": "v2",
+  "fmt": "json_schema"
+ },
+ "I_v2_short_f15_flash25": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 15,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_schema",
+  "short": true
+ },
+ "J_v2_video_flash25": {
+  "model": "google/gemini-2.5-flash",
+  "input": "video",
+  "prompt": "v2",
+  "fmt": "json_schema"
+ },
+ "K_v2_f30_1280_flash25_jobj_norm": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 30,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_object"
+ },
+ "L_v2_f30_1280_flash25_think": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 30,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_object",
+  "reasoning": {
+   "max_tokens": 4000
+  }
+ },
+ "M_v2_f30_1280_pro25": {
+  "model": "google/gemini-2.5-pro",
+  "frames": 30,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_object"
+ },
+ "N_v2_f30_1280_flash38": {
+  "model": "google/gemini-3.8-flash",
+  "frames": 30,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_object"
+ },
+ "O_v2_video_flash38": {
+  "model": "google/gemini-3.8-flash",
+  "input": "video",
+  "prompt": "v2",
+  "fmt": "json_object"
+ },
+ "P_base_f10_flash38_schema": {
+  "model": "google/gemini-3.8-flash",
+  "frames": 10,
+  "width": 768,
+  "src_h": 480,
+  "prompt": "base",
+  "fmt": "json_schema"
+ },
+ "Q_v2_f30_1280_flash38_schema": {
+  "model": "google/gemini-3.8-flash",
+  "frames": 30,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_schema"
+ },
+ "R_v2_video_pro25": {
+  "model": "google/gemini-2.5-pro",
+  "input": "video",
+  "prompt": "v2",
+  "fmt": "json_object"
+ },
+ "C2_rerun": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 10,
+  "width": 1280,
+  "prompt": "base",
+  "fmt": "json_schema"
+ },
+ "S_v2_f10_1280_flash25_jobj": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 10,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_object"
+ },
+ "S2_rerun": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 10,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_object"
+ },
+ "T_v2_f15_1280_flash25_jobj": {
+  "model": "google/gemini-2.5-flash",
+  "frames": 15,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_object"
+ },
+ "U_v2_f15_1280_flash35": {
+  "model": "google/gemini-3.5-flash",
+  "frames": 15,
+  "width": 1280,
+  "prompt": "v2",
+  "fmt": "json_object",
+  "reasoning": {
+   "effort": "low"
+  }
+ }
+}

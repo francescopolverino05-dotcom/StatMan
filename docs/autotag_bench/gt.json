@@ -1,0 +1,12 @@
+{
+ "teams": {"home": "Napoli (light blue / sky-blue shirts)", "away": "Bodø/Glimt (yellow shirts)"},
+ "clips": {
+  "goal":   {"start": 1848, "half": 1, "home_attacks": "right", "events": [{"type":"shot","t":[7,14],"team":"home","outcome":"goal"},{"type":"goal","t":[7,15],"team":"home"}], "passes": null, "note":"Riccio goal 31' (UEFA 31:49; on-screen clock ~30:42-30:57 here). Exact strike frame not resolvable by eye; celebration visible by video 1864. Score bug updates late."},
+  "fk":     {"start": 798, "half": 1, "home_attacks": "right", "events": [{"type":"free_kick","t":[5,10],"team":"home","outcome":"crossed_played"}], "optional":[{"type":"shot","t":[8,14]},{"type":"foul","t":[0,15]}], "passes": null, "note":"Napoli wide free kick crossed into box ~video 805-807 (hand tag called it a corner; frames show players lined at box edge, taker in right half). Scramble/possible header at 807-809 (hand tag: shot off target) -> shot optional."},
+  "corner_away_side": {"start": 4096, "half": 2, "home_attacks": "left", "events": [{"type":"corner","t":[3,11]}], "optional":[{"type":"shot","t":[6,15]},{"type":"aerial_duel","t":[6,15]}], "passes": null, "note":"Corner from the near-side right flag (taker visible at flag ~video 4101); team not scored (hand tag says Napoli, but 2H direction suggests Bodo attack right)."},
+  "corner_home": {"start": 4415, "half": 2, "home_attacks": "left", "events": [{"type":"corner","t":[5,13],"team":"home"}], "optional":[{"type":"shot","t":[9,15]},{"type":"foul","t":[9,15]},{"type":"aerial_duel","t":[9,15]}], "passes": null, "note":"Napoli corner from near-side left flag ~video 4422-4427 then box scramble (around the disallowed Pereyra goal ~70'; outcome not verified)."},
+  "open1": {"start": 600, "half": 1, "home_attacks": "right", "events": [], "passes": [3,8], "note":"Midfield open play, possession changes. Ball not resolvable by eye at 720p; pass count is a range."},
+  "open2": {"start": 1824, "half": 1, "home_attacks": "right", "events": [], "passes": [3,8], "note":"Open play, both halves of pitch; no set piece/shot."},
+  "open3": {"start": 4060, "half": 2, "home_attacks": "left", "events": [], "passes": [3,8], "note":"2H open play, no set piece/shot."}
+ }
+}

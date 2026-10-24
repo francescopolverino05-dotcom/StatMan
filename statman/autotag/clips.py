@@ -115,7 +115,7 @@ def _ffmpeg_env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k != "LD_LIBRARY_PATH"}
 
 
-def cut_clip(src: Path, clip: Clip, out_dir: Path, *, height: int = 480) -> Clip:
+def cut_clip(src: Path, clip: Clip, out_dir: Path, *, height: int = 720) -> Clip:
     out = out_dir / f"clip_{clip.index:05d}.mp4"
     if not (out.exists() and out.stat().st_size > 0):
         tmp = out.with_suffix(".part.mp4")
@@ -132,7 +132,7 @@ def cut_clip(src: Path, clip: Clip, out_dir: Path, *, height: int = 480) -> Clip
     return Clip(clip.index, clip.video_start, clip.video_end, clip.match_start, clip.period, str(out))
 
 
-def extract_frames(clip_path: Path, n_frames: int, duration: float, *, width: int = 768) -> list[tuple[float, bytes]]:
+def extract_frames(clip_path: Path, n_frames: int, duration: float, *, width: int = 1280) -> list[tuple[float, bytes]]:
     """Sample ``n_frames`` evenly spaced JPEG frames: [(t_clip_seconds, jpeg bytes)]."""
 
     n = max(1, n_frames)
