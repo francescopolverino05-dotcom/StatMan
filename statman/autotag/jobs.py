@@ -17,8 +17,11 @@ from pathlib import Path
 from typing import Any
 
 from statman.autotag import store
-from statman.autotag.clips import DEFAULT_CLIP_SECONDS, DEFAULT_OVERLAP_SECONDS, Clip, clips_dir, cut_clip, plan_clips
-from statman.autotag.merge import build_timeline, review_threshold
+from statman.autotag import scorebug
+from statman.autotag.clips import (
+    DEFAULT_CLIP_SECONDS, DEFAULT_OVERLAP_SECONDS, Clip, clips_dir, cut_clip, plan_clips, video_to_match,
+)
+from statman.autotag.merge import build_timeline, review_threshold, route_for_review
 from statman.autotag.repo import EventRepo, get_repo
 from statman.autotag.tagger import Tagger, TaggerUnavailable, get_tagger
 
@@ -123,6 +126,27 @@ def _cancelled(match_id: str) -> bool:
     return bool((get_autotag_job(match_id) or {}).get("cancel_requested"))
 
 
+def _run_scorebug(match_id: str, meta: dict[str, Any], src: Path) -> dict[str, Any]:
+    """Once per match (cached in scorebug.json). Never fails the job."""
+
+    cached = store.read_doc(match_id, "scorebug")
+    if cached and cached.get("video_path") == str(src) and scorebug.mode() != "off":
+        return cached
+    _update(match_id, status="cutting", stage="reading score bug")
+    try:
+        sb = scorebug.analyse(src)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("scorebug skipped for %s: %s", match_id, exc)
+        sb = {"enabled": False, "reason": str(exc)}
+    sb.pop("readings", None)
+    sb["video_path"] = str(src)
+    if scorebug.mode() != "off":
+        store.write_doc(match_id, "scorebug", sb)
+    _update(match_id, scorebug={k: sb.get(k) for k in ("enabled", "reason", "goals", "segments", "runtime_s",
+                                                         "cost_usd", "llm_calls")})
+    return sb
+
+
 def process_job(match_id: str, *, tagger: Tagger | None = None, repo: EventRepo | None = None) -> dict[str, Any]:
     """Run a queued job to completion in this thread (the worker calls this)."""
 
@@ -137,6 +161,15 @@ def process_job(match_id: str, *, tagger: Tagger | None = None, repo: EventRepo 
         clips = [Clip.from_dict(c) for c in store.read_doc(match_id, "clips", [])]
         src = Path(meta["video_path"])
         out_dir = clips_dir(match_id)
+
+        sb = _run_scorebug(match_id, meta, src)
+        if sb.get("enabled") and not meta.get("segments"):
+            # (a) clock from the score bug: same video windows, corrected match clock / period.
+            segs = scorebug.clip_segments(sb)
+            clips = [Clip(c.index, c.video_start, c.video_end, *video_to_match(c.video_start, segs), c.path)
+                     for c in clips]
+            store.write_doc(match_id, "clips", [c.to_dict() for c in clips])
+            meta = _update(match_id, segments=segs, segments_source="scorebug")
 
         _update(match_id, status="cutting", stage="cutting clips")
         cut: list[Clip] = []
@@ -175,6 +208,9 @@ def process_job(match_id: str, *, tagger: Tagger | None = None, repo: EventRepo 
         results = [(c, raw.get(str(c.index), [])) for c in cut]
         threshold = review_threshold()
         events = build_timeline(results, threshold=threshold)
+        if sb.get("enabled"):
+            # (b) confirmed goals in, (c) unbacked AI goals -> low-confidence shot candidates.
+            events = route_for_review(scorebug.reconcile_goals(events, sb), threshold)
         saved = (repo or get_repo()).replace_ai_events(match_id, events)
         pending = sum(1 for e in saved if e["review_status"] == "pending")
         return _update(

@@ -121,3 +121,14 @@ queue. Review at `/review?match=<id>`; stats at `/api/autotag/matches/<id>/stats
 
 With `DATABASE_URL` set, events and corrections are rows in the `events` /
 `corrections` tables (migration `002_autotag.sql`); otherwise JSON under `.data/autotag/`.
+
+### Score bug reader (autotag)
+
+`statman/autotag/scorebug.py` runs once per auto-tag job before tagging: samples the top-left
+score bug every 5 s, OCRs clock + score with `tesseract` (apt `tesseract-ocr`), optional
+vision fallback on the crop only (`TAGGER_API_KEY`, `google/gemini-2.5-flash`, disable with
+`STATMAN_SCOREBUG_LLM=0`). It sets clip segments/periods (second-half clock reset handled),
+inserts confirmed goals (confidence 0.95) and turns AI goals with no score change into
+low-confidence `shot` candidates for review. `STATMAN_SCOREBUG=auto|off`;
+`STATMAN_SCOREBUG_GOAL_LAG_S` (default 15) = bug update delay after the goal.
+No bug / no tesseract -> feature off, job continues unchanged.
