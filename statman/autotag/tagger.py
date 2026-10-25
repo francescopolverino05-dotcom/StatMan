@@ -182,6 +182,8 @@ def clip_context_text(clip: Clip, context: dict[str, Any]) -> str:
                 f"{p.get('shirt')} {p.get('name') or ''}".strip() for p in players if p.get("shirt") is not None
             )
             lines.append(f"{side} shirt numbers: {roster}.")
+    if context.get("corrective"):
+        lines.append(str(context["corrective"]))
     return "\n".join(lines)
 
 
@@ -331,6 +333,8 @@ class VisionLLMTagger:
         attacks = context.get("home_attacks")
         if attacks:
             intro += f" home attacks the goal on the {str(attacks).upper()} of the image; away attacks the other goal."
+        if context.get("corrective"):
+            intro += "\n" + str(context["corrective"])
         return intro
 
     def build_request(
@@ -394,7 +398,10 @@ class VisionLLMTagger:
                 conv = from_code_event(e)
                 if conv is None:
                     continue
-                t_clip = clock_to_clip_seconds(conv.pop("clock", None), clip)
+                raw_clock = conv.pop("clock", None)
+                t_clip = clock_to_clip_seconds(raw_clock, clip)
+                if clock_outside_clip(raw_clock, clip):
+                    conv["clock_outside"] = True
                 if t_clip is None and conv.get("t_clip_seconds") is None:
                     continue
                 if t_clip is not None:
@@ -460,6 +467,16 @@ def clock_to_clip_seconds(clock: Any, clip: Clip) -> float | None:
     if 0.0 <= secs <= clip.duration:  # model reported time into the clip instead of the match clock
         return round(secs, 2)
     return round(min(max(rel, 0.0), clip.duration), 2)
+
+
+def clock_outside_clip(clock: Any, clip: Clip, slack: float = 5.0) -> bool:
+    """True when a model clock is neither inside the clip window nor plain seconds-into-clip."""
+
+    secs = clock_to_seconds(clock)
+    if secs is None:
+        return False
+    rel = secs - clip.match_start
+    return not (-slack <= rel <= clip.duration + slack) and not (0.0 <= secs <= clip.duration)
 
 
 def _usage(payload: dict[str, Any]) -> dict[str, Any]:

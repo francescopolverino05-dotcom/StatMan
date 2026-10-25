@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from statman.autotag import store
-from statman.autotag import scorebug
+from statman.autotag import quality, scorebug
 from statman.autotag.clips import (
     Clip, clips_dir, cut_clip, env_clip_seconds, env_overlap_seconds, plan_clips, video_to_match,
 )
@@ -220,9 +220,100 @@ def _usage_total(clip_usage: list[dict[str, Any]]) -> dict[str, Any]:
             tot[key] += int(u.get(key) or 0)
         tot["cost_usd"] += float(u.get("cost_usd") or 0.0)
     tot["cost_usd"] = round(tot["cost_usd"], 6)
+    clips = {u.get("clip") for u in clip_usage}
     if clip_usage:
-        tot["cost_per_clip_usd"] = round(tot["cost_usd"] / len(clip_usage), 6)
+        tot["cost_per_clip_usd"] = round(tot["cost_usd"] / max(len(clips), 1), 6)
+        retry = [u for u in clip_usage if int(u.get("attempt") or 0) > 0]
+        tot["retry_calls"] = len(retry)
+        tot["retry_cost_usd"] = round(sum(float(u.get("cost_usd") or 0.0) for u in retry), 6)
     return tot
+
+
+def _tag_once(tagger: Tagger, clip: Clip, ctx: dict[str, Any], clip_usage: list[dict[str, Any]],
+              attempt: int) -> tuple[list[dict[str, Any]] | None, str | None]:
+    if hasattr(tagger, "last_usage"):
+        tagger.last_usage = {}
+    try:
+        return tagger.tag_clip(clip, ctx), None
+    except TaggerUnavailable:
+        raise
+    except Exception as exc:  # noqa: BLE001 - recorded as a failed attempt
+        return None, str(exc)
+    finally:
+        last = getattr(tagger, "last_usage", None)
+        if last:
+            clip_usage.append({"clip": clip.index, "attempt": attempt, **last})
+
+
+def _tag_with_quality(match_id: str, tagger: Tagger, clip: Clip, ctx: dict[str, Any],
+                      clip_usage: list[dict[str, Any]]):
+    """Tag a clip, quality-check it, and re-tag with a corrective prompt while it fails.
+
+    Returns (best events or None, quality record or None, last error). Stops after
+    ``STATMAN_RETAG_MAX`` re-tags or once job cost exceeds ``STATMAN_JOB_MAX_COST``.
+    """
+
+    events, err = _tag_once(tagger, clip, ctx, clip_usage, 0)
+    if not quality.enabled():
+        return events, None, err
+    th = quality.thresholds()
+    max_retag, max_cost = quality.retag_max(), quality.job_max_cost()
+    q = quality.check_clip(events, clip.duration, error=err, th=th)
+    attempts = [{"attempt": 0, "score": q["score"], "passed": q["passed"], "issues": q["hard"] + q["soft"],
+                 "stats": q["stats"], "error": err}]
+    best = (q, events, 0)
+    stop_reason = None
+    n = 0
+    while not best[0]["passed"] and n < max_retag:
+        if _usage_total(clip_usage)["cost_usd"] >= max_cost:
+            stop_reason = f"job cost budget ${max_cost:.2f} reached"
+            log.warning("auto-tag %s clip %s: %s, not re-tagging", match_id, clip.index, stop_reason)
+            break
+        n += 1
+        _update(match_id, stage=f"re-tagging clip {clip.index} (attempt {n}/{max_retag})")
+        corrective = quality.corrective_text(q, n)
+        ev2, err2 = _tag_once(tagger, clip, {**ctx, "corrective": corrective}, clip_usage, n)
+        q = quality.check_clip(ev2, clip.duration, error=err2, th=th)
+        attempts.append({"attempt": n, "score": q["score"], "passed": q["passed"], "issues": q["hard"] + q["soft"],
+                         "stats": q["stats"], "error": err2, "corrective_prompt": corrective})
+        if ev2 is not None and (best[1] is None or quality.rank(q) > quality.rank(best[0])):
+            best = (q, ev2, n)
+        if err2 is not None:
+            err = err2
+    bq, bev, chosen = best
+    record = {
+        "clip": clip.index, "attempts": attempts, "chosen_attempt": chosen, "retags": n,
+        "score": bq["score"], "passed": bq["passed"], "flagged": not bq["passed"] and bev is not None,
+        "issues": bq["hard"] + bq["soft"], "reason": quality.issue_summary(bq), "stop_reason": stop_reason,
+    }
+    return bev, record, (None if bev is not None else err)
+
+
+def quality_summary(clip_quality: dict[str, Any]) -> dict[str, Any]:
+    recs = list(clip_quality.values())
+    return {
+        "enabled": quality.enabled(), "retag_max": quality.retag_max(), "job_max_cost_usd": quality.job_max_cost(),
+        "clips_checked": len(recs),
+        "clips_passed": sum(1 for r in recs if r.get("passed") and not r.get("retags")),
+        "clips_retagged": sum(1 for r in recs if r.get("passed") and r.get("retags")),
+        "clips_flagged": sum(1 for r in recs if r.get("flagged")),
+        "retags": sum(int(r.get("retags") or 0) for r in recs),
+        "budget_stops": sum(1 for r in recs if r.get("stop_reason")),
+    }
+
+
+def flag_failed_clips(events: list[dict[str, Any]], clip_quality: dict[str, Any], threshold: float) -> list[dict[str, Any]]:
+    """Events from clips that still fail after re-tags go to the review queue with the issues as reason."""
+
+    bad = {int(k): r for k, r in clip_quality.items() if r.get("flagged")}
+    if not bad:
+        return events
+    for ev in events:
+        hits = [bad[c] for c in ev.get("clip_ids") or [] if c in bad]
+        if hits:
+            ev["issues"] = list(ev.get("issues") or []) + [
+                f"clip {r['clip']} quality: {r['reason']}" for r in hits if r.get("reason")]
+    return route_for_review(events, threshold)
 
 
 def process_job(match_id: str, *, tagger: Tagger | None = None, repo: EventRepo | None = None) -> dict[str, Any]:
@@ -269,27 +360,27 @@ def process_job(match_id: str, *, tagger: Tagger | None = None, repo: EventRepo 
         context = tagger_context(match_id, meta)
         failures: list[str] = []
         clip_usage: list[dict[str, Any]] = list((get_autotag_job(match_id) or {}).get("clip_usage") or [])
+        clip_quality: dict[str, Any] = store.read_doc(match_id, "quality", {}) or {}
+        if not any(str(c.index) in raw for c in cut):
+            clip_quality = {}
         for i, clip in enumerate(cut):
             if _cancelled(match_id):
                 return _update(match_id, status="cancelled", stage="cancelled")
             if str(clip.index) not in raw:
                 clip_ctx = {**context, "home_attacks": home_attacks(context["settings"], clip.period)}
-                if hasattr(tagger, "last_usage"):
-                    tagger.last_usage = {}
-                try:
-                    raw[str(clip.index)] = tagger.tag_clip(clip, clip_ctx)
-                except TaggerUnavailable:
-                    raise
-                except Exception as exc:  # noqa: BLE001 - keep going; clip is reported
-                    failures.append(f"clip {clip.index}: {exc}")
+                events, record, err = _tag_with_quality(match_id, tagger, clip, clip_ctx, clip_usage)
+                if record is not None:
+                    clip_quality[str(clip.index)] = record
+                    store.write_doc(match_id, "quality", clip_quality)
+                if events is None:
+                    failures.append(f"clip {clip.index}: {err}")
+                    _update(match_id, clips_tagged=i + 1, clip_failures=failures, usage=_usage_total(clip_usage),
+                            clip_usage=clip_usage, quality=quality_summary(clip_quality))
                     continue
-                finally:
-                    last = getattr(tagger, "last_usage", None)
-                    if last:
-                        clip_usage.append({"clip": clip.index, **last})
+                raw[str(clip.index)] = events
                 store.write_doc(match_id, "raw_tags", raw)
             _update(match_id, clips_tagged=i + 1, clip_failures=failures, usage=_usage_total(clip_usage),
-                    clip_usage=clip_usage)
+                    clip_usage=clip_usage, quality=quality_summary(clip_quality))
 
         _update(match_id, status="merging", stage="merging overlapping clips")
         results = [(c, raw.get(str(c.index), [])) for c in cut]
@@ -298,11 +389,13 @@ def process_job(match_id: str, *, tagger: Tagger | None = None, repo: EventRepo 
         if sb.get("enabled"):
             # (b) confirmed goals in, (c) unbacked AI goals -> low-confidence shot candidates.
             events = route_for_review(scorebug.reconcile_goals(events, sb), threshold)
+        events = flag_failed_clips(events, clip_quality, threshold)
         saved = (repo or get_repo()).replace_ai_events(match_id, events)
         pending = sum(1 for e in saved if e["review_status"] == "pending")
         return _update(
             match_id, status="done", stage="done", review_threshold=threshold, events_total=len(saved),
             events_pending=pending, clip_failures=failures, finished_at=time.time(),
+            quality=quality_summary(clip_quality), clip_quality=clip_quality,
         )
     except TaggerUnavailable as exc:
         return _update(match_id, status="tagger_disabled", stage="tagger not configured", error=str(exc))

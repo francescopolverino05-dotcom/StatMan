@@ -28,6 +28,7 @@ def _env(monkeypatch, tmp_path):
               "TAGGER_API_URL", "TAGGER_MODEL", "DATABASE_URL", "STATMAN_VIDEO_DIR", "STATMAN_REVIEW_THRESHOLD"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("STATMAN_SCOREBUG", "off")
+    monkeypatch.setenv("STATMAN_QUALITY", "off")  # quality re-tag covered in test_autotag_quality.py
     monkeypatch.setattr(store, "ROOT", tmp_path / "autotag")
 
 

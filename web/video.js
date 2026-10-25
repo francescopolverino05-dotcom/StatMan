@@ -542,12 +542,22 @@ function renderAutotag(job) {
     const pct = job.status === "done" ? 100 : Math.round((100 * done) / total);
     atProgressWrap.hidden = false;
     atProgressFill.style.width = `${pct}%`;
-    atProgressText.textContent = `${job.stage || job.status} · ${done}/${total} clips (${pct}%)`;
+    const qq = job.quality && job.quality.clips_checked
+      ? ` · ${job.quality.clips_retagged + job.quality.clips_flagged ? `${job.quality.retags} re-tags, ${job.quality.clips_flagged} flagged` : "quality OK"}`
+      : "";
+    atProgressText.textContent = `${job.stage || job.status} · ${done}/${total} clips (${pct}%)${qq}`;
   } else {
     atProgressWrap.hidden = true;
   }
   if (job.status === "done") {
-    setAtStatus(`Auto-tag done: ${job.events_total ?? 0} events, ${job.events_pending ?? 0} pending review.`);
+    const q = job.quality;
+    const qText = q && q.enabled && q.clips_checked
+      ? ` Quality: ${q.clips_passed} clips passed, ${q.clips_retagged} re-tagged, ${q.clips_flagged} flagged for review` +
+        (q.budget_stops ? ` (${q.budget_stops} retries skipped: budget)` : "") + "."
+      : "";
+    const cost = job.usage && job.usage.cost_usd ? ` Cost $${job.usage.cost_usd.toFixed(3)}` +
+      (job.usage.retry_cost_usd ? ` (retries $${job.usage.retry_cost_usd.toFixed(3)})` : "") + "." : "";
+    setAtStatus(`Auto-tag done: ${job.events_total ?? 0} events, ${job.events_pending ?? 0} pending review.${qText}${cost}`);
   } else if (job.status === "error") {
     setAtStatus(`Auto-tag failed: ${job.error || "unknown error"}`, { error: true });
   } else if (job.status === "tagger_disabled") {
