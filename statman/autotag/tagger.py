@@ -2,12 +2,17 @@
 
 Backends:
 
-* ``VisionLLMTagger`` - OpenAI-compatible ``/chat/completions`` with sampled
-  frames. Configured by ``TAGGER_API_URL``, ``TAGGER_API_KEY``, ``TAGGER_MODEL``
-  (optional ``TAGGER_FRAMES``, ``TAGGER_FRAME_WIDTH``, ``TAGGER_RESPONSE_FORMAT``,
-  ``TAGGER_PROMPT`` = base|v2, ``TAGGER_TIMEOUT``). Benchmarked defaults
-  (phase2-tuning): 10 frames at 1280 px, json_schema with a json_object retry
-  when the model collapses to an empty answer.
+* ``VisionLLMTagger`` - OpenAI-compatible ``/chat/completions`` (OpenRouter).
+  Configured by ``TAGGER_API_URL``, ``TAGGER_API_KEY``, ``TAGGER_MODEL``.
+  ``TAGGER_INPUT`` = ``video`` (default: the whole clip as a base64 mp4
+  ``video_url`` part, re-encoded to ``TAGGER_VIDEO_HEIGHT`` (480) /
+  ``TAGGER_VIDEO_BITRATE`` (500k) / ``TAGGER_VIDEO_FPS`` (10); needs a
+  video-capable model such as google/gemini-2.5-flash) or ``frames`` (legacy:
+  ``TAGGER_FRAMES`` evenly spaced JPEGs at ``TAGGER_FRAME_WIDTH``).
+  ``TAGGER_PROMPT`` = analyst (default: analyst event codes with start/end
+  coordinates, like hand tagging) | base | v2 (legacy taxonomy prompts).
+  Also ``TAGGER_RESPONSE_FORMAT``, ``TAGGER_TIMEOUT``. json_schema with a
+  json_object retry when the model collapses to an empty answer.
   Disabled (``enabled() is False``) when URL or model is unset.
 * ``FixtureTagger`` - deterministic, reads a JSON fixture keyed by clip index.
   For tests and offline demos only; select with ``STATMAN_TAGGER=fixture`` and
@@ -25,8 +30,11 @@ import time
 from pathlib import Path
 from typing import Any, Protocol
 
-from statman.autotag.clips import Clip, extract_frames
-from statman.autotag.taxonomy import EVENT_TYPES, FREE_KICK_MAX_DISTANCE_M, TAXONOMY, json_schema
+from statman.autotag.clips import Clip, encode_for_model, extract_frames
+from statman.autotag.taxonomy import (
+    CODES, EVENT_TYPES, FREE_KICK_MAX_DISTANCE_M, TAXONOMY, clock_to_seconds, code_json_schema, from_code_event,
+    json_schema,
+)
 
 log = logging.getLogger("statman.autotag")
 
@@ -102,6 +110,81 @@ _PROMPT_V2 = [
     "Never invent evenly spaced events (one per frame). Tag an event only when you can see it happen.",
 ]
 
+ANALYST_PROMPT = [
+    "You are a professional football (soccer) performance analyst hand-tagging match video, event by event.",
+    "You receive one continuous clip of match video (usually a wide elevated sideline camera; players are small).",
+    "Watch the whole clip and log EVERY on-ball event in order. Never summarise, never group several passes into one.",
+    "Codes: PASS, CROSS, SHOT, SAVE, TACKLE, INTERCEPT, AERIAL, DUEL, FOUL, CARD, CORNER, FK, THROW, GOALKICK, "
+    "GK_PASS, CLEAR, RECOVERY, LOST, GAP.",
+    "clock = the match clock (mm:ss) when the event happens: clip start clock + seconds into the clip.",
+    "team = home or away (use the team names and kit colours given). player / shirt only if you can actually read "
+    "them (or match a readable number to the lineup); otherwise null. Never guess names.",
+    "outcome: PASS/CROSS/GK_PASS/THROW/GOALKICK/TACKLE/AERIAL/DUEL = success|fail; SHOT = on|off|blocked|goal|post; "
+    "CARD = yellow|red; otherwise null.",
+    "A misplaced pass (intercepted, out of play, to nobody) is outcome fail - always.",
+    "A goalkeeper catching or claiming a cross is RECOVERY (team = goalkeeper's team), not SAVE. SAVE only stops a SHOT.",
+    "RECOVERY = winning a loose ball; LOST = losing the ball by miscontrol or being dispossessed (not a misplaced pass);"
+    " INTERCEPT = cutting out an opponent pass; CLEAR = defensive clearance without a target.",
+    "AERIAL and DUEL: log one event per player involved (both teams), success for the winner, fail for the loser.",
+    "Coordinates are 0-100 and always from the ACTING team's view: x=100 is the goal that team attacks, x=0 its own "
+    "goal; y=0 its right touchline, y=100 its left touchline. Use the attacking direction given for this half to "
+    "convert what you see on screen. x1,y1 = where the action starts; x2,y2 = where it ends (pass/cross/shot/clear "
+    "destination, or same as start for on-the-spot actions). null if you truly cannot place it.",
+    "When the camera is off the ball (replay, close-up, crowd, broadcast graphic) write ONE GAP event (team = the "
+    "team last in possession, coordinates null, detail = what is shown) instead of inventing events.",
+    "The clip overlaps the previous one by a few seconds: do not log an event twice; an event cut off at the very "
+    "start of the clip that you cannot see fully may be skipped.",
+    "detail = a few words (e.g. 'long ball to the left winger', 'header wide'). confidence 0-1.",
+    'Return ONLY JSON: {"events": [{"clock":"12:34","team":"home","code":"PASS","player":null,"shirt":8,'
+    '"outcome":"success","x1":40,"y1":30,"x2":55,"y2":20,"detail":"...","confidence":0.8}, ...]}.',
+]
+
+
+def analyst_prompt() -> str:
+    return "\n".join(ANALYST_PROMPT)
+
+
+def _fmt_clock(seconds: float) -> str:
+    seconds = max(0, int(round(seconds)))
+    return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+
+def clip_context_text(clip: Clip, context: dict[str, Any]) -> str:
+    """Match context for one clip: teams, kits, lineups, attacking direction, clip start clock."""
+
+    teams = context.get("teams") or {}
+    kits = context.get("kits") or {}
+    kit_text = kits if isinstance(kits, str) else ""
+    if not isinstance(kits, dict):
+        kits = {}
+    lines = [
+        f"Clip {clip.index}: {clip.duration:.0f} s of video, half {clip.period}. "
+        f"Match clock at clip start = {_fmt_clock(clip.match_start)}; at clip end = "
+        f"{_fmt_clock(clip.match_start + clip.duration)}.",
+        f"home = {teams.get('home') or 'home team'}" + (f" (kit: {kits['home']})" if kits.get("home") else "")
+        + f"; away = {teams.get('away') or 'away team'}" + (f" (kit: {kits['away']})" if kits.get("away") else "") + ".",
+    ]
+    if kit_text:
+        lines.append(f"Kits: {kit_text}.")
+    attacks = context.get("home_attacks")  # 'left'|'right' on screen for this clip's half
+    if attacks:
+        other = "left" if str(attacks).lower() == "right" else "right"
+        lines.append(
+            f"In this half home attacks the goal on the {str(attacks).upper()} of the screen and away attacks the "
+            f"{other.upper()} goal."
+        )
+    else:
+        lines.append("Attacking direction not given: work it out from the goalkeepers' positions and kick-offs.")
+    for side in ("home", "away"):
+        players = (context.get("lineups") or {}).get(side) or []
+        if players:
+            roster = ", ".join(
+                f"{p.get('shirt')} {p.get('name') or ''}".strip() for p in players if p.get("shirt") is not None
+            )
+            lines.append(f"{side} shirt numbers: {roster}.")
+    return "\n".join(lines)
+
+
 _TYPE_ALIASES = ("event_type", "event", "kind", "action")
 _COLLAPSE_COMPLETION_TOKENS = 10
 
@@ -174,6 +257,10 @@ class VisionLLMTagger:
         timeout: float | None = None,
         frame_width: int | None = None,
         prompt: str | None = None,
+        input_mode: str | None = None,
+        video_height: int | None = None,
+        video_bitrate: str | None = None,
+        video_fps: float | None = None,
         client: Any = None,
     ) -> None:
         self.api_url = (api_url if api_url is not None else os.environ.get("TAGGER_API_URL", "")).strip()
@@ -181,8 +268,16 @@ class VisionLLMTagger:
         self.model = (model if model is not None else os.environ.get("TAGGER_MODEL", "")).strip()
         self.frames = int(frames or os.environ.get("TAGGER_FRAMES") or 10)
         self.frame_width = int(frame_width or os.environ.get("TAGGER_FRAME_WIDTH") or 1280)
-        self.prompt = (prompt or os.environ.get("TAGGER_PROMPT") or "base").strip().lower()
+        self.prompt = (prompt or os.environ.get("TAGGER_PROMPT") or "analyst").strip().lower()
+        mode = (input_mode or os.environ.get("TAGGER_INPUT") or "video").strip().lower()
+        self.input_mode = mode if mode in {"video", "frames"} else "video"
+        self.video_height = int(video_height or os.environ.get("TAGGER_VIDEO_HEIGHT") or 480)
+        self.video_bitrate = (video_bitrate or os.environ.get("TAGGER_VIDEO_BITRATE") or "500k").strip()
+        self.video_fps = float(video_fps or os.environ.get("TAGGER_VIDEO_FPS") or 10)
         self.total_cost = 0.0
+        self.usage_total: dict[str, Any] = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0,
+                                            "total_tokens": 0, "cost_usd": 0.0}
+        self.last_usage: dict[str, Any] = {}
         self.response_format = (response_format or os.environ.get("TAGGER_RESPONSE_FORMAT") or "json_schema").strip()
         self.timeout = float(timeout or os.environ.get("TAGGER_TIMEOUT") or 120)
         self._client = client
@@ -194,10 +289,37 @@ class VisionLLMTagger:
         url = self.api_url.rstrip("/")
         return url if url.endswith("/chat/completions") else url + "/chat/completions"
 
-    def build_request(
-        self, frames: list[tuple[float, bytes]], context: dict[str, Any], clip: Clip, *, response_format: str | None = None
-    ) -> dict[str, Any]:
-        response_format = response_format or self.response_format
+    @property
+    def analyst(self) -> bool:
+        return self.prompt not in {"base", "v2"}
+
+    def _response_format(self, response_format: str) -> dict[str, Any] | None:
+        if response_format == "json_schema":
+            schema = code_json_schema() if self.analyst else json_schema()
+            return {"type": "json_schema", "json_schema": {"name": "statman_events", "strict": True, "schema": schema}}
+        if response_format == "json_object":
+            return {"type": "json_object"}
+        return None
+
+    def _body(self, content: list[dict[str, Any]], response_format: str | None) -> dict[str, Any]:
+        system = analyst_prompt() if self.analyst else _system_prompt(self.prompt)
+        body: dict[str, Any] = {
+            "model": self.model,
+            "temperature": 0,
+            "usage": {"include": True},
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": content},
+            ],
+        }
+        rf = self._response_format(response_format or self.response_format)
+        if rf:
+            body["response_format"] = rf
+        return body
+
+    def _intro(self, clip: Clip, context: dict[str, Any]) -> str:
+        if self.analyst:
+            return clip_context_text(clip, context)
         teams = context.get("teams") or {}
         intro = (
             f"Clip {clip.index}: {clip.duration:.1f} s, match clock {clip.match_start:.0f} s at clip start. "
@@ -206,33 +328,37 @@ class VisionLLMTagger:
         )
         if context.get("kits"):
             intro += f" Kits: {context['kits']}."
-        attacks = context.get("home_attacks")  # 'left'|'right' for this clip's half
+        attacks = context.get("home_attacks")
         if attacks:
             intro += f" home attacks the goal on the {str(attacks).upper()} of the image; away attacks the other goal."
-        content: list[dict[str, Any]] = [{"type": "text", "text": intro}]
+        return intro
+
+    def build_request(
+        self, frames: list[tuple[float, bytes]], context: dict[str, Any], clip: Clip, *, response_format: str | None = None
+    ) -> dict[str, Any]:
+        """Frames mode: evenly spaced JPEG frames as image_url parts."""
+
+        content: list[dict[str, Any]] = [{"type": "text", "text": self._intro(clip, context)}]
         for t, jpeg in frames:
             content.append({"type": "text", "text": f"frame t={t:.2f}s"})
             content.append({
                 "type": "image_url",
                 "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode("ascii")},
             })
-        body: dict[str, Any] = {
-            "model": self.model,
-            "temperature": 0,
-            "usage": {"include": True},
-            "messages": [
-                {"role": "system", "content": _system_prompt(self.prompt)},
-                {"role": "user", "content": content},
-            ],
-        }
-        if response_format == "json_schema":
-            body["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {"name": "statman_events", "strict": True, "schema": json_schema()},
-            }
-        elif response_format == "json_object":
-            body["response_format"] = {"type": "json_object"}
-        return body
+        return self._body(content, response_format)
+
+    def build_video_request(
+        self, video: bytes, context: dict[str, Any], clip: Clip, *, response_format: str | None = None,
+        mime: str = "video/mp4",
+    ) -> dict[str, Any]:
+        """Video mode: the whole clip as one base64 data URL ``video_url`` part (OpenRouter format)."""
+
+        content: list[dict[str, Any]] = [
+            {"type": "text", "text": self._intro(clip, context)},
+            {"type": "video_url", "video_url": {"url": f"data:{mime};base64," + base64.b64encode(video).decode("ascii")}},
+            {"type": "text", "text": "Tag every on-ball event in this clip now."},
+        ]
+        return self._body(content, response_format)
 
     def _post(self, body: dict[str, Any]) -> dict[str, Any]:
         import httpx
@@ -264,20 +390,43 @@ class VisionLLMTagger:
         for e in events:
             if not isinstance(e, dict):
                 continue
+            if "code" in e or str(e.get("type") or "").strip().upper() in CODES and "clock" in e:
+                conv = from_code_event(e)
+                if conv is None:
+                    continue
+                t_clip = clock_to_clip_seconds(conv.pop("clock", None), clip)
+                if t_clip is None and conv.get("t_clip_seconds") is None:
+                    continue
+                if t_clip is not None:
+                    conv["t_clip_seconds"] = t_clip
+                out.append(conv)
+                continue
             e = normalize_event(e)
             if e.get("type") in EVENT_TYPES:
                 out.append(e)
         return out
+
+    def _requests(self, clip: Clip, context: dict[str, Any]):
+        """(build(response_format) -> body, frame_times) for the configured input mode."""
+
+        if self.input_mode == "video":
+            video = encode_for_model(
+                Path(clip.path), height=self.video_height, bitrate=self.video_bitrate, fps=self.video_fps
+            )
+            log.info("tagger clip %s: sending %.1f MB video", clip.index, len(video) / 1e6)
+            return (lambda rf=None: self.build_video_request(video, context, clip, response_format=rf)), []
+        frames = extract_frames(Path(clip.path), self.frames, clip.duration, width=self.frame_width)
+        return (lambda rf=None: self.build_request(frames, context, clip, response_format=rf)), [t for t, _ in frames]
 
     def tag_clip(self, clip: Clip, context: dict[str, Any]) -> list[dict[str, Any]]:
         if not self.enabled():
             raise TaggerUnavailable("Vision tagger disabled: set TAGGER_API_URL and TAGGER_MODEL")
         if not clip.path:
             raise ValueError(f"clip {clip.index} has no file")
-        frames = extract_frames(Path(clip.path), self.frames, clip.duration, width=self.frame_width)
-        frame_times = [t for t, _ in frames]
-        body = self.build_request(frames, context, clip)
+        build, frame_times = self._requests(clip, context)
+        body = build()
         last: Exception | None = None
+        self.last_usage = {}
         for attempt in range(3):
             try:
                 payload = self._post(body)
@@ -286,15 +435,31 @@ class VisionLLMTagger:
                 if not events and self.is_collapsed(payload) and self.response_format == "json_schema":
                     # Strict schema often makes the model bail out with {"events":[]} in ~5 tokens.
                     log.info("tagger clip %s: empty-output collapse, retrying with json_object", clip.index)
-                    retry = self._post(self.build_request(frames, context, clip, response_format="json_object"))
+                    retry = self._post(build("json_object"))
                     self._account(retry, clip)
                     events = self.parse_response(retry, clip)
-                return suppress_repetition(events, frame_times)
+                if self.input_mode == "frames":
+                    return suppress_repetition(events, frame_times)
+                return events
             except Exception as exc:  # noqa: BLE001 - retry transport and parse errors
                 last = exc
                 log.warning("tagger clip %s attempt %s failed: %s", clip.index, attempt + 1, exc)
                 time.sleep(min(8, 2 ** attempt))
         raise RuntimeError(f"tagger failed on clip {clip.index}: {last}")
+
+
+def clock_to_clip_seconds(clock: Any, clip: Clip) -> float | None:
+    """Model match clock -> seconds into the clip (clamped to the clip)."""
+
+    secs = clock_to_seconds(clock)
+    if secs is None:
+        return None
+    rel = secs - clip.match_start
+    if -5.0 <= rel <= clip.duration + 5.0:
+        return round(min(max(rel, 0.0), clip.duration), 2)
+    if 0.0 <= secs <= clip.duration:  # model reported time into the clip instead of the match clock
+        return round(secs, 2)
+    return round(min(max(rel, 0.0), clip.duration), 2)
 
 
 def _usage(payload: dict[str, Any]) -> dict[str, Any]:
@@ -308,10 +473,30 @@ def _is_collapsed(payload: dict[str, Any]) -> bool:
 
 
 def _account(self: VisionLLMTagger, payload: dict[str, Any], clip: Clip) -> None:
-    cost = _usage(payload).get("cost")
+    """Add one response's token usage / cost (OpenRouter ``usage``) to the running totals."""
+
+    u = _usage(payload)
+    if not u:
+        return
+    tot = self.usage_total
+    tot["calls"] += 1
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        try:
+            n = int(u.get(key) or 0)
+        except (TypeError, ValueError):
+            n = 0
+        tot[key] += n
+        self.last_usage[key] = self.last_usage.get(key, 0) + n
+    cost = u.get("cost")
     if cost is not None:
         self.total_cost += float(cost)
-        log.info("tagger clip %s cost $%.4f (running $%.4f)", clip.index, float(cost), self.total_cost)
+        tot["cost_usd"] = round(self.total_cost, 6)
+        self.last_usage["cost_usd"] = round(self.last_usage.get("cost_usd", 0.0) + float(cost), 6)
+    log.info(
+        "tagger clip %s usage prompt=%s completion=%s cost=$%.4f (running $%.4f, %s tokens)",
+        clip.index, u.get("prompt_tokens"), u.get("completion_tokens"), float(cost or 0), self.total_cost,
+        tot["total_tokens"],
+    )
 
 
 VisionLLMTagger.is_collapsed = staticmethod(_is_collapsed)  # type: ignore[attr-defined]
@@ -339,6 +524,10 @@ def tagger_status() -> dict[str, Any]:
             "api_url": llm.api_url or None,
             "model": llm.model or None,
             "has_api_key": bool(llm.api_key),
+            "input": llm.input_mode,
+            "video_height": llm.video_height,
+            "video_bitrate": llm.video_bitrate,
+            "video_fps": llm.video_fps,
             "frames_per_clip": llm.frames,
             "response_format": llm.response_format,
             "frame_width": llm.frame_width,

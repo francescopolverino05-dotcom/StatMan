@@ -26,6 +26,16 @@ from statman.autotag.taxonomy import json_schema, normalize_event
 FIXTURE = Path(__file__).parent / "fixtures" / "autotag_test_clips.json"
 
 
+@pytest.fixture(autouse=True)
+def legacy_tagger_defaults(monkeypatch):
+    """These tests were written for 15 s clips and the frames tagger; the new
+    defaults (60 s, video input) are covered in test_autotag_video.py."""
+    monkeypatch.setenv("STATMAN_CLIP_SECONDS", "15")
+    monkeypatch.setenv("STATMAN_CLIP_OVERLAP", "5")
+    monkeypatch.setenv("TAGGER_INPUT", "frames")
+    monkeypatch.delenv("TAGGER_PROMPT", raising=False)
+
+
 @pytest.fixture
 def autotag_root(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "ROOT", tmp_path / "autotag")

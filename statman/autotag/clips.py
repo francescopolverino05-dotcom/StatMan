@@ -18,8 +18,31 @@ from typing import Any
 
 from statman.persistence.paths import configured_video_dir
 
-DEFAULT_CLIP_SECONDS = 15.0
+DEFAULT_CLIP_SECONDS = 60.0
 DEFAULT_OVERLAP_SECONDS = 5.0
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    try:
+        value = float(raw) if raw else default
+    except ValueError:
+        return default
+    return value if math.isfinite(value) else default
+
+
+def env_clip_seconds() -> float:
+    """Clip length: ``STATMAN_CLIP_SECONDS`` (default 60)."""
+    value = _env_float("STATMAN_CLIP_SECONDS", DEFAULT_CLIP_SECONDS)
+    return value if value > 0 else DEFAULT_CLIP_SECONDS
+
+
+def env_overlap_seconds() -> float:
+    """Overlap between consecutive clips: ``STATMAN_CLIP_OVERLAP`` (default 5)."""
+    value = _env_float("STATMAN_CLIP_OVERLAP", DEFAULT_OVERLAP_SECONDS)
+    if value < 0 or value >= env_clip_seconds():
+        return min(DEFAULT_OVERLAP_SECONDS, env_clip_seconds() / 2)
+    return value
 
 
 @dataclass(frozen=True)
@@ -77,11 +100,19 @@ def video_to_match(t_video: float, segments: list[dict[str, Any]] | None = None)
 def plan_clips(
     duration: float,
     *,
-    clip_seconds: float = DEFAULT_CLIP_SECONDS,
-    overlap_seconds: float = DEFAULT_OVERLAP_SECONDS,
+    clip_seconds: float | None = None,
+    overlap_seconds: float | None = None,
     segments: list[dict[str, Any]] | None = None,
 ) -> list[Clip]:
-    """Overlapping windows covering [0, duration]. Last clip ends at duration."""
+    """Overlapping windows covering [0, duration]. Last clip ends at duration.
+
+    Clip length / overlap default to ``STATMAN_CLIP_SECONDS`` / ``STATMAN_CLIP_OVERLAP``.
+    """
+
+    if clip_seconds is None:
+        clip_seconds = env_clip_seconds()
+    if overlap_seconds is None:
+        overlap_seconds = env_overlap_seconds()
 
     if duration <= 0:
         return []
@@ -147,3 +178,27 @@ def extract_frames(clip_path: Path, n_frames: int, duration: float, *, width: in
         if proc.stdout:
             frames.append((t, proc.stdout))
     return frames
+
+
+def encode_for_model(
+    clip_path: Path, *, height: int = 480, bitrate: str = "500k", fps: float = 10.0
+) -> bytes:
+    """Re-encode a clip small for a video-capable model: H.264 mp4, no audio.
+
+    480p at ~500 kb/s and 10 fps keeps a 60 s clip around 3-4 MB (base64 ~5 MB)
+    while the ball and shirt colours stay readable. ``faststart`` puts the moov
+    atom first so the provider can parse it from a data URL.
+    """
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="statman-enc-") as tmp:
+        out = Path(tmp) / "model.mp4"
+        cmd = [
+            "ffmpeg", "-y", "-v", "error", "-i", str(clip_path), "-an",
+            "-vf", f"scale=-2:{int(height)},fps={fps:g}",
+            "-c:v", "libx264", "-preset", "veryfast", "-b:v", bitrate, "-maxrate", bitrate,
+            "-bufsize", bitrate, "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out),
+        ]
+        subprocess.run(cmd, check=True, env=_ffmpeg_env(), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        return out.read_bytes()

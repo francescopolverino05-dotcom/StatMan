@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 from typing import Any
 
@@ -12,6 +13,8 @@ DEFAULT_REVIEW_THRESHOLD = 0.75
 # Same action seen by two overlapping clips lands within this many seconds.
 DEDUPE_WINDOW_SECONDS: dict[str, float] = {"default": 2.0, "card": 6.0, "goal": 6.0, "goal_conceded": 6.0, "corner": 4.0}
 KEY_PASS_WINDOW_SECONDS = 6.0
+# Two overlap copies of one action start within this distance (0-100 pitch units).
+DEDUPE_MAX_DISTANCE = 15.0
 
 
 def review_threshold() -> float:
@@ -56,6 +59,11 @@ def clip_events_to_match(clip: Clip, raw_events: list[dict[str, Any]]) -> list[d
 def _compatible(a: dict[str, Any], b: dict[str, Any]) -> bool:
     if a["type"] != b["type"] or a["team"] != b["team"]:
         return False
+    if a.get("code") and b.get("code") and a["code"] != b["code"]:
+        return False  # e.g. PASS vs CROSS
+    if None not in (a.get("x"), a.get("y"), b.get("x"), b.get("y")):
+        if math.hypot(a["x"] - b["x"], a["y"] - b["y"]) > DEDUPE_MAX_DISTANCE:
+            return False
     if a["shirt"] is not None and b["shirt"] is not None and a["shirt"] != b["shirt"]:
         return False
     if a["type"] == "card" and a["attributes"].get("color") != b["attributes"].get("color"):
@@ -73,6 +81,10 @@ def _better(a: dict[str, Any], b: dict[str, Any]) -> bool:
 
 def dedupe_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Merge duplicates coming from *different* overlapping clips.
+
+    Duplicates = same team + type (+ code when both have one) within the
+    type's window (~2 s for on-ball events) and, when both are placed, start
+    points closer than ``DEDUPE_MAX_DISTANCE``.
 
     Two same-type events from the same clip are always kept (two quick passes
     are two passes). The kept copy is the most confident one; it gains the
@@ -102,7 +114,7 @@ def dedupe_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 keep["attributes"][key] = value
             elif keep["attributes"][key] != value:
                 keep["issues"].append(f"clips disagree on {key}")
-        for key in ("shirt", "player", "x", "y"):
+        for key in ("shirt", "player", "x", "y", "x2", "y2", "outcome", "code", "detail"):
             if keep.get(key) is None and other.get(key) is not None:
                 keep[key] = other[key]
         keep["clip_ids"] = sorted(set(keep["clip_ids"]) | set(other["clip_ids"]))

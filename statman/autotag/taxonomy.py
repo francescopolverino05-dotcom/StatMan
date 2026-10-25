@@ -47,7 +47,23 @@ TAXONOMY: dict[str, dict[str, Any]] = {
     "save": {},
     "goal_conceded": {},
     "gk_pass": {"length": ("short", "long"), "lane": ("middle", "flank"), "completed": "bool"},
+    # Added for the analyst-style (code) tagger. Stats ignore them for now (step 6).
+    "duel": {"won": "bool"},
+    "throw_in": {"completed": "bool"},
+    "goal_kick": {"completed": "bool"},
+    "clearance": {},
+    "recovery": {},
+    "gap": {},  # camera off the ball / replay: nothing can be tagged here
 }
+
+# Analyst event codes the model returns -> internal taxonomy type.
+CODES: dict[str, str] = {
+    "PASS": "pass", "CROSS": "pass", "SHOT": "shot", "SAVE": "save", "TACKLE": "tackle",
+    "INTERCEPT": "interception", "AERIAL": "aerial_duel", "DUEL": "duel", "FOUL": "foul", "CARD": "card",
+    "CORNER": "corner", "FK": "free_kick", "THROW": "throw_in", "GOALKICK": "goal_kick", "GK_PASS": "gk_pass",
+    "CLEAR": "clearance", "RECOVERY": "recovery", "LOST": "ball_lost", "GAP": "gap",
+}
+OUTCOMES = ("success", "fail", "on", "off", "blocked", "goal", "post", "yellow", "red")
 
 # Attributes a reviewer needs before the event can be trusted.
 REQUIRED: dict[str, tuple[str, ...]] = {
@@ -173,6 +189,14 @@ def normalize_event(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[st
 
     x = _opt_float(raw.get("x"), 0.0, 100.0)
     y = _opt_float(raw.get("y"), 0.0, 100.0)
+    x2 = _opt_float(raw.get("x2"), 0.0, 100.0)
+    y2 = _opt_float(raw.get("y2"), 0.0, 100.0)
+    outcome = str(raw.get("outcome") or "").strip().lower() or None
+    if outcome is not None and outcome not in OUTCOMES:
+        issues.append(f"invalid outcome={outcome!r}")
+        outcome = None
+    code = str(raw.get("code") or "").strip().upper() or None
+    detail = raw.get("detail")
     player = raw.get("player")
     event = {
         "type": etype,
@@ -182,10 +206,145 @@ def normalize_event(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[st
         "t_match_seconds": round(t, 2),
         "x": x,
         "y": y,
+        "x2": x2,
+        "y2": y2,
+        "outcome": outcome,
+        "code": code,
+        "detail": str(detail).strip() if isinstance(detail, str) and detail.strip() else None,
         "attributes": attrs,
         "confidence": round(conf, 3),
     }
     return event, issues
+
+
+_SUCCESS = {"success": True, "fail": False}
+
+
+def clock_to_seconds(value: Any) -> float | None:
+    """'37:12' / '90+2:05' / '37' (minutes) / 2232 (seconds as number) -> seconds."""
+
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value) if math.isfinite(value) and value >= 0 else None
+    text = str(value).strip().replace("'", "")
+    plus = 0.0
+    if "+" in text:  # stoppage time: 45+2:10 -> 47:10
+        base, _, rest = text.partition("+")
+        try:
+            extra_min, _, extra_sec = rest.partition(":")
+            plus = float(extra_min or 0) * 60 + float(extra_sec or 0)
+            return float(base) * 60 + plus
+        except ValueError:
+            return None
+    parts = text.split(":")
+    try:
+        nums = [float(p) for p in parts]
+    except ValueError:
+        return None
+    if len(nums) == 1:
+        return nums[0] * 60
+    if len(nums) == 2:
+        return nums[0] * 60 + nums[1]
+    if len(nums) == 3:
+        return nums[0] * 3600 + nums[1] * 60 + nums[2]
+    return None
+
+
+def from_code_event(raw: dict[str, Any]) -> dict[str, Any] | None:
+    """Translate one analyst-code event (code/outcome/x1..y2) into a raw taxonomy event.
+
+    The result still goes through ``normalize_event`` later. ``None`` for an
+    unknown code. Keeps ``code``, ``outcome``, ``detail``, ``x2``, ``y2``.
+    """
+
+    code = str(raw.get("code") or raw.get("type") or "").strip().upper().replace(" ", "_").replace("-", "_")
+    code = {"INTERCEPTION": "INTERCEPT", "CLEARANCE": "CLEAR", "THROW_IN": "THROW", "GOAL_KICK": "GOALKICK",
+            "FREE_KICK": "FK", "AERIAL_DUEL": "AERIAL", "BALL_LOST": "LOST"}.get(code, code)
+    etype = CODES.get(code)
+    if etype is None:
+        return None
+    outcome = str(raw.get("outcome") or "").strip().lower() or None
+    detail = str(raw.get("detail") or "")
+    low = detail.lower()
+    attrs: dict[str, Any] = {}
+    ok = _SUCCESS.get(outcome or "")
+    if etype == "pass":
+        if ok is not None:
+            attrs["completed"] = ok
+        if code == "CROSS":
+            attrs["cross"] = True
+    elif etype == "shot":
+        attrs["outcome"] = {"goal": "goal", "on": "saved", "off": "missed", "blocked": "blocked",
+                            "post": "post", "fail": "missed"}.get(outcome or "")
+        if outcome == "on" and "goal" in low and "no goal" not in low:
+            attrs["outcome"] = "goal"
+        if "head" in low:
+            attrs["headed"] = True
+    elif etype in {"tackle", "aerial_duel", "duel"}:
+        if ok is not None:
+            attrs["won"] = ok
+    elif etype in {"gk_pass", "throw_in", "goal_kick"}:
+        if ok is not None:
+            attrs["completed"] = ok
+    elif etype == "card":
+        color = outcome if outcome in {"yellow", "red"} else ("red" if "red" in low else "yellow" if "yellow" in low else None)
+        attrs["color"] = color
+    elif etype == "ball_lost":
+        if "control" in low or "touch" in low:
+            attrs["reason"] = "miscontrol"
+        elif "dispossess" in low or "tackled" in low or "lost it" in low:
+            attrs["reason"] = "dispossessed"
+
+    x1, y1 = raw.get("x1", raw.get("x")), raw.get("y1", raw.get("y"))
+    x2, y2 = raw.get("x2"), raw.get("y2")
+    if etype == "gk_pass":
+        try:
+            dist = math.hypot(float(x2) - float(x1), float(y2) - float(y1))
+            attrs["length"] = "long" if dist >= 35 else "short"
+            attrs["lane"] = "middle" if 30 <= float(y2) <= 70 else "flank"
+        except (TypeError, ValueError):
+            pass
+    shirt = raw.get("shirt", raw.get("number"))
+    out = {
+        "type": etype, "code": code, "team": raw.get("team"), "shirt": shirt, "player": raw.get("player"),
+        "x": x1, "y": y1, "x2": x2, "y2": y2, "outcome": outcome, "detail": detail or None,
+        "attributes": {k: v for k, v in attrs.items() if v is not None},
+        "confidence": 1.0 if etype == "gap" and raw.get("confidence") is None else raw.get("confidence"),
+    }
+    for key in ("t_clip_seconds", "t_match_seconds", "clock"):
+        if raw.get(key) is not None:
+            out[key] = raw[key]
+    return out
+
+
+def code_json_schema() -> dict[str, Any]:
+    """Strict schema for the analyst-code tagger: {"events": [...]}."""
+
+    num = {"type": ["number", "null"]}
+    event = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["clock", "team", "code", "player", "shirt", "outcome", "x1", "y1", "x2", "y2",
+                     "detail", "confidence"],
+        "properties": {
+            "clock": {"type": "string", "description": "match clock mm:ss"},
+            "team": {"type": "string", "enum": list(TEAMS)},
+            "code": {"type": "string", "enum": list(CODES)},
+            "player": {"type": ["string", "null"]},
+            "shirt": {"type": ["integer", "null"]},
+            "outcome": {"type": ["string", "null"], "enum": [*OUTCOMES, None]},
+            "x1": num, "y1": num, "x2": num, "y2": num,
+            "detail": {"type": ["string", "null"]},
+            "confidence": {"type": "number"},
+        },
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["events"],
+        "properties": {"events": {"type": "array", "items": event}},
+    }
 
 
 def json_schema() -> dict[str, Any]:

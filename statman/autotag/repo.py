@@ -22,7 +22,7 @@ from statman.autotag import store
 from statman.persistence.backend import postgres_enabled
 
 KEEP_ON_RETAG = ("confirmed", "corrected", "rejected")
-EDITABLE = ("type", "team", "shirt", "player", "t_match_seconds", "x", "y", "attributes")
+EDITABLE = ("type", "team", "shirt", "player", "t_match_seconds", "x", "y", "x2", "y2", "outcome", "attributes")
 
 
 class EventRepo(Protocol):
@@ -53,6 +53,11 @@ def _clean(event: dict[str, Any], match_id: str) -> dict[str, Any]:
         "period": event.get("period"),
         "x": event.get("x"),
         "y": event.get("y"),
+        "x2": event.get("x2"),
+        "y2": event.get("y2"),
+        "outcome": event.get("outcome"),
+        "code": event.get("code"),
+        "detail": event.get("detail"),
         "attributes": dict(event.get("attributes") or {}),
         "confidence": event.get("confidence"),
         "review_status": event.get("review_status") or "pending",
@@ -127,7 +132,7 @@ class FileEventRepo:
 
 _COLS = (
     "id, match_id, period, clock_ms, video_ts_ms, team, type, x, y, flags, confidence, "
-    "review_status, source, shirt_number, player_name, meta"
+    "review_status, source, shirt_number, player_name, meta, end_x, end_y, outcome"
 )
 
 
@@ -148,13 +153,14 @@ class PostgresEventRepo:
     @staticmethod
     def _row(r: tuple) -> dict[str, Any]:
         (eid, match_id, period, clock_ms, video_ms, team, etype, x, y, flags, conf,
-         status, source, shirt, player, meta) = r
+         status, source, shirt, player, meta, end_x, end_y, outcome) = r
         meta = meta or {}
         return {
             "id": int(eid), "match_id": match_id, "type": etype, "team": team, "shirt": shirt,
             "player": player, "t_match_seconds": (clock_ms or 0) / 1000.0,
             "video_ts_seconds": None if video_ms is None else video_ms / 1000.0, "period": period,
-            "x": x, "y": y, "attributes": flags or {}, "confidence": conf, "review_status": status,
+            "x": x, "y": y, "x2": end_x, "y2": end_y, "outcome": outcome, "code": meta.get("code"),
+            "detail": meta.get("detail"), "attributes": flags or {}, "confidence": conf, "review_status": status,
             "review_reason": meta.get("review_reason", []), "issues": meta.get("issues", []),
             "clip_ids": meta.get("clip_ids", []), "source": source,
         }
@@ -168,18 +174,19 @@ class PostgresEventRepo:
         return (
             ev.get("period"), int(round(ev["t_match_seconds"] * 1000)),
             None if video is None else int(round(video * 1000)), ev.get("team"), ev["type"],
-            attrs.get("outcome"), ev.get("x"), ev.get("y"),
+            ev.get("outcome") or attrs.get("outcome"), ev.get("x"), ev.get("y"), ev.get("x2"), ev.get("y2"),
             attrs.get("headed") if isinstance(attrs.get("headed"), bool) else None,
             bool(attrs["line_broken"]) if attrs.get("line_broken") else None,
             Jsonb(attrs), ev.get("confidence"), ev["review_status"], ev["source"],
             ev.get("shirt"), ev.get("player"),
-            Jsonb({"clip_ids": ev["clip_ids"], "issues": ev["issues"], "review_reason": ev["review_reason"]}),
+            Jsonb({"clip_ids": ev["clip_ids"], "issues": ev["issues"], "review_reason": ev["review_reason"],
+                   "code": ev.get("code"), "detail": ev.get("detail")}),
         )
 
     _INSERT = (
-        "INSERT INTO events (match_id, period, clock_ms, video_ts_ms, team, type, outcome, x, y, headed, "
+        "INSERT INTO events (match_id, period, clock_ms, video_ts_ms, team, type, outcome, x, y, end_x, end_y, headed, "
         "line_broken, flags, confidence, review_status, source, shirt_number, player_name, meta) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING " + _COLS
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING " + _COLS
     )
 
     def _ensure_match(self, conn, match_id: str) -> None:
@@ -227,6 +234,7 @@ class PostgresEventRepo:
         with self._conn() as conn:
             r = conn.execute(
                 "UPDATE events SET period=%s, clock_ms=%s, video_ts_ms=%s, team=%s, type=%s, outcome=%s, x=%s, y=%s, "
+                "end_x=%s, end_y=%s, "
                 "headed=%s, line_broken=%s, flags=%s, confidence=%s, review_status=%s, source=%s, shirt_number=%s, "
                 f"player_name=%s, meta=%s, updated_at=now() WHERE match_id=%s AND id=%s RETURNING {_COLS}",
                 (*p, match_id, event_id),

@@ -180,6 +180,7 @@ def api_root() -> dict[str, Any]:
             "autotag_tagger": "/api/autotag/tagger",
             "autotag_run": "POST /api/autotag/matches/{match_id}/run",
             "autotag_job": "/api/autotag/matches/{match_id}",
+            "autotag_settings": "GET|PUT /api/autotag/matches/{match_id}/settings",
             "autotag_events": "/api/autotag/matches/{match_id}/events",
             "autotag_review_queue": "/api/autotag/matches/{match_id}/review-queue",
             "autotag_review": "POST /api/autotag/matches/{match_id}/events/{event_id}/review",
@@ -967,9 +968,12 @@ def api_autotag_matches() -> dict[str, Any]:
 async def api_autotag_run(match_id: str, request: Request) -> dict[str, Any]:
     """Cut overlapping clips and tag them in the background job queue.
 
-    JSON body (all optional): video_job_id, pack_id, clip_seconds (15),
-    overlap_seconds (5), segments [{video_start, match_start}], teams
-    {home, away} kit descriptions, tagger ("vision_llm" | "fixture").
+    JSON body (all optional): video_job_id, pack_id, clip_seconds
+    (STATMAN_CLIP_SECONDS, default 60), overlap_seconds (STATMAN_CLIP_OVERLAP,
+    default 5), segments [{video_start, match_start}], teams {home, away},
+    settings {home_name, away_name, home_kit, away_kit,
+    home_attacks_first_half: left|right} (saved as the match settings),
+    tagger ("vision_llm" | "fixture").
     """
     from statman.autotag import start_autotag
 
@@ -984,11 +988,12 @@ async def api_autotag_run(match_id: str, request: Request) -> dict[str, Any]:
     try:
         return start_autotag(
             match_id, path,
-            clip_seconds=float(body.get("clip_seconds") or 15.0),
-            overlap_seconds=float(body.get("overlap_seconds") if body.get("overlap_seconds") is not None else 5.0),
+            clip_seconds=float(body["clip_seconds"]) if body.get("clip_seconds") else None,
+            overlap_seconds=float(body["overlap_seconds"]) if body.get("overlap_seconds") is not None else None,
             segments=body.get("segments") or None,
             teams=body.get("teams") or None,
             tagger=body.get("tagger") or None,
+            settings=body.get("settings") if isinstance(body.get("settings"), dict) else None,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1105,6 +1110,28 @@ def api_autotag_corrections(match_id: str) -> dict[str, Any]:
 
     rows = get_repo().list_corrections(_autotag_match(match_id))
     return {"count": len(rows), "corrections": rows}
+
+
+@app.get("/api/autotag/matches/{match_id}/settings")
+def api_autotag_settings(match_id: str) -> dict[str, Any]:
+    """Match settings for the tagger: team names, kits, home_attacks_first_half (left|right on screen)."""
+    from statman.autotag.jobs import get_settings
+
+    return get_settings(_autotag_match(match_id))
+
+
+@app.put("/api/autotag/matches/{match_id}/settings")
+async def api_autotag_settings_put(match_id: str, request: Request) -> dict[str, Any]:
+    from statman.autotag.jobs import save_settings
+
+    _autotag_match(match_id)
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body must be a JSON object")
+    try:
+        return save_settings(match_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/autotag/matches/{match_id}/lineup")
