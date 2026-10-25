@@ -1,0 +1,117 @@
+# Good shirt IDs. Tagger totals: Napoli 54/46, 1 shot (goal); Spezia 40/31, 1 shot (goal).
+69:00|Napoli|PASS|Zappalà|2|success|40,90|35,50||high
+69:01|Napoli|PASS|Branchizio|5|success|35,50|30,10||high
+69:03|Napoli|PASS|De Stefano|4|success|30,10|45,10||high
+69:05|Napoli|PASS|Melnyk|7|success|45,10|35,20||high
+69:07|Napoli|PASS|Liccardo|15|success|35,20|35,50||high
+69:08|Napoli|PASS|Branchizio|5|success|35,50|40,80||high
+69:10|Napoli|PASS|Zappalà|2|fail|40,80|70,90||high
+69:12|Spezia|INTERCEPT|Del Sante|3|success|30,10|||high
+69:13|Spezia|PASS|Del Sante|3|fail|30,10|50,15||high
+69:15|Napoli|RECOVERY|Chiummariello|8|success|50,85|||high
+69:16|Napoli|PASS|Chiummariello|8|success|50,85|45,70||high
+69:17|Napoli|PASS|Liccardo|15|success|45,70|40,30||high
+69:20|Napoli|PASS|Ravicchio|23|success|40,30|55,20||high
+69:22|Napoli|PASS|Melnyk|7|success|55,20|45,20||high
+69:24|Napoli|PASS|Liccardo|15|success|45,20|55,50||high
+69:26|Napoli|PASS|Baridò|20|success|55,50|65,80||high
+69:28|Napoli|PASS|Rovetini|21|success|65,80|75,90||high
+69:30|Napoli|PASS|Zappalà|2|fail|75,90|85,70||high
+69:31|Spezia|INTERCEPT|Francini|6|success|15,30|||high
+69:32|Spezia|PASS|Francini|6|fail|15,30|30,50||high
+69:33|Napoli|RECOVERY|Baridò|20|success|70,50|||high
+69:34|Napoli|PASS|Baridò|20|success|70,50|60,70||high
+69:36|Napoli|PASS|Liccardo|15|success|60,70|50,40||high
+69:38|Napoli|PASS|Ravicchio|23|success|50,40|50,80||high
+69:40|Napoli|PASS|Chiummariello|8|success|50,80|65,70||high
+69:42|Napoli|PASS|Baridò|20|success|65,70|85,50|through-ball assist, key, linebreak|high
+69:44|Napoli|SHOT|Esposito|22|goal|85,50|100,50|in box, right foot, est xG 0.4|high
+|GAP|69:45-70:04 celebrations
+70:04|Spezia|PASS|Trentinella|9|success|50,50|48,40||high
+70:05|Spezia|PASS|Sartori|18|success|48,40|40,70||high
+70:06|Spezia|PASS|Mazzanti|2|success|40,70|35,50||high
+70:08|Spezia|PASS|Francini|6|success|35,50|40,20||high
+70:10|Spezia|PASS|Del Sante|3|success|40,20|50,15||high
+70:12|Spezia|PASS|D'Auria|16|fail|50,15|70,20||high
+70:13|Napoli|INTERCEPT|Zappalà|2|success|30,80|||high
+70:14|Napoli|PASS|Zappalà|2|success|30,80|40,90||high
+70:16|Napoli|PASS|Chiummariello|8|fail|40,90|60,95||high
+70:22|Spezia|THROW|Del Sante|3|success|40,5|45,10||high
+70:24|Spezia|PASS|D'Auria|16|success|45,10|38,5||high
+70:25|Spezia|PASS|Del Sante|3|success|38,5|35,30||high
+70:27|Spezia|PASS|Vignali|5|success|35,30|35,70||high
+70:29|Spezia|PASS|Mazzanti|2|success|35,70|45,95||high
+70:31|Spezia|PASS|Ghetti|17|success|45,95|38,80||high
+70:32|Spezia|PASS|Mazzanti|2|success|38,80|35,60||high
+70:34|Spezia|PASS|Vignali|5|success|35,60|35,30||high
+70:36|Spezia|PASS|Francini|6|success|35,30|40,15||high
+70:38|Spezia|PASS|Del Sante|3|success|40,15|55,10||high
+70:41|Spezia|PASS|D'Auria|16|success|55,10|65,15||high
+70:43|Spezia|PASS|Longhi|4|success|65,15|70,10||high
+70:45|Spezia|PASS|D'Auria|16|fail|70,10|80,20||high
+70:46|Napoli|TACKLE|Branchizio|5|success|20,80|||high
+70:47|Napoli|CLEAR|Branchizio|5|success|20,80|50,95||high
+70:50|Spezia|THROW|Del Sante|3|success|50,0|45,10||high
+70:52|Spezia|PASS|D'Auria|16|success|45,10|35,30||high
+70:54|Spezia|PASS|Vannucci|8|success|35,30|40,60||high
+70:56|Spezia|PASS|Vignali|5|success|40,60|45,80||high
+70:58|Spezia|PASS|Sartori|18|fail|45,80|70,80||high
+71:01|Napoli|INTERCEPT|De Stefano|4|success|30,20|||high
+71:02|Napoli|PASS|De Stefano|4|success|30,20|40,10||high
+71:04|Napoli|PASS|Melnyk|7|success|40,10|35,30||high
+71:05|Napoli|PASS|Liccardo|15|success|35,30|45,20||high
+71:07|Napoli|PASS|Melnyk|7|success|45,20|40,40||high
+71:09|Napoli|PASS|Ravicchio|23|success|40,40|45,80||high
+71:11|Napoli|PASS|Chiummariello|8|fail|45,80|60,95||high
+71:13|Spezia|INTERCEPT|Del Sante|3|success|40,5|||high
+71:14|Spezia|PASS|Del Sante|3|fail|40,5|50,15||high
+71:15|Napoli|INTERCEPT|Chiummariello|8|success|50,85|||high
+71:16|Napoli|PASS|Chiummariello|8|success|50,85|45,70||high
+71:18|Napoli|PASS|Liccardo|15|fail|45,70|60,30||high
+71:20|Spezia|INTERCEPT|Francini|6|success|40,30|||high
+71:21|Spezia|PASS|Francini|6|success|40,30|50,10||high
+71:23|Spezia|PASS|D'Auria|16|success|50,10|60,15||high
+71:25|Spezia|PASS|Trentinella|9|success|60,15|65,30||high
+71:27|Spezia|PASS|Vannucci|8|success|65,30|75,15||high
+71:29|Spezia|PASS|D'Auria|16|success|75,15|85,30||high
+71:31|Spezia|PASS|Longhi|4|fail|85,30|90,40||high
+71:32|Napoli|INTERCEPT|Branchizio|5|success|10,60|||high
+71:33|Napoli|CLEAR|Branchizio|5|success|10,60|30,95||high
+71:36|Spezia|THROW|Del Sante|3|success|70,5|65,15||high
+71:38|Spezia|PASS|D'Auria|16|success|65,15|60,25||high
+71:40|Spezia|PASS|Vannucci|8|success|60,25|70,30||high
+71:42|Spezia|PASS|Longhi|4|success|70,30|75,15||high
+71:43|Spezia|CROSS|Vannucci|8|success|75,15|92,50|key, assist|high
+71:44|Spezia|SHOT|Longhi|4|goal|92,50|100,50|header, in box, est xG 0.15|high
+|GAP|71:45-72:04 celebrations
+72:06|Napoli|PASS|Esposito|22|success|50,50|45,45||high
+72:08|Napoli|PASS|Baridò|20|success|45,45|40,30||high
+72:10|Napoli|PASS|Liccardo|15|success|40,30|35,50||high
+72:12|Napoli|PASS|Branchizio|5|success|35,50|35,80||high
+72:14|Napoli|PASS|Zappalà|2|success|35,80|45,95||high
+72:16|Napoli|PASS|Rovetini|21|success|45,95|40,70||high
+72:17|Napoli|PASS|Chiummariello|8|fail|40,70|55,80||high
+72:19|Spezia|INTERCEPT|Sartori|18|success|45,20|||high
+72:20|Spezia|PASS|Sartori|18|fail|45,20|60,30||high
+72:21|Napoli|RECOVERY|Baridò|20|success|40,70|||high
+72:22|Napoli|PASS|Baridò|20|success|40,70|35,40||high
+72:24|Napoli|PASS|Branchizio|5|success|35,40|35,20||high
+72:26|Napoli|PASS|De Stefano|4|success|35,20|45,10||high
+72:28|Napoli|PASS|Melnyk|7|success|45,10|40,30||high
+72:30|Napoli|PASS|Liccardo|15|success|40,30|35,60||high
+72:32|Napoli|PASS|Branchizio|5|success|35,60|35,85||high
+72:34|Napoli|PASS|Zappalà|2|success|35,85|50,95||high
+72:36|Napoli|PASS|Rovetini|21|success|50,95|45,70||high
+72:38|Napoli|PASS|Chiummariello|8|success|45,70|35,40||high
+72:40|Napoli|PASS|Branchizio|5|success|35,40|35,15||high
+72:42|Napoli|PASS|De Stefano|4|success|35,15|45,10||high
+72:44|Napoli|PASS|Melnyk|7|fail|45,10|65,15||high
+72:46|Spezia|INTERCEPT|Mazzanti|2|success|35,85|||high
+72:47|Spezia|PASS|Mazzanti|2|fail|35,85|50,70||high
+72:49|Napoli|INTERCEPT|Melnyk|7|success|50,30|||high
+72:50|Napoli|PASS|Melnyk|7|success|50,30|40,20||high
+72:52|Napoli|PASS|De Stefano|4|success|40,20|35,40||high
+72:54|Napoli|PASS|Branchizio|5|success|35,40|35,80||high
+72:56|Napoli|PASS|Zappalà|2|success|35,80|45,95||high
+72:58|Napoli|PASS|Rovetini|21|fail|45,95|70,80||high
+73:00|Spezia|INTERCEPT|Del Sante|3|success|30,20|||high

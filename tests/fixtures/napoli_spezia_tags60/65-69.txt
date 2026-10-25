@@ -1,0 +1,78 @@
+# RETAG2 full, positions only. Tagger totals: Napoli 28/32, 0 shots; Spezia 25/29, 2 shots (66:40 over, 68:37 wide). CONFLICT: 66:35 corner not on authoritative list -> treat as cross, not corner. Gaps 66:06-66:35, 66:40-66:57, 68:37-68:55.
+65:01|Spezia|PASS|||success|50,50|30,20|back|high
+65:03|Spezia|PASS|||success|30,20|45,5||high
+65:05|Spezia|PASS|||success|45,5|35,25||high
+65:07|Spezia|PASS|||success|35,25|25,70||high
+65:09|Spezia|PASS|||success|25,70|35,95||high
+65:11|Spezia|PASS|||success|35,95|60,95|forward wing|high
+65:14|Spezia|PASS|||success|60,95|55,75||high
+65:16|Spezia|PASS|||fail|55,75|85,80|through|high
+65:18|Napoli|INTERCEPT|||success|15,20|15,20||high
+65:19|Napoli|PASS|||success|15,20|20,35||high
+65:21|Napoli|PASS|||success|20,35|25,85||high
+65:23|Napoli|PASS|||success|25,85|45,90||high
+65:25|Napoli|PASS|||success|45,90|35,95||high
+65:27|Napoli|PASS|||success|35,95|25,60||high
+65:29|Napoli|PASS|||success|25,60|10,50|to GK|high
+65:32|Napoli|PASS|Spinelli|1|success|10,50|20,25||high
+65:35|Napoli|PASS|||success|20,25|40,10||high
+65:39|Napoli|PASS|||success|40,10|25,20||high
+65:42|Napoli|PASS|||success|25,20|25,60||high
+65:45|Napoli|PASS|||success|25,60|30,85||high
+65:49|Napoli|PASS|||fail|30,85|60,95|down the line|high
+65:51|Spezia|INTERCEPT|||success|40,5|40,5||high
+65:51|Spezia|PASS|||success|40,5|50,20||high
+65:53|Spezia|PASS|||success|50,20|70,10||high
+65:55|Spezia|PASS|||success|70,10|60,25||high
+65:57|Spezia|PASS|||success|60,25|45,40||high
+65:59|Spezia|PASS|||success|45,40|40,70||high
+66:01|Spezia|PASS|||success|40,70|60,90||high
+66:03|Spezia|PASS|||success|60,90|80,95||high
+66:05|Spezia|CROSS|||fail|80,95|85,90|blocked|high
+66:06|Napoli|INTERCEPT|||success|15,5|15,5|blocks cross|high
+66:35|Spezia|CROSS|||fail|100,100|90,50|tagger said corner; not on authoritative list|high
+66:37|Napoli|CLEAR|||success|10,50|25,70|header|high
+66:39|Spezia|RECOVERY|||success|70,30|70,30||high
+66:40|Spezia|SHOT|||fail|70,30|100,50|over the bar, out box|high
+66:57|Napoli|GOALKICK|Spinelli|1|success|5,50|15,35||high
+66:59|Napoli|PASS|||success|15,35|25,15||high
+67:03|Napoli|PASS|||success|25,15|50,10||high
+67:06|Napoli|PASS|||success|50,10|45,30||high
+67:08|Napoli|PASS|||success|45,30|30,40||high
+67:10|Napoli|PASS|||success|30,40|25,60||high
+67:13|Napoli|PASS|||success|25,60|30,90||high
+67:15|Napoli|PASS|||success|30,90|20,70||high
+67:17|Napoli|PASS|||success|20,70|10,50|to GK|high
+67:20|Napoli|PASS|Spinelli|1|success|10,50|20,30||high
+67:23|Napoli|PASS|||success|20,30|30,10||high
+67:25|Napoli|PASS|||fail|30,10|60,5|down the line|high
+67:27|Spezia|INTERCEPT|||success|40,95|40,95||high
+67:28|Spezia|PASS|||success|40,95|60,90||high
+67:31|Spezia|PASS|||success|60,90|55,60||high
+67:33|Spezia|PASS|||success|55,60|55,30||high
+67:35|Spezia|PASS|||fail|55,30|85,10|through|high
+67:37|Napoli|INTERCEPT|||success|15,90|15,90||high
+67:38|Napoli|PASS|||success|15,90|25,70||high
+67:40|Napoli|PASS|||success|25,70|55,85||high
+67:42|Spezia|TACKLE|||success|45,15|45,15|out of bounds|high
+67:48|Napoli|THROW|||success|55,0|50,10||high
+67:50|Napoli|PASS|||success|50,10|52,5||high
+67:51|Napoli|CROSS|||fail|52,5|85,50|into box|high
+67:53|Spezia|CLEAR|||success|15,50|30,50|header|high
+67:54|Napoli|RECOVERY|||success|70,50|70,50||high
+67:55|Napoli|PASS|||success|70,50|85,20||high
+67:57|Napoli|CROSS|||fail|85,20|95,50||high
+67:59|Spezia|RECOVERY|Azzoni|1|success|5,50|5,50|catches cross (not a save)|high
+68:04|Spezia|GK_PASS|Azzoni|1|success|5,50|20,15|throw|high
+68:08|Spezia|PASS|||success|20,15|45,10||high
+68:11|Napoli|TACKLE|||success|55,90|55,90|out of bounds|high
+68:20|Spezia|THROW|||success|45,0|55,10||high
+68:22|Spezia|PASS|||success|55,10|45,5||high
+68:24|Spezia|PASS|||success|45,5|30,30||high
+68:26|Spezia|PASS|||success|30,30|25,60||high
+68:29|Spezia|PASS|||success|25,60|45,70||high
+68:32|Spezia|PASS|||success|45,70|70,85||high
+68:35|Spezia|PASS|||success|70,85|80,50||high
+68:37|Spezia|SHOT|||fail|80,50|100,30|wide right, in box|high
+68:55|Napoli|GOALKICK|Spinelli|1|success|5,50|15,25||high
+68:58|Napoli|PASS|||success|15,25|25,10||high

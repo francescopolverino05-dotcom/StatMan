@@ -47,7 +47,7 @@ TAXONOMY: dict[str, dict[str, Any]] = {
     "save": {},
     "goal_conceded": {},
     "gk_pass": {"length": ("short", "long"), "lane": ("middle", "flank"), "completed": "bool"},
-    # Added for the analyst-style (code) tagger. Stats ignore them for now (step 6).
+    # Added for the analyst-style (code) tagger. Stats use them via their codes (THROW/GOALKICK = passes, DUEL won = PPDA action).
     "duel": {"won": "bool"},
     "throw_in": {"completed": "bool"},
     "goal_kick": {"completed": "bool"},

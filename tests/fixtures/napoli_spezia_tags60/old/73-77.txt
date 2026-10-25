@@ -1,0 +1,31 @@
+# NUM column unreliable (e.g. 15/23 labelled midfielder/defender; 8 as forward) - use for team totals; player attribution low confidence.
+# Tagger totals: Napoli 28 passes/26 completed, 2 shots; Spezia 10/7, 0 shots.
+73:26|Spezia|FOUL|defender|6|success|25,30||foul on #20 -> authoritative Napoli FK 73:30|high
+73:59|Napoli|FK|midfielder|15|fail|75,70|90,50|cross into box|high
+74:01|Spezia|CLEAR|defender|6|success|10,50||header|high
+74:02|Napoli|RECOVERY|midfielder|22|success|70,20|||high
+74:13|Napoli|PASS|winger|20|fail|65,95|75,70|tackled|high
+74:14|Spezia|TACKLE|midfielder|5|success|25,30|||high
+74:17|Spezia|PASS|midfielder|16|fail|30,30|45,80|switch|high
+74:19|Napoli|INTERCEPT|defender|23|success|55,20|||high
+74:28|Spezia|TACKLE|defender|2|success|20,90||concedes corner|high
+74:55|Napoli|CORNER|winger|20|success|100,0|95,5|short corner; CONFLICT with authoritative list|high
+74:58|Napoli|CROSS|winger|20|fail|95,5|95,45|caught by GK|high
+75:00|Spezia|RECOVERY|GK|1|success|5,55||claims cross|high
+75:07|Spezia|PASS|defender|3|fail|15,10|30,10||high
+75:09|Napoli|INTERCEPT|defender|4|success|60,95|||high
+75:12|Napoli|PASS|winger|20|fail|65,95|75,75|tackled|high
+75:14|Spezia|TACKLE|defender|4|success|25,25|||high
+75:23|Napoli|CROSS|defender|4|fail|70,95|90,50|headed clear|high
+75:26|Spezia|CLEAR|defender|6|success|10,50||header|high
+75:27|Napoli|RECOVERY|midfielder|15|success|70,50|||high
+75:28|Napoli|SHOT|midfielder|15|fail|70,50|100,50|out box, right foot, over bar, xG 0.03|high
+75:57|Spezia|GOALKICK|GK|1|fail|5,50|50,50|long|high
+76:00|Napoli|AERIAL|defender|5|success|50,50|||high
+76:02|Spezia|RECOVERY|midfielder|16|success|50,60|||high
+76:09|Spezia|PASS|midfielder|5|fail|25,40|60,25||high
+76:13|Napoli|TACKLE|defender|4|success|40,75|||high
+76:23|Spezia|CROSS|defender|3|fail|40,5|95,50|caught by GK|high
+76:25|Napoli|RECOVERY|GK|1|success|5,50||claims cross|high
+76:48|Napoli|SHOT|winger|20|fail|85,65|100,50|in box, left foot, saved (on target), xG 0.06|high
+76:50|Spezia|SAVE|GK|1|success|5,50|||high

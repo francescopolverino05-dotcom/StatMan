@@ -576,9 +576,51 @@ function renderAutotag(job) {
     document.getElementById("autotag-stats-link").href = `${atUrl(mid)}/stats`;
     document.getElementById("autotag-team-csv").href = `${atUrl(mid)}/stats/team.csv`;
     document.getElementById("autotag-player-csv").href = `${atUrl(mid)}/stats/players.csv`;
+    loadAutotagTeamStats(mid).catch(() => {});
   }
   if (active) startAtPoll();
   else stopAtPoll();
+}
+
+function escHtml(v) {
+  return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+async function loadAutotagTeamStats(mid) {
+  const res = await fetch(`${atUrl(mid)}/stats`);
+  if (!res.ok || mid !== atMatch) return;
+  const s = await res.json();
+  const T = s.teams || {};
+  const h = T.home || {};
+  const a = T.away || {};
+  const defs = s.definitions || {};
+  const flags = s.stat_flags || {};
+  const v = (x) => (x === null || x === undefined ? "–" : x);
+  const rows = [
+    ["Passes (completed / attempted)", "passes", (t) => `${t.passes_completed} / ${t.passes} (${v(t.pass_accuracy_pct)}%)`, defs.passes],
+    ["Possession (share of passes)", "possession_pct", (t) => `${v(t.possession_pct)}%`, defs.possession_pct],
+    ["Progressive Passes", "progressive_passes",
+      (t) => `${t.progressive_passes} att / ${t.progressive_passes_completed} cmp (${v(t.progressive_pass_pct)}%)`, defs.progressive_passes],
+    ["PPDA", "ppda", (t) => `${v(t.ppda)} (${t.ppda_opponent_passes} / ${t.ppda_defensive_actions})`, defs.ppda],
+    ["Shots (on target)", "shots", (t) => `${t.shots} (${t.shots_on_target})`, ""],
+    ["xG", "xg", (t) => `${t.xg}`, "Sum of the tagger's per-shot xG values"],
+    ["Crosses (completed / attempted)", "crosses", (t) => `${t.crosses_completed} / ${t.crosses}`, ""],
+    ["Tackles", "tackles", (t) => `${t.tackles}`, ""],
+    ["Interceptions", "interceptions", (t) => `${t.interceptions}`, ""],
+    ["Corners", "corners", (t) => `${t.corners}`, ""],
+  ];
+  document.getElementById("autotag-team-stats-body").innerHTML = rows.map(([label, key, fmt, tip]) => {
+    const f = flags[key];
+    const status = f
+      ? `<span class="flagtag" title="${escHtml(f.reasons.join("; "))}">${escHtml(f.status)}</span> <small>${escHtml(f.reasons.join("; "))}</small>`
+      : "counted";
+    return `<tr><th scope="row" title="${escHtml(tip)}">${escHtml(label)}${tip ? " ⓘ" : ""}</th><td>${escHtml(fmt(h))}</td><td>${escHtml(fmt(a))}</td><td>${status}</td></tr>`;
+  }).join("");
+  const pf = flags.players;
+  document.getElementById("autotag-team-stats-note").textContent =
+    `${s.method || ""}. ${defs.ppda || ""} ${defs.progressive_passes || ""}` +
+    (pf ? ` Player stats: ${pf.status} – ${pf.reasons.join("; ")}.` : "");
+  document.getElementById("autotag-team-stats").hidden = false;
 }
 
 async function refreshAutotag() {

@@ -290,18 +290,20 @@ def _sample_events():
 def test_team_stats_maths():
     s = team_stats(_sample_events())
     h, a = s["home"], s["away"]
-    assert h["passes"] == 4 and h["passes_completed"] == 3 and h["pass_accuracy_pct"] == 75.0
-    # possession: home 4 passes + 1 gk_pass = 5 of 10 attempted
-    assert h["possession_pct"] == 50.0 and a["possession_pct"] == 50.0
+    # passes = PASS + GK_PASS + FK + GOALKICK + THROW (build3.py); crosses and direct-shot FKs are not passes
+    assert h["passes"] == 5 and h["passes_completed"] == 3 and h["pass_accuracy_pct"] == 60.0
+    assert a["passes"] == 4 and a["crosses"] == 1
+    # possession: share of passes attempted, 5 of 9
+    assert h["possession_pct"] == 55.6 and a["possession_pct"] == 44.4
     # PPDA home: away passes in own half 4 / home (tackle+foul) in away half 2 = 2.0
     assert h["ppda"] == 2.0 and h["ppda_events_without_x"] == 1
-    # PPDA away: home passes in own half (x<50: 20, 40, 30(pending), gk 5) = 4 / 0 actions -> None
-    assert a["ppda"] is None and a["ppda_opponent_passes_own_half"] == 4
+    # PPDA away: home PASS/CROSS at x<=60 (20, 40, 30 pending; gk_pass is not counted) = 3 / 0 actions -> None
+    assert a["ppda"] is None and a["ppda_opponent_passes"] == 3
     assert h["goals"] == 1 and a["goals_conceded"] == 1 and h["goals_conceded"] == 0
     assert h["shots"] == 2 and h["shots_on_target"] == 1 and h["shots_off_target"] == 1
     assert h["shot_accuracy_pct"] == 50.0 and h["xg"] == 0.45
     assert h["shots_inside_box"] == 1 and h["shots_outside_box"] == 1
-    assert h["key_passes"] == 1 and h["progressive_passes"] == 1 and h["line_broken"] == {"defence": 1}
+    assert h["key_passes"] == 1 and h["progressive_passes"] == 0 and h["progressive_candidates_without_coords"] == 5 and h["line_broken"] == {"defence": 1}
     assert a["crosses"] == 1 and a["yellow_cards"] == 1
     assert h["gk_saves"] == 1 and h["save_pct"] == 100.0 and h["shots_faced"] == 1 and h["on_target_faced"] == 1
     assert a["save_pct"] == 0.0 and a["xg_missing"] == 1
@@ -309,7 +311,7 @@ def test_team_stats_maths():
     assert h["free_kicks_30m"] == 1 and h["free_kicks_30m_direct_shot"] == 1
     assert h["gk_passes_long"] == 1 and h["gk_passes_flank"] == 1 and h["gk_pass_accuracy_pct"] == 0.0
     confirmed = team_stats(_sample_events(), confirmed_only=True)
-    assert confirmed["home"]["passes"] == 3
+    assert confirmed["home"]["passes"] == 4  # pending pass left out
 
 
 def test_player_stats_and_minutes():
@@ -336,7 +338,7 @@ def test_player_stats_and_minutes():
 def test_csv_exports():
     stats = match_stats(_sample_events())
     team = team_csv(stats).splitlines()
-    assert team[0] == "metric,home,away" and any(l.startswith("ppda,2.0,") for l in team)
+    assert team[0] == "metric,home,away,status,reason" and any(l.startswith("ppda,2.0,") for l in team)
     players = player_csv(stats).splitlines()
     assert players[0].startswith("team,shirt,name,position,minutes")
     assert len(players) == 1 + len(stats["players"])

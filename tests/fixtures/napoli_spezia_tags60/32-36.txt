@@ -1,0 +1,130 @@
+32:00|Napoli|PASS|Santella|3|success|20,10|10,50||med
+32:02|Napoli|PASS|Spinelli|1|success|10,50|20,30||high
+32:04|Napoli|PASS|Branchizio|5|success|20,30|25,10||med
+32:06|Napoli|PASS|Santella|3|success|25,10|45,10||med
+32:08|Napoli|PASS|Mané|11|fail|45,10|70,10||med
+32:09|Spezia|INTERCEPT|Mazzanti|2|success|30,10|||high
+32:09|Spezia|PASS|Mazzanti|2|success|30,10|40,15||med
+32:11|Spezia|PASS|D'Ambrosio|7|success|40,15|35,25||med
+32:12|Spezia|PASS|Vannucci|8|fail|35,25|70,20||med
+32:14|Napoli|RECOVERY|Branchizio|5|success|30,20|||med
+32:15|Napoli|PASS|Branchizio|5|success|30,20|15,50||med
+32:17|Napoli|PASS|Spinelli|1|success|15,50|25,80||high
+32:19|Napoli|PASS|Zappalà|2|success|25,80|40,70||high
+32:20|Napoli|PASS|Chiummariello|8|fail|40,70|60,80||med
+32:22|Spezia|INTERCEPT|Longhi|4|success|40,80|||med
+32:23|Spezia|PASS|Longhi|4|success|40,80|45,90||med
+32:25|Spezia|PASS|Del Sante|3|success|45,90|60,95||med
+32:27|Spezia|PASS|Maggiore|11|fail|60,95|85,90||med
+32:28|Napoli|CLEAR|Zappalà|2|success|15,90|40,90||med
+32:30|Spezia|RECOVERY|Francini|6|success|60,90|||med
+32:32|Spezia|PASS|Francini|6|success|60,90|55,70||med
+32:34|Spezia|PASS|Vignali|5|success|55,70|60,20||med
+32:35|Spezia|PASS|Mazzanti|2|success|60,20|70,15||med
+32:37|Spezia|PASS|D'Ambrosio|7|success|70,15|65,30||med
+32:38|Spezia|PASS|Vannucci|8|success|65,30|75,50||med
+32:39|Spezia|PASS|Carbone|10|success|75,50|85,15||med
+32:41|Spezia|PASS|D'Ambrosio|7|fail|85,15|90,50||med
+32:43|Napoli|INTERCEPT|Santella|3|success|10,15|||med
+32:44|Napoli|PASS|Santella|3|success|10,15|30,25||med
+32:45|Napoli|PASS|Lieto|6|success|30,25|40,40||med
+32:47|Napoli|PASS|Chiummariello|8|fail|40,40|50,60||med
+32:48|Spezia|TACKLE|Longhi|4|success|50,60|||med
+32:49|Spezia|PASS|Longhi|4|success|50,60|45,70||med
+32:51|Spezia|PASS|Francini|6|success|45,70|40,40||med
+32:52|Spezia|PASS|Vignali|5|success|40,40|50,15||med
+32:55|Spezia|PASS|Mazzanti|2|fail|50,15|70,10||med
+32:58|Napoli|THROW|Santella|3|success|30,05|40,10||med
+33:00|Napoli|PASS|Mané|11|success|40,10|35,15||med
+33:01|Napoli|PASS|Santella|3|fail|35,15|60,10||med
+33:03|Spezia|INTERCEPT|Mazzanti|2|success|40,10|||med
+33:04|Spezia|PASS|Mazzanti|2|success|40,10|50,15||med
+33:05|Spezia|PASS|D'Ambrosio|7|success|50,15|45,30||med
+33:06|Spezia|PASS|Vannucci|8|fail|45,30|60,50||med
+33:07|Napoli|INTERCEPT|De Stefano|4|success|40,50|||med
+33:08|Napoli|PASS|De Stefano|4|success|40,50|50,60||med
+33:09|Napoli|PASS|Lieto|6|success|50,60|45,85||med
+33:11|Napoli|PASS|Zappalà|2|success|45,85|60,80||med
+33:13|Napoli|PASS|Melnyk|7|success|60,80|55,60||med
+33:15|Napoli|PASS|Chiummariello|8|success|55,60|65,70||med
+33:16|Napoli|PASS|Riccio|10|success|65,70|70,85||med
+33:18|Napoli|PASS|Melnyk|7|success|70,85|65,75||med
+33:19|Napoli|PASS|Riccio|10|success|65,75|60,60||med
+33:20|Napoli|PASS|Chiummariello|8|success|60,60|55,40||med
+33:21|Napoli|PASS|Lieto|6|success|55,40|60,15||med
+33:23|Napoli|PASS|Mané|11|success|60,15|55,30||med
+33:24|Napoli|PASS|Lieto|6|success|55,30|65,50||med
+33:26|Napoli|PASS|Chiummariello|8|success|65,50|85,25|linebreak, key|high
+33:30|Napoli|SHOT|Mané|11|goal|88,25|100,45|in box, left foot, est xG 0.35|high
+|GAP|33:32-34:01
+34:02|Spezia|PASS|Trentinella|9|success|50,50|45,55||high
+34:04|Spezia|PASS|Carbone|10|success|45,55|35,80||med
+34:05|Spezia|PASS|Del Sante|3|success|35,80|25,60||med
+34:07|Spezia|PASS|Francini|6|success|25,60|30,30||med
+34:08|Spezia|PASS|Vignali|5|success|30,30|45,15||med
+34:10|Spezia|PASS|Mazzanti|2|success|45,15|35,30||med
+34:11|Spezia|PASS|Vignali|5|success|35,30|25,50||med
+34:13|Spezia|PASS|Azzoni|1|success|25,50|30,85||high
+34:15|Spezia|PASS|Del Sante|3|success|30,85|50,90||med
+34:17|Spezia|PASS|Maggiore|11|fail|50,90|70,80||med
+34:18|Napoli|TACKLE|Zappalà|2|success|30,90|||med
+34:19|Napoli|PASS|Zappalà|2|success|30,90|40,85||med
+34:21|Napoli|PASS|Melnyk|7|success|40,85|45,70||med
+34:22|Napoli|PASS|Chiummariello|8|fail|45,70|60,75||med
+34:24|Spezia|INTERCEPT|Francini|6|success|40,75|||med
+34:24|Spezia|PASS|Francini|6|success|40,75|45,85||med
+34:26|Spezia|PASS|Del Sante|3|fail|45,85|60,90||med
+34:27|Napoli|INTERCEPT|Zappalà|2|success|40,90|||med
+34:28|Napoli|PASS|Zappalà|2|success|40,90|30,65||med
+34:29|Napoli|PASS|De Stefano|4|success|30,65|15,50||med
+34:31|Napoli|PASS|Spinelli|1|success|15,50|25,35||high
+34:33|Napoli|PASS|Branchizio|5|success|25,35|30,15||med
+34:35|Napoli|PASS|Santella|3|success|30,15|40,20||med
+34:37|Napoli|PASS|Mané|11|success|40,20|35,40||med
+34:39|Napoli|PASS|Lieto|6|success|35,40|30,70||med
+34:41|Napoli|PASS|De Stefano|4|success|30,70|35,85||med
+34:44|Napoli|PASS|Zappalà|2|success|35,85|45,90||med
+34:46|Napoli|PASS|Melnyk|7|success|45,90|60,60||med
+34:48|Napoli|PASS|Chiummariello|8|success|60,60|50,40||med
+34:49|Napoli|PASS|Lieto|6|success|50,40|55,15||med
+34:51|Napoli|PASS|Santella|3|success|55,15|65,20||med
+34:53|Napoli|PASS|Mané|11|success|65,20|55,40||med
+34:55|Napoli|PASS|Lieto|6|success|55,40|45,70||med
+34:57|Napoli|PASS|De Stefano|4|success|45,70|50,85||med
+34:58|Napoli|PASS|Zappalà|2|success|50,85|60,90||med
+35:00|Napoli|PASS|Melnyk|7|fail|60,90|70,80||med
+35:01|Spezia|INTERCEPT|Del Sante|3|success|30,80|||med
+35:02|Spezia|PASS|Del Sante|3|success|30,80|40,75||med
+35:04|Spezia|PASS|Maggiore|11|success|40,75|45,60||med
+35:06|Spezia|PASS|Longhi|4|success|45,60|55,85||med
+35:08|Spezia|PASS|Del Sante|3|success|55,85|65,80||med
+35:10|Spezia|PASS|Maggiore|11|fail|65,80|80,70||med
+35:11|Napoli|INTERCEPT|Zappalà|2|success|20,80|||med
+35:12|Napoli|PASS|Zappalà|2|success|20,80|30,85||med
+35:14|Napoli|PASS|Melnyk|7|success|30,85|40,60||med
+35:15|Napoli|PASS|Chiummariello|8|success|40,60|35,45||med
+35:17|Napoli|PASS|Branchizio|5|success|35,45|45,25||med
+35:19|Napoli|PASS|Santella|3|success|45,25|55,20||med
+35:21|Napoli|PASS|Mané|11|fail|55,20|70,40||med
+35:23|Spezia|INTERCEPT|Mazzanti|2|success|30,40|||med
+35:24|Spezia|PASS|Mazzanti|2|fail|30,40|45,30||med
+35:26|Napoli|INTERCEPT|Branchizio|5|success|55,30|||med
+35:27|Napoli|PASS|Branchizio|5|success|55,30|65,15||med
+35:28|Napoli|PASS|Santella|3|fail|65,15|80,10||med
+35:32|Spezia|THROW|Mazzanti|2|success|20,10|30,15||med
+35:34|Spezia|PASS|D'Ambrosio|7|success|30,15|25,35||med
+35:36|Spezia|PASS|Vannucci|8|success|25,35|20,50||med
+35:38|Spezia|PASS|Vignali|5|success|20,50|15,30||med
+35:39|Spezia|PASS|Azzoni|1|success|15,30|25,15||high
+35:41|Spezia|PASS|Mazzanti|2|success|25,15|40,20||med
+35:43|Spezia|PASS|D'Ambrosio|7|success|40,20|45,35||med
+35:45|Spezia|PASS|Carbone|10|success|45,35|55,20||med
+35:47|Spezia|PASS|Trentinella|9|success|55,20|50,30||med
+35:48|Spezia|PASS|Vannucci|8|fail|50,30|70,15||med
+35:52|Napoli|THROW|Santella|3|success|30,05|40,10||med
+35:54|Napoli|PASS|Mané|11|success|40,10|35,30||med
+35:56|Napoli|PASS|Branchizio|5|success|35,30|40,60||med
+35:58|Napoli|PASS|De Stefano|4|success|40,60|30,50||med
+36:00|Napoli|PASS|Spinelli|1|success|30,50|40,80||high
+36:02|Napoli|PASS|Zappalà|2|success|40,80|50,85||med
+36:04|Napoli|PASS|Melnyk|7|success|50,85|55,70||med

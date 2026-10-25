@@ -1,0 +1,126 @@
+# RETAG2 full, positions only. Tagger totals: Napoli 38/53, 1 shot (61:50 FK header wide); Spezia 23/34, 0 shots. 61:49 FK = authoritative Napoli FK.
+61:01|Napoli|PASS|||success|45,10|35,40|backward|0.9
+61:02|Napoli|PASS|||success|35,40|38,75|backward|0.9
+61:04|Napoli|PASS|||fail|38,75|50,100|down the line|0.9
+61:09|Spezia|THROW|||success|50,0|45,5|throw-in|0.9
+61:10|Spezia|PASS|||success|45,5|55,20|backward|0.9
+61:11|Spezia|PASS|||success|55,20|65,30|backward|0.9
+61:12|Spezia|PASS|||fail|65,30|35,80|long diagonal|0.9
+61:19|Napoli|THROW|||success|35,0|45,15|throw-in|0.9
+61:20|Napoli|PASS|||success|45,15|40,25|backward|0.9
+61:22|Napoli|PASS|||fail|40,25|60,10|forward|0.9
+61:23|Spezia|INTERCEPT|||success|40,90|40,90|interception|0.9
+61:24|Spezia|CLEAR|||success|40,90|35,100|headed out|0.9
+61:28|Napoli|THROW|||fail|55,0|60,10|throw-in|0.9
+61:29|Spezia|INTERCEPT|||success|40,90|40,90|header|0.9
+61:30|Spezia|CLEAR|||success|40,90|25,75|headed clear|0.9
+61:31|Napoli|RECOVERY|||success|75,25|75,25|recovery|0.9
+61:32|Napoli|PASS|||success|75,25|80,15|forward|0.9
+61:33|Napoli|DUEL|||success|80,15|80,15|dribble past defender|0.9
+61:35|Spezia|FOUL|||fail|20,85|20,85|foul conceded|0.9
+61:49|Napoli|FK|||success|80,15|95,50|cross into box|0.9
+61:50|Napoli|SHOT|||fail|95,50|100,60|header wide right|0.9
+62:01|Spezia|GOALKICK|Azzoni|1|success|5,50|30,50|long|0.9
+62:03|Napoli|AERIAL|||success|70,50|70,50|header|0.9
+62:04|Napoli|PASS|||fail|70,50|85,70|headed forward|0.9
+62:04|Spezia|RECOVERY|||success|15,30|15,30|recovery|0.9
+62:05|Spezia|PASS|||success|15,30|20,5|lateral|0.9
+62:07|Spezia|PASS|||fail|20,5|35,5|up the line|0.9
+62:08|Napoli|INTERCEPT|||success|65,95|65,95|interception|0.9
+62:08|Napoli|PASS|||fail|65,95|70,100|poor touch out|0.9
+62:15|Napoli|THROW|||success|60,100|50,95|throw-in|0.9
+62:16|Napoli|PASS|||success|50,95|40,80|backward|0.9
+62:18|Napoli|PASS|||success|40,80|35,50|backward|0.9
+62:21|Napoli|PASS|||success|35,50|45,50|forward|0.9
+62:22|Napoli|PASS|||success|45,50|55,20|forward left|0.9
+62:24|Napoli|PASS|||success|55,20|45,20|backward|0.9
+62:25|Napoli|PASS|||success|45,20|45,50|backward|0.9
+62:26|Napoli|PASS|||success|45,50|40,85|backward right|0.9
+62:30|Napoli|PASS|||success|40,85|60,95|forward right|0.9
+62:32|Napoli|PASS|||fail|60,95|75,95|down the line|0.9
+62:34|Spezia|INTERCEPT|||success|25,5|25,5|interception|0.9
+62:34|Spezia|CLEAR|||success|25,5|25,0|clear out of bounds|0.9
+62:39|Napoli|THROW|||success|75,100|65,95|throw-in|0.9
+62:41|Napoli|PASS|||success|65,95|55,80|backward|0.9
+62:43|Napoli|PASS|||success|55,80|55,50|lateral|0.9
+62:46|Napoli|PASS|||success|55,50|45,25|backward|0.9
+62:48|Napoli|PASS|||success|45,25|60,10|forward left|0.9
+62:50|Napoli|PASS|||fail|60,10|95,25|long through ball|0.9
+62:58|Spezia|GK_PASS|Azzoni|1|success|5,50|10,35|short pass|0.9
+63:00|Spezia|PASS|||success|10,35|15,15|lateral|0.9
+63:02|Spezia|PASS|||success|15,15|25,15|forward left|0.9
+63:04|Spezia|PASS|||success|25,15|15,25|backward|0.9
+63:06|Spezia|PASS|||success|15,25|15,50|lateral|0.9
+63:08|Spezia|PASS|||success|15,50|25,85|long diagonal|0.9
+63:11|Spezia|PASS|||success|25,85|35,90|forward right|0.9
+63:14|Spezia|PASS|||fail|35,90|45,85|inside|0.9
+63:14|Napoli|INTERCEPT|||success|55,15|55,15|interception|0.9
+63:15|Napoli|PASS|||success|55,15|60,25|short|0.9
+63:16|Napoli|PASS|||fail|60,25|70,10|forward left|0.9
+63:18|Spezia|INTERCEPT|||success|30,90|30,90|interception|0.9
+63:18|Spezia|PASS|||success|30,90|30,75|backward|0.9
+63:20|Spezia|PASS|||success|30,75|25,60|inside|0.9
+63:22|Spezia|PASS|||success|25,60|40,80|forward right|0.9
+63:24|Spezia|PASS|||success|40,80|45,70|forward|0.9
+63:26|Spezia|PASS|||fail|45,70|60,70|through ball|0.9
+63:28|Napoli|INTERCEPT|||success|40,30|40,30|interception|0.9
+63:28|Napoli|PASS|||success|40,30|35,15|backward|0.9
+63:31|Napoli|PASS|||success|35,15|40,5|forward left|0.9
+63:32|Napoli|PASS|||fail|40,5|55,5|up the line|0.9
+63:33|Spezia|INTERCEPT|||success|45,95|45,95|interception|0.9
+63:34|Spezia|CLEAR|||success|45,95|45,100|tackled out|0.9
+63:39|Napoli|THROW|||success|45,0|40,15|throw-in|0.9
+63:41|Napoli|PASS|||success|40,15|35,40|backward|0.9
+63:43|Napoli|PASS|||success|35,40|30,55|lateral|0.9
+63:44|Napoli|PASS|||fail|30,55|60,100|long diagonal|0.9
+63:48|Spezia|THROW|||success|40,5|35,15|throw-in|0.9
+63:50|Spezia|PASS|||success|35,15|30,25|backward|0.9
+63:51|Spezia|PASS|||success|30,25|25,50|backward|0.9
+63:54|Spezia|PASS|||fail|25,50|50,20|long forward|0.9
+63:57|Napoli|INTERCEPT|||success|50,80|50,80|header|0.9
+63:57|Napoli|PASS|||fail|50,80|60,80|headed forward|0.9
+63:59|Spezia|RECOVERY|||success|40,20|40,20|recovery|0.9
+64:00|Spezia|PASS|||success|40,20|45,15|short|0.9
+64:01|Spezia|PASS|||fail|45,15|55,10|forward left|0.9
+64:02|Napoli|INTERCEPT|||success|45,90|45,90|interception|0.9
+64:02|Napoli|PASS|||success|45,90|50,85|forward|0.9
+64:04|Napoli|PASS|||success|50,85|60,95|forward right|0.9
+64:06|Napoli|PASS|||success|60,95|65,85|inside|0.9
+64:07|Napoli|PASS|||fail|65,85|80,85|forward|0.9
+64:08|Spezia|INTERCEPT|||success|20,15|20,15|interception|0.9
+64:09|Spezia|PASS|||fail|20,15|35,25|clearance|0.9
+64:11|Napoli|RECOVERY|||success|65,75|65,75|recovery|0.9
+64:12|Napoli|PASS|||success|65,75|70,80|short|0.9
+64:14|Napoli|PASS|||success|70,80|75,60|inside|0.9
+64:15|Napoli|PASS|||fail|75,60|85,60|forward|0.9
+64:16|Spezia|INTERCEPT|||success|15,40|15,40|interception|0.9
+64:17|Spezia|PASS|||success|15,40|30,10|forward left|0.9
+64:19|Spezia|PASS|||success|30,10|40,15|inside|0.9
+64:21|Spezia|PASS|||success|40,15|50,15|forward|0.9
+64:23|Spezia|PASS|||fail|50,15|60,10|through|0.9
+64:24|Napoli|INTERCEPT|||success|40,90|40,90|interception|0.9
+64:24|Napoli|PASS|||success|40,90|45,80|forward|0.9
+64:26|Napoli|PASS|||success|45,80|55,75|right|0.9
+64:27|Napoli|PASS|||fail|55,75|65,70|forward|0.9
+64:28|Spezia|INTERCEPT|||success|35,30|35,30|interception|0.9
+64:28|Spezia|PASS|||success|35,30|30,25|backward|0.9
+64:29|Spezia|PASS|||success|30,25|35,10|forward left|0.9
+64:31|Spezia|PASS|||fail|35,10|45,15|forward|0.9
+64:32|Napoli|INTERCEPT|||success|55,85|55,85|interception|0.9
+64:33|Napoli|PASS|||success|55,85|60,95|right|0.9
+64:36|Napoli|PASS|||success|60,95|65,80|inside|0.9
+64:38|Napoli|PASS|||fail|65,80|80,75|through ball|0.9
+64:39|Spezia|INTERCEPT|||success|20,25|20,25|interception|0.9
+64:40|Spezia|PASS|||success|20,25|25,15|lateral|0.9
+64:41|Spezia|PASS|||fail|25,15|40,0|up the line out|0.9
+64:44|Napoli|THROW|||success|60,100|55,95|throw-in|0.9
+64:45|Napoli|PASS|||success|55,95|50,80|backward|0.9
+64:46|Napoli|PASS|||success|50,80|55,60|lateral|0.9
+64:48|Napoli|PASS|||success|55,60|65,50|forward|0.9
+64:49|Napoli|PASS|||success|65,50|75,25|forward left|0.9
+64:51|Napoli|PASS|||success|75,25|70,30|backward|0.9
+64:53|Napoli|PASS|||success|70,30|75,40|forward|0.9
+64:55|Napoli|PASS|||success|75,40|85,25|forward left|0.9
+64:57|Napoli|CROSS|||fail|85,25|95,50|blocked|0.9
+64:59|Spezia|INTERCEPT|||success|5,50|5,50|interception|0.9
+64:59|Spezia|CLEAR|||success|5,50|25,50|away|0.9
