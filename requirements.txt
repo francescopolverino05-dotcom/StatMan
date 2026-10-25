@@ -23,3 +23,6 @@ torch>=2.2.0
 pypdf>=5.0.0
 # Postgres storage when DATABASE_URL is set (statman/persistence)
 psycopg[binary]>=3.1,<4
+# Match sheet PDF -> PNG pages for the vision reader (step 5)
+pypdfium2>=4.20
+pillow>=10.0

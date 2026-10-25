@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StatMan — match sheet</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/assets/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/assets/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/assets/apple-touch-icon.png" />
+  </head>
+    <div id="app-nav"></div>
+
+    <header class="page-hero">
+      <p class="eyebrow">Auto-tag · match sheet</p>
+      <h1>Match sheet facts</h1>
+      <p class="lede">
+        Upload the official match sheet (PDF or scan) or type the facts. Check and edit what was read:
+        nothing changes the tags until you press <strong>Confirm &amp; apply</strong>. Confirmed goals, assists,
+        cards and subs then override the auto-tags, re-anchor the clip clock and limit shirt numbers to players on the pitch.
+      </p>
+    </header>
+
+    <main>
+      <section class="section">
+        <form id="match-form" class="match-bar">
+          <label class="field"><span>Match id</span><input id="match-id" required placeholder="match id" /></label>
+          <button class="btn btn--primary" type="submit">Load</button>
+          <a class="btn btn--ghost" id="to-review" href="#">Review events</a>
+        </form>
+        <form id="upload-form" class="match-bar">
+          <label class="field"><span>Match sheet (PDF / image)</span>
+            <input id="sheet-file" type="file" accept=".pdf,image/*" required /></label>
+          <button class="btn btn--primary" type="submit">Read sheet</button>
+          <button class="btn btn--ghost" type="button" id="blank">Enter manually</button>
+        </form>
+        <p id="status" class="muted"></p>
+      </section>
+
+      <section class="section" id="editor" hidden>
+        <h2>Check &amp; edit <small id="sheet-status"></small></h2>
+        <ul id="issues" class="muted"></ul>
+        <div id="pages"></div>
+        <div class="match-bar">
+          <label class="field"><span>Home team</span><input id="home_team" /></label>
+          <label class="field"><span>Away team</span><input id="away_team" /></label>
+        </div>
+        <div class="grid-2">
+          <div><h3>Home lineup</h3><table class="table" id="t-lineup-home"></table><button class="btn btn--ghost" data-add="lineup-home">+ player</button></div>
+          <div><h3>Away lineup</h3><table class="table" id="t-lineup-away"></table><button class="btn btn--ghost" data-add="lineup-away">+ player</button></div>
+        </div>
+        <h3>Goals</h3><table class="table" id="t-goals"></table><button class="btn btn--ghost" data-add="goals">+ goal</button>
+        <h3>Substitutions</h3><table class="table" id="t-subs"></table><button class="btn btn--ghost" data-add="subs">+ sub</button>
+        <h3>Cards</h3><table class="table" id="t-cards"></table><button class="btn btn--ghost" data-add="cards">+ card</button>
+        <details><summary>Raw JSON (edit or paste)</summary>
+          <textarea id="json" rows="14" style="width:100%;font-family:monospace"></textarea>
+          <button class="btn btn--ghost" id="from-json" type="button">Load JSON into form</button>
+          <button class="btn btn--ghost" id="save-draft" type="button">Save draft</button>
+        </details>
+        <div class="cta"><button class="btn btn--primary" id="confirm" type="button">Confirm &amp; apply</button></div>
+        <pre id="report" class="muted"></pre>
+      </section>
+    </main>
+
+    <script src="/static/matchsheet.js" type="module"></script>
+    <script type="module">
+      import { mountAppNav } from "/static/app-shell.js";
+      mountAppNav({ active: "matchsheet" });
+    </script>
+  </body>
+</html>

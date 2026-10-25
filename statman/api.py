@@ -185,6 +185,7 @@ def api_root() -> dict[str, Any]:
             "autotag_review_queue": "/api/autotag/matches/{match_id}/review-queue",
             "autotag_review": "POST /api/autotag/matches/{match_id}/events/{event_id}/review",
             "autotag_stats": "/api/autotag/matches/{match_id}/stats",
+            "autotag_matchsheet": "GET|PUT /api/autotag/matches/{match_id}/matchsheet (+ /upload, /confirm)",
             "autotag_team_csv": "/api/autotag/matches/{match_id}/stats/team.csv",
             "autotag_player_csv": "/api/autotag/matches/{match_id}/stats/players.csv",
         },
@@ -1131,6 +1132,85 @@ async def api_autotag_settings_put(match_id: str, request: Request) -> dict[str,
     try:
         return save_settings(match_id, body)
     except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# --- Step 5: match sheet facts override tags --------------------------------
+
+
+@app.get("/matchsheet")
+def ui_matchsheet() -> FileResponse:
+    """Upload a match sheet, check/edit the extracted facts, confirm to apply (?match=ID)."""
+    return _page("matchsheet.html")
+
+
+@app.get("/api/autotag/matches/{match_id}/matchsheet")
+def api_matchsheet_get(match_id: str) -> dict[str, Any]:
+    from statman.autotag.matchsheet import get_sheet
+
+    doc = get_sheet(_autotag_match(match_id))
+    if doc is None:
+        return {"status": "none", "facts": None}
+    return {k: v for k, v in doc.items() if k != "raw"}
+
+
+@app.post("/api/autotag/matches/{match_id}/matchsheet/upload")
+async def api_matchsheet_upload(match_id: str, file: UploadFile = File(...)) -> dict[str, Any]:
+    """PDF (scanned or digital) or image -> PNG pages -> vision model -> editable draft. Nothing is applied."""
+    from statman.autotag.matchsheet import read_sheet
+
+    _autotag_match(match_id)
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="empty file")
+    if len(data) > 30 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="match sheet larger than 30 MB")
+    try:
+        return await run_in_threadpool(read_sheet, match_id, data, file.filename or "")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=f"could not read the match sheet: {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 - model/network errors, never leak headers
+        raise HTTPException(status_code=502, detail=f"match sheet reader failed: {type(exc).__name__}") from exc
+
+
+@app.get("/api/autotag/matches/{match_id}/matchsheet/pages/{page}.png")
+def api_matchsheet_page(match_id: str, page: int) -> FileResponse:
+    from statman.autotag.store import match_dir
+
+    path = match_dir(_autotag_match(match_id)) / "matchsheet_pages" / f"page{int(page)}.png"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="page not found")
+    return FileResponse(path, media_type="image/png")
+
+
+@app.put("/api/autotag/matches/{match_id}/matchsheet")
+async def api_matchsheet_put(match_id: str, request: Request) -> dict[str, Any]:
+    """Manual JSON / form entry: save facts as a draft (not applied)."""
+    from statman.autotag.matchsheet import save_draft
+
+    _autotag_match(match_id)
+    body = await request.json()
+    facts = body.get("facts", body) if isinstance(body, dict) else body
+    try:
+        return save_draft(match_id, facts, source="manual")
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/autotag/matches/{match_id}/matchsheet/confirm")
+async def api_matchsheet_confirm(match_id: str, request: Request) -> dict[str, Any]:
+    """{facts, reviewer}: the user checked the facts. Apply them to the tags and recompute stats."""
+    from statman.autotag.matchsheet import confirm_and_apply
+
+    _autotag_match(match_id)
+    body = await request.json()
+    if not isinstance(body, dict) or not isinstance(body.get("facts"), dict):
+        raise HTTPException(status_code=400, detail="body needs {facts: {...}}")
+    try:
+        return confirm_and_apply(match_id, body["facts"], reviewer=body.get("reviewer"))
+    except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

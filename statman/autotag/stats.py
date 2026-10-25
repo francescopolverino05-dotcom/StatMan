@@ -212,7 +212,10 @@ def player_stats(
             passes = n("pass")
             done = n("pass", lambda e: _a(e, "completed") is True)
             row.update({
-                "role": "outfield", "goals": n("goal"), "shots": len(shots),
+                "role": "outfield", "goals": n("goal"),
+                "assists": sum(1 for e in evs if e["type"] == "goal" and e["team"] == key[0]
+                               and _a(e, "assist_shirt") is not None and int(_a(e, "assist_shirt")) == key[1]),
+                "shots": len(shots),
                 "shots_on_target": sum(1 for e in shots if _a(e, "on_target") is True),
                 "xg": round(sum(float(_a(e, "xg") or 0.0) for e in shots), 2),
                 "key_passes": n("pass", lambda e: _a(e, "key_pass") is True),
