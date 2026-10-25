@@ -5,12 +5,19 @@ Backends:
 * ``VisionLLMTagger`` - OpenAI-compatible ``/chat/completions`` (OpenRouter).
   Configured by ``TAGGER_API_URL``, ``TAGGER_API_KEY``, ``TAGGER_MODEL``.
   ``TAGGER_INPUT`` = ``video`` (default: the whole clip as a base64 mp4
-  ``video_url`` part, re-encoded to ``TAGGER_VIDEO_HEIGHT`` (480) /
-  ``TAGGER_VIDEO_BITRATE`` (500k) / ``TAGGER_VIDEO_FPS`` (10); needs a
-  video-capable model such as google/gemini-2.5-flash) or ``frames`` (legacy:
-  ``TAGGER_FRAMES`` evenly spaced JPEGs at ``TAGGER_FRAME_WIDTH``).
-  ``TAGGER_PROMPT`` = analyst (default: analyst event codes with start/end
-  coordinates, like hand tagging) | base | v2 (legacy taxonomy prompts).
+  ``video_url`` part, re-encoded to ``TAGGER_VIDEO_HEIGHT`` (720) /
+  ``TAGGER_VIDEO_BITRATE`` (200k per sampled frame) / ``TAGGER_VIDEO_FPS`` (5
+  real frames per second the model actually sees); needs a video-capable model
+  such as google/gemini-2.5-flash) or ``frames`` (legacy: ``TAGGER_FRAMES``
+  evenly spaced JPEGs at ``TAGGER_FRAME_WIDTH``).
+  Gemini samples any video at 1 frame per video second, and OpenRouter has no
+  fps option, so a 10 fps file still gave the model only 60 frames per 60 s
+  clip (the old 1-event-per-second cadence). ``TAGGER_VIDEO_STRETCH`` (on)
+  slows the clip down ``TAGGER_VIDEO_FPS`` times so every sampled frame is a
+  real one; the model reports video seconds and we divide by the factor.
+  ``TAGGER_PROMPT`` = core (default: core event codes, real timestamps, 6x3
+  zones with a coordinate confidence, shirt from the lineup or null) |
+  analyst (previous default: all analyst codes, free x/y) | base | v2.
   Also ``TAGGER_RESPONSE_FORMAT``, ``TAGGER_TIMEOUT``. json_schema with a
   json_object retry when the model collapses to an empty answer.
   Disabled (``enabled() is False``) when URL or model is unset.
@@ -32,8 +39,8 @@ from typing import Any, Protocol
 
 from statman.autotag.clips import Clip, encode_for_model, extract_frames
 from statman.autotag.taxonomy import (
-    CODES, EVENT_TYPES, FREE_KICK_MAX_DISTANCE_M, TAXONOMY, clock_to_seconds, code_json_schema, from_code_event,
-    json_schema,
+    CODES, CORE_CODES, EVENT_TYPES, EXTRA_CODES, FREE_KICK_MAX_DISTANCE_M, TAXONOMY, ZONES, clock_to_seconds,
+    code_json_schema, core_json_schema, from_code_event, goal_relook_schema, json_schema, zone_to_xy,
 )
 
 log = logging.getLogger("statman.autotag")
@@ -62,12 +69,19 @@ class FixtureTagger:
         if not isinstance(fixture, dict):
             fixture = json.loads(Path(fixture).read_text(encoding="utf-8"))
         self._clips = {str(k): list(v) for k, v in (fixture.get("clips") or {}).items()}
+        self._goals = [dict(g) for g in fixture.get("goals") or []]
 
     def enabled(self) -> bool:
         return True
 
     def tag_clip(self, clip: Clip, context: dict[str, Any]) -> list[dict[str, Any]]:
         return [dict(e) for e in self._clips.get(str(clip.index), [])]
+
+    def relook_goal(self, video_path: Any, start: float, duration: float, context: dict[str, Any]) -> dict[str, Any] | None:
+        """Fixture ``goals``: [{...relook answer...}] consumed in order (t in seconds from ``start``)."""
+        if not self._goals:
+            return None
+        return dict(self._goals.pop(0))
 
 
 def _system_prompt(variant: str = "base") -> str:
@@ -144,13 +158,129 @@ def analyst_prompt() -> str:
     return "\n".join(ANALYST_PROMPT)
 
 
+CORE_PROMPT = [
+    "You are a professional football (soccer) performance analyst tagging match video, event by event.",
+    "You receive one continuous clip (usually a wide elevated sideline camera; players are small).",
+    "Log ONLY on-ball events you actually SEE happen, in order, each at its real moment. Never fill time: there is "
+    "no expected number of events, play has pauses, and real events are NOT evenly spaced. Output with a fixed "
+    "cadence (one event every second, or every N seconds) is fabricated and will be rejected.",
+    "t = the video timestamp in seconds (as on the video timeline, decimals allowed) at the moment of the event. "
+    "Never round all events to whole seconds, never space them evenly.",
+    "Codes (only these): PASS, CROSS, SHOT, SAVE, TACKLE, INTERCEPT, FOUL, CARD, CORNER, GAP.",
+    "PASS = deliberate pass to a team-mate; CROSS = delivery from a wide area into the box. outcome success if a "
+    "team-mate receives it, fail if it is intercepted, goes out or reaches nobody.",
+    "SHOT = a deliberate attempt to score aimed at goal (strike or header). Blocked attempts count; clearances, "
+    "crosses, long balls and passes into the box are NOT shots. outcome on (saved / on target) | off | blocked | "
+    "post | goal.",
+    "SAVE = the goalkeeper stops a SHOT (team = goalkeeper's team). A keeper catching a cross is not a SAVE.",
+    "TACKLE = a player wins or tries to win the ball from an opponent in possession (success if won). INTERCEPT "
+    "= a player cuts out an opponent pass. FOUL team = the team that committed it. CARD outcome yellow|red, only "
+    "when the referee shows it. CORNER = a corner kick taken from the arc.",
+    "Do not log clearances, loose-ball recoveries, aerial duels, throw-ins or goal kicks.",
+    "team = home or away from the kit colours given. shirt = the shirt number ONLY when you can read it on the "
+    "video (use the lineup given to check it is a player on the pitch); otherwise null. Never guess a number.",
+    "Location as coarse zones from the ACTING team's view: columns 1-6 along the pitch (1 = its own goal third "
+    "nearest its goal, 6 = nearest the goal it attacks), channel R (its right touchline) / C (centre) / L (its "
+    "left touchline): e.g. 4C, 6L. zone = where the action starts, end_zone = where the ball ends (passes, "
+    "crosses, shots) or null. Use the attacking direction given to convert what you see. null if you cannot "
+    "place it.",
+    "coord_confidence 0-1 = how sure you are of the zones (low when the camera is tight or the pitch markings "
+    "are not visible).",
+    "If the camera is off the ball (replay, close-up, crowd, graphic) write ONE GAP event (team = team last in "
+    "possession, zones null, detail = what is shown).",
+    "The clip overlaps the previous one by a few seconds: do not log an event twice.",
+    "When in doubt about anything (shirt, outcome, zone) use null rather than guessing. If you are not sure an "
+    "event happened, leave it out. confidence 0-1 per event. detail = a few words.",
+    'Return ONLY JSON: {"events": [{"t":12.4,"team":"home","code":"PASS","shirt":8,"outcome":"success",'
+    '"zone":"3C","end_zone":"4L","coord_confidence":0.7,"detail":"...","confidence":0.8}, ...]}.',
+]
+
+
+def core_prompt() -> str:
+    return "\n".join(CORE_PROMPT)
+
+
+GOAL_RELOOK_PROMPT = [
+    "You are a football analyst. This short clip contains a goal (the score changed). Watch it closely.",
+    "Report the video timestamp t (seconds) when the ball crosses the goal line, the scoring team, the scorer's "
+    "shirt number and the shirt number of the team-mate who made the last pass before the shot (assist).",
+    "Read shirt numbers from the video (replays and celebrations often show them); match them to the lineup "
+    "given. If a number is not readable, use null - never guess. own_goal true if a defender put it in.",
+    "goal_seen false if you cannot see a goal in this clip.",
+    'Return ONLY JSON: {"goal_seen":true,"t":17.6,"team":"home","scorer_shirt":9,"assist_shirt":null,'
+    '"own_goal":false,"headed":false,"detail":"...","confidence":0.8}.',
+]
+
+
+def _lineup_minute_window(p: dict[str, Any]) -> tuple[float, float | None] | None:
+    start = p.get("on_minute")
+    if start is None:
+        if not p.get("starter"):
+            return None
+        start = 0.0
+    end = p.get("off_minute")
+    return float(start), (float(end) if end is not None else None)
+
+
+def on_pitch_players(lineup_doc: dict[str, Any] | None, team: str, t0: float, t1: float) -> list[dict[str, Any]]:
+    """Players of ``team`` on the pitch at any time in match seconds [t0, t1] (lineup doc on/off minutes)."""
+
+    out = []
+    for p in (lineup_doc or {}).get("players") or []:
+        if p.get("team") != team or p.get("shirt") is None:
+            continue
+        win = _lineup_minute_window(p)
+        if win is None:
+            continue
+        start, end = win
+        if start * 60 <= t1 and (end is None or end * 60 >= t0):
+            out.append(p)
+    return sorted(out, key=lambda p: int(p["shirt"]))
+
+
+def lineup_text(context: dict[str, Any], t0: float, t1: float) -> list[str]:
+    """Lineup lines for the prompt: confirmed match-sheet players on the pitch in the window, else rosters."""
+
+    lines: list[str] = []
+    doc = context.get("lineup_doc")
+    kits = context.get("kits") if isinstance(context.get("kits"), dict) else {}
+    teams = context.get("teams") or {}
+    for side in ("home", "away"):
+        label = f"{side} ({teams.get(side) or side}" + (f", {kits[side]} kit" if kits.get(side) else "") + ")"
+        players = on_pitch_players(doc, side, t0, t1) if doc else []
+        if players:
+            roster = ", ".join(
+                f"{p['shirt']} {p.get('name') or ''}".strip() + (f" [{p['position']}]" if p.get("position") else "")
+                for p in players)
+            lines.append(f"{label} players on the pitch in this clip (confirmed match sheet): {roster}.")
+            continue
+        players = (context.get("lineups") or {}).get(side) or []
+        if players:
+            roster = ", ".join(
+                f"{p.get('shirt')} {p.get('name') or ''}".strip() for p in players if p.get("shirt") is not None)
+            lines.append(f"{label} shirt numbers: {roster}.")
+    if lines:
+        lines.append("Give the shirt number of the acting player whenever it is readable on the video and is one of "
+                     "the numbers above; otherwise shirt = null.")
+    return lines
+
+
+def has_lineup(context: dict[str, Any]) -> bool:
+    if (context.get("lineup_doc") or {}).get("players"):
+        return True
+    return any((context.get("lineups") or {}).get(s) for s in ("home", "away"))
+
+
 def _fmt_clock(seconds: float) -> str:
     seconds = max(0, int(round(seconds)))
     return f"{seconds // 60:02d}:{seconds % 60:02d}"
 
 
-def clip_context_text(clip: Clip, context: dict[str, Any]) -> str:
-    """Match context for one clip: teams, kits, lineups, attacking direction, clip start clock."""
+def clip_context_text(clip: Clip, context: dict[str, Any], *, scale: float | None = None) -> str:
+    """Match context for one clip: teams, kits, lineups, attacking direction, clip start clock.
+
+    ``scale`` (core prompt): the video is slowed down this many times; timestamps are video seconds.
+    """
 
     teams = context.get("teams") or {}
     kits = context.get("kits") or {}
@@ -175,13 +305,16 @@ def clip_context_text(clip: Clip, context: dict[str, Any]) -> str:
         )
     else:
         lines.append("Attacking direction not given: work it out from the goalkeepers' positions and kick-offs.")
-    for side in ("home", "away"):
-        players = (context.get("lineups") or {}).get(side) or []
-        if players:
-            roster = ", ".join(
-                f"{p.get('shirt')} {p.get('name') or ''}".strip() for p in players if p.get("shirt") is not None
-            )
-            lines.append(f"{side} shirt numbers: {roster}.")
+    if scale is not None:
+        total = clip.duration * scale
+        if scale > 1:
+            lines.append(
+                f"The video is SLOWED DOWN {scale:g}x so you can follow every touch: it lasts {total:.0f} s of video "
+                f"for {clip.duration:.0f} s of real play. Report t in VIDEO seconds (0-{total:.0f}); real play is "
+                f"slow-motion, so consecutive passes are typically 5-20 video seconds apart.")
+        else:
+            lines.append(f"Report t in seconds from the clip start (0-{total:.0f}).")
+    lines += lineup_text(context, clip.match_start, clip.match_start + clip.duration)
     if context.get("corrective"):
         lines.append(str(context["corrective"]))
     return "\n".join(lines)
@@ -263,6 +396,7 @@ class VisionLLMTagger:
         video_height: int | None = None,
         video_bitrate: str | None = None,
         video_fps: float | None = None,
+        video_stretch: bool | None = None,
         client: Any = None,
     ) -> None:
         self.api_url = (api_url if api_url is not None else os.environ.get("TAGGER_API_URL", "")).strip()
@@ -270,12 +404,22 @@ class VisionLLMTagger:
         self.model = (model if model is not None else os.environ.get("TAGGER_MODEL", "")).strip()
         self.frames = int(frames or os.environ.get("TAGGER_FRAMES") or 10)
         self.frame_width = int(frame_width or os.environ.get("TAGGER_FRAME_WIDTH") or 1280)
-        self.prompt = (prompt or os.environ.get("TAGGER_PROMPT") or "analyst").strip().lower()
+        self.prompt = (prompt or os.environ.get("TAGGER_PROMPT") or "core").strip().lower()
         mode = (input_mode or os.environ.get("TAGGER_INPUT") or "video").strip().lower()
         self.input_mode = mode if mode in {"video", "frames"} else "video"
-        self.video_height = int(video_height or os.environ.get("TAGGER_VIDEO_HEIGHT") or 480)
-        self.video_bitrate = (video_bitrate or os.environ.get("TAGGER_VIDEO_BITRATE") or "500k").strip()
-        self.video_fps = float(video_fps or os.environ.get("TAGGER_VIDEO_FPS") or 10)
+        self.video_height = int(video_height or os.environ.get("TAGGER_VIDEO_HEIGHT") or 720)
+        self.video_bitrate = (video_bitrate or os.environ.get("TAGGER_VIDEO_BITRATE") or "200k").strip()
+        self.video_fps = float(video_fps or os.environ.get("TAGGER_VIDEO_FPS") or 5)
+        self.video_stretch = (os.environ.get("TAGGER_VIDEO_STRETCH") or "on").strip().lower() not in {
+            "off", "0", "false", "no"} if video_stretch is None else bool(video_stretch)
+        try:
+            self.extra_min_conf = float(os.environ.get("STATMAN_AT_EXTRA_MIN_CONF") or 0.85)
+        except ValueError:
+            self.extra_min_conf = 0.85
+        try:
+            self.coord_min_conf = float(os.environ.get("STATMAN_AT_COORD_MIN_CONF") or 0.7)
+        except ValueError:
+            self.coord_min_conf = 0.7
         self.total_cost = 0.0
         self.usage_total: dict[str, Any] = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0,
                                             "total_tokens": 0, "cost_usd": 0.0}
@@ -295,16 +439,25 @@ class VisionLLMTagger:
     def analyst(self) -> bool:
         return self.prompt not in {"base", "v2"}
 
+    @property
+    def core(self) -> bool:
+        return self.prompt == "core"
+
+    @property
+    def time_scale(self) -> float:
+        """Video seconds per real second in what the model receives (core prompt timestamps)."""
+        return self.video_fps if self.input_mode == "video" and self.video_stretch else 1.0
+
     def _response_format(self, response_format: str) -> dict[str, Any] | None:
         if response_format == "json_schema":
-            schema = code_json_schema() if self.analyst else json_schema()
+            schema = core_json_schema() if self.core else code_json_schema() if self.analyst else json_schema()
             return {"type": "json_schema", "json_schema": {"name": "statman_events", "strict": True, "schema": schema}}
         if response_format == "json_object":
             return {"type": "json_object"}
         return None
 
     def _body(self, content: list[dict[str, Any]], response_format: str | None) -> dict[str, Any]:
-        system = analyst_prompt() if self.analyst else _system_prompt(self.prompt)
+        system = core_prompt() if self.core else analyst_prompt() if self.analyst else _system_prompt(self.prompt)
         body: dict[str, Any] = {
             "model": self.model,
             "temperature": 0,
@@ -320,6 +473,8 @@ class VisionLLMTagger:
         return body
 
     def _intro(self, clip: Clip, context: dict[str, Any]) -> str:
+        if self.core:
+            return clip_context_text(clip, context, scale=self.time_scale)
         if self.analyst:
             return clip_context_text(clip, context)
         teams = context.get("teams") or {}
@@ -360,7 +515,8 @@ class VisionLLMTagger:
         content: list[dict[str, Any]] = [
             {"type": "text", "text": self._intro(clip, context)},
             {"type": "video_url", "video_url": {"url": f"data:{mime};base64," + base64.b64encode(video).decode("ascii")}},
-            {"type": "text", "text": "Tag every on-ball event in this clip now."},
+            {"type": "text", "text": "Tag the on-ball events you actually see in this clip now." if self.core
+             else "Tag every on-ball event in this clip now."},
         ]
         return self._body(content, response_format)
 
@@ -394,6 +550,11 @@ class VisionLLMTagger:
         for e in events:
             if not isinstance(e, dict):
                 continue
+            if self.core and "code" in e and "clock" not in e:
+                conv = self.core_event(e, clip)
+                if conv is not None:
+                    out.append(conv)
+                continue
             if "code" in e or str(e.get("type") or "").strip().upper() in CODES and "clock" in e:
                 conv = from_code_event(e)
                 if conv is None:
@@ -418,9 +579,11 @@ class VisionLLMTagger:
 
         if self.input_mode == "video":
             video = encode_for_model(
-                Path(clip.path), height=self.video_height, bitrate=self.video_bitrate, fps=self.video_fps
+                Path(clip.path), height=self.video_height, bitrate=self.video_bitrate, fps=self.video_fps,
+                stretch=self.video_stretch,
             )
-            log.info("tagger clip %s: sending %.1f MB video", clip.index, len(video) / 1e6)
+            log.info("tagger clip %s: sending %.1f MB video (%g fps seen, x%g slow-motion)", clip.index,
+                     len(video) / 1e6, self.video_fps, self.time_scale)
             return (lambda rf=None: self.build_video_request(video, context, clip, response_format=rf)), []
         frames = extract_frames(Path(clip.path), self.frames, clip.duration, width=self.frame_width)
         return (lambda rf=None: self.build_request(frames, context, clip, response_format=rf)), [t for t, _ in frames]
@@ -453,6 +616,114 @@ class VisionLLMTagger:
                 log.warning("tagger clip %s attempt %s failed: %s", clip.index, attempt + 1, exc)
                 time.sleep(min(8, 2 ** attempt))
         raise RuntimeError(f"tagger failed on clip {clip.index}: {last}")
+
+
+def _core_event(self: "VisionLLMTagger", e: dict[str, Any], clip: Clip) -> dict[str, Any] | None:
+    """One core-prompt event -> raw taxonomy event (clip seconds, zone centre coordinates)."""
+
+    code = str(e.get("code") or "").strip().upper()
+    conf = e.get("confidence")
+    try:
+        conf_f = float(conf)
+    except (TypeError, ValueError):
+        conf_f = 0.0
+    if code not in CORE_CODES:
+        if code not in EXTRA_CODES or conf_f < self.extra_min_conf:
+            return None  # clearances / recoveries / aerials etc. only when the model is highly confident
+    try:
+        t_video = float(e.get("t"))
+    except (TypeError, ValueError):
+        return None
+    scale = self.time_scale
+    t_clip = t_video / scale
+    outside = not (-1.0 <= t_clip <= clip.duration + 1.0)
+    xy, xy2 = zone_to_xy(e.get("zone")), zone_to_xy(e.get("end_zone"))
+    raw = {k: e.get(k) for k in ("team", "shirt", "player", "outcome", "detail", "confidence")}
+    raw.update(code=code, x1=xy[0] if xy else None, y1=xy[1] if xy else None,
+               x2=xy2[0] if xy2 else None, y2=xy2[1] if xy2 else None)
+    conv = from_code_event(raw)
+    if conv is None:
+        return None
+    conv.pop("clock", None)
+    conv["t_clip_seconds"] = round(min(max(t_clip, 0.0), clip.duration), 2)
+    conv["t_video_raw"] = t_video
+    if outside:
+        conv["clock_outside"] = True
+    try:
+        cc = min(max(float(e.get("coord_confidence")), 0.0), 1.0)
+    except (TypeError, ValueError):
+        cc = 0.0
+    attrs = conv.setdefault("attributes", {})
+    if xy or xy2:
+        attrs["zone"] = str(e.get("zone") or "").upper() or None
+        attrs["end_zone"] = str(e.get("end_zone") or "").upper() or None
+        attrs["coord_confidence"] = round(cc, 2)
+        attrs["coords_estimated"] = cc < self.coord_min_conf
+        conv["attributes"] = {k: v for k, v in attrs.items() if v is not None}
+    return conv
+
+
+def _relook_goal(self: "VisionLLMTagger", video_path: str | Path, start: float, duration: float,
+                 context: dict[str, Any]) -> dict[str, Any] | None:
+    """Re-tag a short window around a goal (scorer, assist, exact time). Times returned in seconds from ``start``."""
+
+    if not self.enabled():
+        raise TaggerUnavailable("Vision tagger disabled")
+    scale = self.video_fps if self.video_stretch else 1.0
+    video = encode_for_model(Path(video_path), height=self.video_height, bitrate=self.video_bitrate,
+                             fps=self.video_fps, stretch=self.video_stretch, start=start, duration=duration)
+    t0 = float(context.get("match_start") or 0.0)
+    intro = [f"Goal re-look: {duration:.0f} s of real play" + (
+        f", slowed down {scale:g}x ({duration * scale:.0f} s of video); report t in VIDEO seconds." if scale > 1
+        else "; report t in seconds from the clip start.")]
+    teams = context.get("teams") or {}
+    intro.append(f"home = {teams.get('home') or 'home'}; away = {teams.get('away') or 'away'}.")
+    if context.get("goal_team"):
+        intro.append(f"The score bug says {context['goal_team']} scored.")
+    intro += lineup_text(context, t0, t0 + duration)
+    body = {
+        "model": self.model, "temperature": 0, "usage": {"include": True},
+        "messages": [
+            {"role": "system", "content": "\n".join(GOAL_RELOOK_PROMPT)},
+            {"role": "user", "content": [
+                {"type": "text", "text": "\n".join(intro)},
+                {"type": "video_url", "video_url": {"url": "data:video/mp4;base64," + base64.b64encode(video).decode("ascii")}},
+            ]},
+        ],
+    }
+    if self.response_format == "json_schema":
+        body["response_format"] = {"type": "json_schema", "json_schema": {
+            "name": "statman_goal", "strict": True, "schema": goal_relook_schema()}}
+    self.last_usage = {}
+    payload = self._post(body)
+    self._account(payload, Clip(-1, start, start + duration, t0, 1))
+    return parse_relook(payload, scale)
+
+
+def parse_relook(payload: dict[str, Any], scale: float = 1.0) -> dict[str, Any] | None:
+    try:
+        text = payload["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    if isinstance(text, list):
+        text = "".join(part.get("text", "") for part in text if isinstance(part, dict))
+    try:
+        data = _parse_json(text or "")
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    out = dict(data)
+    if out.get("t") is not None:
+        try:
+            out["t"] = round(float(out["t"]) / (scale or 1.0), 2)
+        except (TypeError, ValueError):
+            out["t"] = None
+    return out
+
+
+VisionLLMTagger.core_event = _core_event  # type: ignore[attr-defined]
+VisionLLMTagger.relook_goal = _relook_goal  # type: ignore[attr-defined]
 
 
 def clock_to_clip_seconds(clock: Any, clip: Clip) -> float | None:
@@ -545,7 +816,10 @@ def tagger_status() -> dict[str, Any]:
             "video_height": llm.video_height,
             "video_bitrate": llm.video_bitrate,
             "video_fps": llm.video_fps,
-            "frames_per_clip": llm.frames,
+            "video_stretch": llm.video_stretch,
+            "frames_seen_per_clip_second": llm.video_fps if llm.input_mode == "video" and llm.video_stretch
+            else (1.0 if llm.input_mode == "video" else None),
+            "frames_per_clip": llm.frames if llm.input_mode == "frames" else None,
             "response_format": llm.response_format,
             "frame_width": llm.frame_width,
             "prompt": llm.prompt,

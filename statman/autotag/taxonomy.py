@@ -56,6 +56,36 @@ TAXONOMY: dict[str, dict[str, Any]] = {
     "gap": {},  # camera off the ball / replay: nothing can be tagged here
 }
 
+# Attributes allowed on every event type (zone coordinates, goal re-look results).
+COMMON_ATTRS: dict[str, Any] = {
+    "zone": "str", "end_zone": "str", "coord_confidence": "float", "coords_estimated": "bool",
+    "assist_shirt": "int", "relook": "bool",
+}
+
+# Core codes the default ("core") prompt asks for; stats need nothing else.
+CORE_CODES = ("PASS", "CROSS", "SHOT", "SAVE", "TACKLE", "INTERCEPT", "FOUL", "CARD", "CORNER", "GAP")
+# Codes the model over-produced in tests (16 clearances vs 1, 25 recoveries vs 4, 10 aerials vs 0):
+# only kept when the model is highly confident (STATMAN_AT_EXTRA_MIN_CONF).
+EXTRA_CODES = ("CLEAR", "RECOVERY", "AERIAL", "DUEL", "LOST", "THROW", "GOALKICK", "GK_PASS", "FK")
+
+# 6 x 3 pitch zones from the acting team's view: column 1 (own goal) .. 6 (opponent goal),
+# channel R (its right touchline, y small) / C / L. Zone -> representative (x, y).
+ZONE_COLS = 6
+ZONE_ROWS = {"R": 100 / 6, "C": 50.0, "L": 500 / 6}
+ZONES = tuple(f"{c}{r}" for c in range(1, ZONE_COLS + 1) for r in ZONE_ROWS)
+
+
+def zone_to_xy(zone: Any) -> tuple[float, float] | None:
+    """'4L' -> (58.33, 83.33): centre of the zone on the 0-100 pitch. None if not a zone."""
+    z = str(zone or "").strip().upper()
+    if len(z) != 2 or not z[0].isdigit() or z[1] not in ZONE_ROWS:
+        return None
+    col = int(z[0])
+    if not 1 <= col <= ZONE_COLS:
+        return None
+    return round((col - 0.5) * 100 / ZONE_COLS, 2), round(ZONE_ROWS[z[1]], 2)
+
+
 # Analyst event codes the model returns -> internal taxonomy type.
 CODES: dict[str, str] = {
     "PASS": "pass", "CROSS": "pass", "SHOT": "shot", "SAVE": "save", "TACKLE": "tackle",
@@ -150,7 +180,7 @@ def normalize_event(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[st
     attrs_in = raw.get("attributes") or {}
     if not isinstance(attrs_in, dict):
         attrs_in = {}
-    spec = TAXONOMY[etype]
+    spec = {**COMMON_ATTRS, **TAXONOMY[etype]}
     attrs: dict[str, Any] = {}
     for key, value in attrs_in.items():
         if key not in spec:
@@ -386,4 +416,57 @@ def json_schema() -> dict[str, Any]:
         "additionalProperties": False,
         "required": ["events"],
         "properties": {"events": {"type": "array", "items": event}},
+    }
+
+
+def core_json_schema() -> dict[str, Any]:
+    """Strict schema for the default "core" tagger: real video timestamps, coarse zones, shirt or null."""
+
+    zone = {"type": ["string", "null"], "enum": [*ZONES, None]}
+    event = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["t", "team", "code", "shirt", "outcome", "zone", "end_zone", "coord_confidence",
+                     "detail", "confidence"],
+        "properties": {
+            "t": {"type": "number", "description": "video timestamp in seconds where the event happens"},
+            "team": {"type": "string", "enum": list(TEAMS)},
+            "code": {"type": "string", "enum": list(CORE_CODES)},
+            "shirt": {"type": ["integer", "null"]},
+            "outcome": {"type": ["string", "null"], "enum": [*OUTCOMES, None]},
+            "zone": zone,
+            "end_zone": zone,
+            "coord_confidence": {"type": "number"},
+            "detail": {"type": ["string", "null"]},
+            "confidence": {"type": "number"},
+        },
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["events"],
+        "properties": {"events": {"type": "array", "items": event}},
+    }
+
+
+def goal_relook_schema() -> dict[str, Any]:
+    """Strict schema for the goal re-look: who scored / assisted and when the ball crossed the line."""
+
+    shirt = {"type": ["integer", "null"]}
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["goal_seen", "t", "team", "scorer_shirt", "assist_shirt", "own_goal", "headed",
+                     "detail", "confidence"],
+        "properties": {
+            "goal_seen": {"type": "boolean"},
+            "t": {"type": ["number", "null"], "description": "video seconds when the ball crosses the line"},
+            "team": {"type": ["string", "null"], "enum": [*TEAMS, None]},
+            "scorer_shirt": shirt,
+            "assist_shirt": shirt,
+            "own_goal": {"type": ["boolean", "null"]},
+            "headed": {"type": ["boolean", "null"]},
+            "detail": {"type": ["string", "null"]},
+            "confidence": {"type": "number"},
+        },
     }

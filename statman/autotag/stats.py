@@ -142,6 +142,11 @@ def is_progressive(e: dict[str, Any]) -> bool:
     return gain >= 10
 
 
+def coords_estimated(e: dict[str, Any]) -> bool:
+    """Zone-mode AI pass whose coordinate confidence was low: geometry is a guess, not a measurement."""
+    return bool(_a(e, "coords_estimated"))
+
+
 def _prog_candidate(e: dict[str, Any]) -> bool:
     return is_pass(e) or event_code(e) == "CROSS"
 
@@ -176,7 +181,9 @@ def team_stats(events: list[dict[str, Any]], *, confirmed_only: bool = False) ->
         line_broken = Counter(_a(e, "line_broken") for e in mine if e["type"] == "pass" and _a(e, "line_broken"))
 
         cand = [e for e in mine if _prog_candidate(e)]
-        prog = [e for e in cand if is_progressive(e)]
+        prog_all = [e for e in cand if is_progressive(e)]
+        prog = [e for e in prog_all if not coords_estimated(e)]
+        prog_est = len(prog_all) - len(prog)
         prog_ok = sum(1 for e in prog if is_ok(e))
 
         opp_p = [e for e in opp if event_code(e) in PPDA_PASS_CODES]
@@ -219,6 +226,7 @@ def team_stats(events: list[dict[str, Any]], *, confirmed_only: bool = False) ->
             "progressive_passes_completed": prog_ok,
             "progressive_pass_pct": _pct(prog_ok, len(prog)),
             "progressive_candidates_without_coords": sum(1 for e in cand if not _has_line(e)),
+            "progressive_passes_estimated": prog_est,
             "line_broken": dict(sorted(line_broken.items())),
             "crosses": len(crosses),
             "crosses_completed": sum(1 for e in crosses if is_ok(e)),
@@ -300,6 +308,10 @@ def stat_flags(events: list[dict[str, Any]], teams: dict[str, Any], *, confirmed
     if h["progressive_candidates_without_coords"] or a["progressive_candidates_without_coords"]:
         k = h["progressive_candidates_without_coords"] + a["progressive_candidates_without_coords"]
         add("progressive_passes", "partial", f"{k} pass(es) without start+end coordinates cannot be tested")
+    if h.get("progressive_passes_estimated") or a.get("progressive_passes_estimated"):
+        k = h["progressive_passes_estimated"] + a["progressive_passes_estimated"]
+        add("progressive_passes", "estimated",
+            f"{k} more pass(es) look progressive but their zones are low-confidence estimates; not counted")
     if h["corners"] or a["corners"]:
         add("corners", "partial", "from tags only; not confirmed by the match sheet")
     no_shirt = sum(1 for e in evs if e.get("shirt") is None and e.get("type") != "gap")
@@ -389,7 +401,8 @@ def player_stats(
             shots = [e for e in mine if e["type"] == "shot"]
             passes = [e for e in mine if is_pass(e)]
             done = sum(1 for e in passes if is_ok(e))
-            prog = [e for e in mine if _prog_candidate(e) and is_progressive(e)]
+            prog_all = [e for e in mine if _prog_candidate(e) and is_progressive(e)]
+            prog = [e for e in prog_all if not coords_estimated(e)]
             prog_ok = sum(1 for e in prog if is_ok(e))
             row.update({
                 "role": "outfield", "goals": n("goal"),
@@ -401,6 +414,7 @@ def player_stats(
                 "key_passes": n("pass", lambda e: _a(e, "key_pass") is True),
                 "progressive_passes": len(prog), "progressive_passes_completed": prog_ok,
                 "progressive_pass_pct": _pct(prog_ok, len(prog)),
+                "progressive_passes_estimated": len(prog_all) - len(prog),
                 "passes": len(passes), "passes_completed": done, "pass_accuracy_pct": _pct(done, len(passes)),
                 "crosses": sum(1 for e in mine if event_code(e) == "CROSS"),
                 "tackles": sum(1 for e in mine if event_code(e) == "TACKLE"),

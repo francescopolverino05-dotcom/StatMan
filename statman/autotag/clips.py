@@ -181,22 +181,40 @@ def extract_frames(clip_path: Path, n_frames: int, duration: float, *, width: in
 
 
 def encode_for_model(
-    clip_path: Path, *, height: int = 480, bitrate: str = "500k", fps: float = 10.0
+    clip_path: Path, *, height: int = 720, bitrate: str = "200k", fps: float = 5.0, stretch: bool = True,
+    start: float | None = None, duration: float | None = None,
 ) -> bytes:
-    """Re-encode a clip small for a video-capable model: H.264 mp4, no audio.
+    """Re-encode a clip for a video-capable model: H.264 mp4, no audio.
 
-    480p at ~500 kb/s and 10 fps keeps a 60 s clip around 3-4 MB (base64 ~5 MB)
-    while the ball and shirt colours stay readable. ``faststart`` puts the moov
-    atom first so the provider can parse it from a data URL.
+    Gemini samples video at a fixed 1 frame per *video* second whatever the
+    file's frame rate, and OpenRouter cannot change that rate. So with
+    ``stretch`` (default) the clip is sampled at ``fps`` real frames per second
+    and slowed down ``fps`` times (``setpts``), giving a 1 fps file in which
+    every frame is one real sample: the model then really sees ``fps`` frames
+    per real second. Video second ``v`` = real clip second ``v / fps``.
+    ``bitrate`` is per video second, i.e. per sampled frame (200k ~ 25 KB).
+    ``start``/``duration`` cut a sub-window (goal re-look). ``faststart`` puts the
+    moov atom first so the provider can parse it from a data URL.
     """
 
     import tempfile
 
+    fps = max(0.5, float(fps))
+    vf = f"scale=-2:{int(height)},fps={fps:g}"
+    if stretch:
+        vf += f",setpts={fps:g}*PTS"
     with tempfile.TemporaryDirectory(prefix="statman-enc-") as tmp:
         out = Path(tmp) / "model.mp4"
-        cmd = [
-            "ffmpeg", "-y", "-v", "error", "-i", str(clip_path), "-an",
-            "-vf", f"scale=-2:{int(height)},fps={fps:g}",
+        cmd = ["ffmpeg", "-y", "-v", "error"]
+        if start is not None:
+            cmd += ["-ss", f"{max(0.0, float(start)):.3f}"]
+        cmd += ["-i", str(clip_path)]
+        if duration is not None:
+            cmd += ["-t", f"{float(duration):.3f}"]
+        cmd += ["-an", "-vf", vf]
+        if stretch:
+            cmd += ["-r", "1", "-g", "5"]
+        cmd += [
             "-c:v", "libx264", "-preset", "veryfast", "-b:v", bitrate, "-maxrate", bitrate,
             "-bufsize", bitrate, "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out),
         ]

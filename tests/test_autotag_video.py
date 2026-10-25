@@ -83,7 +83,8 @@ def test_job_uses_env_clip_length(video_70s, monkeypatch):
 
 # --- video payload ---------------------------------------------------------
 
-def test_video_payload_is_base64_mp4_data_url(video_70s, tmp_path):
+def test_video_payload_is_base64_mp4_data_url(video_70s, tmp_path, monkeypatch):
+    monkeypatch.setenv("TAGGER_PROMPT", "analyst")  # default is now "core"; core covered in test_autotag_accuracy.py
     seen = {}
 
     def handler(request: httpx.Request) -> httpx.Response:

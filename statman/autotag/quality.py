@@ -27,6 +27,13 @@ DEFAULTS: dict[str, float] = {
     "STATMAN_QA_SAVE_WINDOW": 6,          # SAVE must follow an on-target SHOT within N s
     "STATMAN_QA_MAX_CORNERS": 2,          # soft flag above this per clip
     "STATMAN_QA_DUP_WINDOW": 0.6,         # identical events within N s = duplicate
+    # Napoli-Spezia hand tags peak at 38 events / 60 s (0.63/s) with 54-64 % of gaps on the modal
+    # whole second (mm:ss clocks); the fabricated AI run had ~1.0/s and 88 % of gaps exactly 1 s.
+    "STATMAN_QA_MAX_RATE": 0.75,          # events per second of open play above this = fabricated cadence
+    "STATMAN_QA_EVEN_GAP_SHARE": 0.75,    # share of inter-event gaps with the same length (0.1 s) above this ...
+    "STATMAN_QA_EVEN_MIN_EVENTS": 12,     # ... once a clip has at least this many timed events ...
+    "STATMAN_QA_EVEN_MIN_RATE": 0.4,      # ... and at least this many events per second
+    "STATMAN_QA_SHIRT_MIN_EVENTS": 10,    # with a lineup given, zero shirt numbers in >= this many events = hard
 }
 RETAG_MAX_DEFAULT = 2
 JOB_MAX_COST_DEFAULT = 4.0
@@ -89,8 +96,23 @@ def _issue(code: str, message: str, hint: str) -> dict[str, str]:
     return {"code": code, "message": message, "hint": hint}
 
 
+def cadence_stats(events: list[dict[str, Any]], open_secs: float) -> dict[str, Any]:
+    """Events per open-play second and the share of inter-event gaps that have the modal length (0.1 s bins)."""
+
+    ts = sorted(t for t in (_t(e) for e in events if not _is_gap(e)) if t is not None)
+    gaps = [round(b - a, 1) for a, b in zip(ts, ts[1:])]
+    rate = len(ts) / open_secs if open_secs > 0 else 0.0
+    if not gaps:
+        return {"rate": round(rate, 3), "modal_gap": None, "modal_gap_share": 0.0}
+    counts: dict[float, int] = {}
+    for g in gaps:
+        counts[g] = counts.get(g, 0) + 1
+    modal, n = max(counts.items(), key=lambda kv: kv[1])
+    return {"rate": round(rate, 3), "modal_gap": modal, "modal_gap_share": round(n / len(gaps), 3)}
+
+
 def check_clip(events: list[dict[str, Any]] | None, duration: float, *, error: str | None = None,
-               th: dict[str, float] | None = None) -> dict[str, Any]:
+               th: dict[str, float] | None = None, lineup_given: bool = False) -> dict[str, Any]:
     th = th or thresholds()
     hard: list[dict[str, str]] = []
     soft: list[dict[str, str]] = []
@@ -117,6 +139,29 @@ def check_clip(events: list[dict[str, Any]] | None, duration: float, *, error: s
     stats = {"events": len(events), "passes": len(passes), "failed_passes": len(failed),
              "gaps": len(gaps), "gap_share": round(gap_share, 2)}
 
+    zone_mode = any("coord_confidence" in (e.get("attributes") or {}) or "t_video_raw" in e for e in events)
+    cad = cadence_stats(events, open_secs)
+    stats.update(rate=cad["rate"], modal_gap=cad["modal_gap"], modal_gap_share=cad["modal_gap_share"])
+    if cad["rate"] > th["STATMAN_QA_MAX_RATE"]:
+        hard.append(_issue(
+            "fixed_cadence", f"{cad['rate']:.2f} events/s of open play (max {th['STATMAN_QA_MAX_RATE']:.2f})",
+            f"your previous answer had {len(play)} events in {open_secs:.0f} s, about one per "
+            f"{1 / max(cad['rate'], 1e-6):.1f} s: that is a fixed cadence, not real play. Log only the events you "
+            "actually see, at their real time"))
+    n_timed = len([e for e in timed if not _is_gap(e)])
+    if n_timed >= th["STATMAN_QA_EVEN_MIN_EVENTS"] and cad["modal_gap_share"] > th["STATMAN_QA_EVEN_GAP_SHARE"] \
+            and cad["rate"] >= th["STATMAN_QA_EVEN_MIN_RATE"]:
+        hard.append(_issue(
+            "even_spacing", f"{cad['modal_gap_share']:.0%} of gaps between events are exactly {cad['modal_gap']} s",
+            f"{cad['modal_gap_share']:.0%} of your events were exactly {cad['modal_gap']} s apart: real events are "
+            "not evenly spaced. Use the real timestamp of each event and leave out events you did not see"))
+    shirts = sum(1 for e in play if e.get("shirt") not in (None, ""))
+    stats["shirts"] = shirts
+    if lineup_given and len(play) >= th["STATMAN_QA_SHIRT_MIN_EVENTS"] and shirts == 0:
+        hard.append(_issue(
+            "no_shirt_numbers", f"0 shirt numbers in {len(play)} events although the lineup was given",
+            "you gave no shirt number at all although the lineup is provided: read the numbers on the shirts (and in "
+            "close-ups/replays) and set shirt for every event where it is readable; null only when it is not"))
     if gap_share < th["STATMAN_QA_GAP_SHARE"]:
         need = int(round(th["STATMAN_QA_MIN_PASSES"] * open_secs / 60.0))
         if len(passes) < need:
@@ -135,12 +180,12 @@ def check_clip(events: list[dict[str, Any]] | None, duration: float, *, error: s
     if passes:
         miss = [e for e in passes if _num(e.get("x2")) is None or _num(e.get("y2")) is None]
         if len(miss) / len(passes) > th["STATMAN_QA_MAX_MISSING_END"]:
-            hard.append(_issue("missing_end_points", f"{len(miss)}/{len(passes)} passes without x2,y2",
+            (soft if zone_mode else hard).append(_issue("missing_end_points", f"{len(miss)}/{len(passes)} passes without x2,y2",
                                f"{len(miss)} passes had no end point: give x2,y2 (where the pass ended) for every pass"))
     if play:
         miss = [e for e in play if _num(e.get("x")) is None or _num(e.get("y")) is None]
         if len(miss) / len(play) > th["STATMAN_QA_MAX_MISSING_START"]:
-            hard.append(_issue("missing_coordinates", f"{len(miss)}/{len(play)} events without x1,y1",
+            (soft if zone_mode else hard).append(_issue("missing_coordinates", f"{len(miss)}/{len(play)} events without x1,y1",
                                f"{len(miss)} events had no coordinates: give x1,y1 for every on-ball event"))
     outside = [e for e in events if e.get("clock_outside")]
     if outside:

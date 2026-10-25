@@ -9,6 +9,7 @@ Per-clip tagger output is cached in ``raw_tags.json`` so a re-run resumes.
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import threading
 import time
@@ -23,7 +24,7 @@ from statman.autotag.clips import (
 )
 from statman.autotag.merge import build_timeline, review_threshold, route_for_review
 from statman.autotag.repo import EventRepo, get_repo
-from statman.autotag.tagger import Tagger, TaggerUnavailable, get_tagger
+from statman.autotag.tagger import Tagger, TaggerUnavailable, get_tagger, has_lineup
 
 log = logging.getLogger("statman.autotag")
 
@@ -147,7 +148,11 @@ def tagger_context(match_id: str, meta: dict[str, Any]) -> dict[str, Any]:
     for p in (store.read_doc(match_id, "lineup", {}) or {}).get("players") or []:
         if isinstance(p, dict) and p.get("team") in lineups and p.get("shirt") is not None:
             lineups[p["team"]].append({"shirt": p["shirt"], "name": p.get("name")})
+    # The lineup doc is written when the match sheet is confirmed (matchsheet.apply_facts):
+    # shirt numbers + on/off minutes, so each clip gets only the players on the pitch then.
+    lineup_doc = store.read_doc(match_id, "lineup", None) or None
     return {"teams": teams, "kits": {k: v for k, v in kits.items() if v}, "lineups": lineups,
+            "lineup_doc": lineup_doc if (lineup_doc or {}).get("players") else None,
             "match_id": match_id, "settings": settings}
 
 
@@ -258,7 +263,8 @@ def _tag_with_quality(match_id: str, tagger: Tagger, clip: Clip, ctx: dict[str, 
         return events, None, err
     th = quality.thresholds()
     max_retag, max_cost = quality.retag_max(), quality.job_max_cost()
-    q = quality.check_clip(events, clip.duration, error=err, th=th)
+    lineup_given = has_lineup(ctx)
+    q = quality.check_clip(events, clip.duration, error=err, th=th, lineup_given=lineup_given)
     attempts = [{"attempt": 0, "score": q["score"], "passed": q["passed"], "issues": q["hard"] + q["soft"],
                  "stats": q["stats"], "error": err}]
     best = (q, events, 0)
@@ -273,7 +279,7 @@ def _tag_with_quality(match_id: str, tagger: Tagger, clip: Clip, ctx: dict[str, 
         _update(match_id, stage=f"re-tagging clip {clip.index} (attempt {n}/{max_retag})")
         corrective = quality.corrective_text(q, n)
         ev2, err2 = _tag_once(tagger, clip, {**ctx, "corrective": corrective}, clip_usage, n)
-        q = quality.check_clip(ev2, clip.duration, error=err2, th=th)
+        q = quality.check_clip(ev2, clip.duration, error=err2, th=th, lineup_given=lineup_given)
         attempts.append({"attempt": n, "score": q["score"], "passed": q["passed"], "issues": q["hard"] + q["soft"],
                          "stats": q["stats"], "error": err2, "corrective_prompt": corrective})
         if ev2 is not None and (best[1] is None or quality.rank(q) > quality.rank(best[0])):
@@ -287,6 +293,94 @@ def _tag_with_quality(match_id: str, tagger: Tagger, clip: Clip, ctx: dict[str, 
         "issues": bq["hard"] + bq["soft"], "reason": quality.issue_summary(bq), "stop_reason": stop_reason,
     }
     return bev, record, (None if bev is not None else err)
+
+
+RELOOK_BEFORE_S = 20.0
+RELOOK_AFTER_S = 5.0
+
+
+def goal_relook_enabled() -> bool:
+    return (os.environ.get("STATMAN_GOAL_RELOOK") or "on").strip().lower() not in {"0", "off", "false", "no"}
+
+
+def _player_name(lineup_doc: dict[str, Any] | None, team: str | None, shirt: Any) -> str | None:
+    for p in (lineup_doc or {}).get("players") or []:
+        if p.get("team") == team and p.get("shirt") is not None and shirt is not None and int(p["shirt"]) == int(shirt):
+            return p.get("name")
+    return None
+
+
+def relook_goals(match_id: str, tagger: Tagger, events: list[dict[str, Any]], sb: dict[str, Any], src: Path,
+                 ctx: dict[str, Any], clip_usage: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict]]:
+    """Second, focused look at each score-bug-confirmed goal: ~20 s before to 5 s after the score change.
+
+    Fills scorer / assist shirt numbers (and names from the lineup). The goal time is anchored to the
+    score-bug change; the model's exact moment is used only if it falls inside the window.
+    Skipped once the job cost reaches ``STATMAN_JOB_MAX_COST``.
+    """
+
+    log_rows: list[dict[str, Any]] = []
+    if not (goal_relook_enabled() and sb.get("enabled") and hasattr(tagger, "relook_goal")):
+        return events, log_rows
+    max_cost = quality.job_max_cost()
+    out = list(events)
+    for g in sb.get("goals") or []:
+        anchor = g.get("score_change_video_s", g.get("video_ts_seconds"))
+        if anchor is None:
+            continue
+        idx = next((i for i, e in enumerate(out) if e.get("type") == "goal" and e.get("team") == g.get("team")
+                    and e.get("video_ts_seconds") is not None and abs(e["video_ts_seconds"] - g["video_ts_seconds"]) <= 90),
+                   None)
+        if idx is None:
+            continue
+        if _usage_total(clip_usage)["cost_usd"] >= max_cost:
+            log_rows.append({"anchor_video_s": anchor, "skipped": f"job cost budget ${max_cost:.2f} reached"})
+            continue
+        start = max(0.0, float(anchor) - RELOOK_BEFORE_S)
+        duration = float(anchor) + RELOOK_AFTER_S - start
+        ev = out[idx]
+        t_match0 = (ev.get("t_match_seconds") or 0) - (ev["video_ts_seconds"] - start)
+        gctx = {**ctx, "goal_team": (ctx.get("teams") or {}).get(g["team"]) or g["team"], "match_start": max(0.0, t_match0)}
+        if hasattr(tagger, "last_usage"):
+            tagger.last_usage = {}
+        try:
+            ans = tagger.relook_goal(src, start, duration, gctx)
+        except TaggerUnavailable:
+            raise
+        except Exception as exc:  # noqa: BLE001 - a failed re-look keeps the goal as it was
+            ans, err = None, str(exc)
+        else:
+            err = None
+        last = getattr(tagger, "last_usage", None)
+        if last:
+            clip_usage.append({"clip": "goal_relook", "attempt": 0, "anchor_video_s": anchor, **last})
+        row = {"anchor_video_s": anchor, "start": start, "duration": duration, "answer": ans, "error": err}
+        log_rows.append(row)
+        if not ans or not ans.get("goal_seen"):
+            continue
+        attrs = {**(ev.get("attributes") or {}), "relook": True}
+        upd = dict(ev)
+        t = ans.get("t")
+        if t is not None and 0 <= float(t) <= duration:
+            vt = start + float(t)
+            if ev.get("t_match_seconds") is not None:
+                upd["t_match_seconds"] = round(ev["t_match_seconds"] + (vt - ev["video_ts_seconds"]), 1)
+            upd["video_ts_seconds"] = round(vt, 1)
+        if ans.get("scorer_shirt") is not None and not ans.get("own_goal"):
+            upd["shirt"] = int(ans["scorer_shirt"])
+            upd["player"] = _player_name(ctx.get("lineup_doc"), ev.get("team"), upd["shirt"]) or ev.get("player")
+        if ans.get("assist_shirt") is not None:
+            attrs["assist_shirt"] = int(ans["assist_shirt"])
+            name = _player_name(ctx.get("lineup_doc"), ev.get("team"), ans["assist_shirt"])
+            if name:
+                attrs["assist_player"] = name
+        if ans.get("own_goal"):
+            attrs["own_goal"] = True
+        if ans.get("headed"):
+            attrs["headed"] = True
+        upd["attributes"] = attrs
+        out[idx] = upd
+    return out, log_rows
 
 
 def quality_summary(clip_quality: dict[str, Any]) -> dict[str, Any]:
@@ -389,6 +483,11 @@ def process_job(match_id: str, *, tagger: Tagger | None = None, repo: EventRepo 
         if sb.get("enabled"):
             # (b) confirmed goals in, (c) unbacked AI goals -> low-confidence shot candidates.
             events = route_for_review(scorebug.reconcile_goals(events, sb), threshold)
+            _update(match_id, stage="re-looking at goals")
+            events, relook_log = relook_goals(match_id, tagger, events, sb, src, context, clip_usage)
+            if relook_log:
+                store.write_doc(match_id, "goal_relook", relook_log)
+                _update(match_id, usage=_usage_total(clip_usage), clip_usage=clip_usage)
         events = flag_failed_clips(events, clip_quality, threshold)
         saved = (repo or get_repo()).replace_ai_events(match_id, events)
         pending = sum(1 for e in saved if e["review_status"] == "pending")
