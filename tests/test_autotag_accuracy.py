@@ -24,7 +24,7 @@ CLIP = Clip(0, 0, 60, 960, 1)
 @pytest.fixture(autouse=True)
 def _env(monkeypatch, tmp_path):
     for k in list(quality.DEFAULTS) + ["TAGGER_PROMPT", "TAGGER_VIDEO_FPS", "TAGGER_VIDEO_STRETCH", "TAGGER_INPUT",
-                                       "STATMAN_AT_EXTRA_MIN_CONF", "STATMAN_AT_COORD_MIN_CONF", "STATMAN_JOB_MAX_COST",
+                                       "STATMAN_AT_EXTRA_MIN_CONF", "STATMAN_AT_COORD_MIN_CONF", "STATMAN_JOB_MAX_COST", "STATMAN_TEST_MAX_COST", "TAGGER_VIDEO_HEIGHT", "TAGGER_MAX_TOKENS",
                                        "STATMAN_GOAL_RELOOK", "TAGGER_API_KEY"]:
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(store, "ROOT", tmp_path / "autotag")
@@ -71,12 +71,15 @@ def test_real_hand_tag_density_does_not_trip_cadence():
     assert not ({"fixed_cadence", "even_spacing"} & {i["code"] for i in q["hard"]}), q["hard"]
 
 
-def test_no_shirt_numbers_fails_only_when_lineup_given():
+def test_no_shirt_numbers_warns_only_when_lineup_given():
+    # Unreadable shirts are a camera limit, not something a re-tag fixes: a warning, never a failure.
     events = json.loads((FIX / "ai_fixed_cadence_clip.json").read_text())
     assert all(e.get("shirt") is None for e in events)
-    with_lineup = {i["code"] for i in quality.check_clip(events, 60, lineup_given=True)["hard"]}
-    without = {i["code"] for i in quality.check_clip(events, 60)["hard"]}
-    assert "no_shirt_numbers" in with_lineup and "no_shirt_numbers" not in without
+    q = quality.check_clip(events, 60, lineup_given=True)
+    assert "no_shirt_numbers" not in {i["code"] for i in q["hard"]}
+    assert "no_shirt_numbers" in {i["code"] for i in q["soft"]}
+    without = quality.check_clip(events, 60)
+    assert "no_shirt_numbers" not in {i["code"] for i in without["hard"] + without["soft"]}
 
 
 def test_cadence_failure_triggers_retag_loop(monkeypatch, tmp_path):
@@ -151,7 +154,7 @@ def test_extras_dropped_unless_high_confidence_and_time_unscaled():
          "coord_confidence": 0.5, "detail": None, "confidence": 0.6},
         {"t": 70.0, "team": "away", "code": "AERIAL", "shirt": 4, "outcome": "success", "zone": "2C", "end_zone": None,
          "coord_confidence": 0.5, "detail": None, "confidence": 0.95},
-    ])
+    ], video_fps=5)
     assert [e["type"] for e in out][0] == "pass" and len(out) == 2
     p = out[0]
     assert p["t_clip_seconds"] == pytest.approx(10.0)  # 50 s of 5x slowed video = 10 s real
@@ -183,7 +186,9 @@ def test_low_coord_confidence_progressive_pass_is_estimated_not_counted():
 
 def test_default_video_settings_and_stretch_encode(tmp_path):
     t = tagger()
-    assert t.prompt == "core" and t.video_fps == 5 and t.video_stretch and t.time_scale == 5
+    assert t.prompt == "core" and t.video_fps == 2 and t.video_height == 480 and t.video_stretch \
+        and t.time_scale == 2
+    assert t.max_tokens == 8000
     src = tmp_path / "s.mp4"
     subprocess.check_call(["ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=25", "-t", "4",
                            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", str(src)],
@@ -251,7 +256,8 @@ def test_goal_relook_http_payload_uses_strict_schema_and_unscales(tmp_path):
                                                  "detail": None, "confidence": 0.7}),
                                          "usage": {"prompt_tokens": 33000, "completion_tokens": 80, "cost": 0.01}})
 
-    t = VisionLLMTagger(api_url="http://x", api_key="k", model="m", client=httpx.Client(transport=httpx.MockTransport(handler)))
+    t = VisionLLMTagger(api_url="http://x", api_key="k", model="m", video_fps=5,
+                        client=httpx.Client(transport=httpx.MockTransport(handler)))
     ans = t.relook_goal(src, 2.0, 25.0, {"teams": {"home": "Napoli"}, "lineup_doc": LINEUP, "goal_team": "Napoli"})
     assert ans["t"] == 17.0 and ans["scorer_shirt"] == 9
     assert seen["body"]["response_format"]["json_schema"]["name"] == "statman_goal"

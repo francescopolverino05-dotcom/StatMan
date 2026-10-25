@@ -5,9 +5,10 @@ Backends:
 * ``VisionLLMTagger`` - OpenAI-compatible ``/chat/completions`` (OpenRouter).
   Configured by ``TAGGER_API_URL``, ``TAGGER_API_KEY``, ``TAGGER_MODEL``.
   ``TAGGER_INPUT`` = ``video`` (default: the whole clip as a base64 mp4
-  ``video_url`` part, re-encoded to ``TAGGER_VIDEO_HEIGHT`` (720) /
-  ``TAGGER_VIDEO_BITRATE`` (200k per sampled frame) / ``TAGGER_VIDEO_FPS`` (5
-  real frames per second the model actually sees); needs a video-capable model
+  ``video_url`` part, re-encoded to ``TAGGER_VIDEO_HEIGHT`` (480) /
+  ``TAGGER_VIDEO_BITRATE`` (150k per sampled frame) / ``TAGGER_VIDEO_FPS`` (2
+  real frames per second the model actually sees; 5 cost ~$0.05 per 60 s clip,
+  2 costs ~$0.027 - see ``budget.py``); needs a video-capable model
   such as google/gemini-2.5-flash) or ``frames`` (legacy: ``TAGGER_FRAMES``
   evenly spaced JPEGs at ``TAGGER_FRAME_WIDTH``).
   Gemini samples any video at 1 frame per video second, and OpenRouter has no
@@ -18,7 +19,9 @@ Backends:
   ``TAGGER_PROMPT`` = core (default: core event codes, real timestamps, 6x3
   zones with a coordinate confidence, shirt from the lineup or null) |
   analyst (previous default: all analyst codes, free x/y) | base | v2.
-  Also ``TAGGER_RESPONSE_FORMAT``, ``TAGGER_TIMEOUT``. json_schema with a
+  Also ``TAGGER_RESPONSE_FORMAT``, ``TAGGER_TIMEOUT``, ``TAGGER_MAX_TOKENS``
+  (completion cap per call, default 8000 = at most ~$0.02 of output).
+  ``before_call`` (set by the job) runs before every HTTP call: cancel + spend cap. json_schema with a
   json_object retry when the model collapses to an empty answer.
   Disabled (``enabled() is False``) when URL or model is unset.
 * ``FixtureTagger`` - deterministic, reads a JSON fixture keyed by clip index.
@@ -37,6 +40,7 @@ import time
 from pathlib import Path
 from typing import Any, Protocol
 
+from statman.autotag.budget import JobStopped, estimate_call
 from statman.autotag.clips import Clip, encode_for_model, extract_frames
 from statman.autotag.taxonomy import (
     CODES, CORE_CODES, EVENT_TYPES, EXTRA_CODES, FREE_KICK_MAX_DISTANCE_M, TAXONOMY, ZONES, clock_to_seconds,
@@ -407,9 +411,14 @@ class VisionLLMTagger:
         self.prompt = (prompt or os.environ.get("TAGGER_PROMPT") or "core").strip().lower()
         mode = (input_mode or os.environ.get("TAGGER_INPUT") or "video").strip().lower()
         self.input_mode = mode if mode in {"video", "frames"} else "video"
-        self.video_height = int(video_height or os.environ.get("TAGGER_VIDEO_HEIGHT") or 720)
-        self.video_bitrate = (video_bitrate or os.environ.get("TAGGER_VIDEO_BITRATE") or "200k").strip()
-        self.video_fps = float(video_fps or os.environ.get("TAGGER_VIDEO_FPS") or 5)
+        self.video_height = int(video_height or os.environ.get("TAGGER_VIDEO_HEIGHT") or 480)
+        self.video_bitrate = (video_bitrate or os.environ.get("TAGGER_VIDEO_BITRATE") or "150k").strip()
+        self.video_fps = float(video_fps or os.environ.get("TAGGER_VIDEO_FPS") or 2)
+        try:
+            self.max_tokens = int(os.environ.get("TAGGER_MAX_TOKENS") or 8000)
+        except ValueError:
+            self.max_tokens = 8000
+        self.before_call: Any = None  # callable(kind, estimate) set by the job; raises JobStopped
         self.video_stretch = (os.environ.get("TAGGER_VIDEO_STRETCH") or "on").strip().lower() not in {
             "off", "0", "false", "no"} if video_stretch is None else bool(video_stretch)
         try:
@@ -467,6 +476,8 @@ class VisionLLMTagger:
                 {"role": "user", "content": content},
             ],
         }
+        if self.max_tokens > 0:
+            body["max_tokens"] = self.max_tokens
         rf = self._response_format(response_format or self.response_format)
         if rf:
             body["response_format"] = rf
@@ -519,6 +530,18 @@ class VisionLLMTagger:
              else "Tag every on-ball event in this clip now."},
         ]
         return self._body(content, response_format)
+
+    def estimate(self, duration_s: float) -> float:
+        """Expected USD of one call on ``duration_s`` real seconds (budget pre-check)."""
+        fps = self.video_fps if self.input_mode == "video" else self.frames / max(duration_s, 1.0)
+        return estimate_call(duration_s, fps, self.video_stretch or self.input_mode != "video",
+                             completion_tokens=min(5000, self.max_tokens or 5000))["cost_usd"]
+
+    def _call(self, body: dict[str, Any], kind: str = "tag", duration_s: float = 60.0) -> dict[str, Any]:
+        """Every paid request goes through here: job guard (cancel + spend cap) first, then HTTP."""
+        if self.before_call is not None:
+            self.before_call(kind, self.estimate(duration_s))
+        return self._post(body)
 
     def _post(self, body: dict[str, Any]) -> dict[str, Any]:
         import httpx
@@ -599,18 +622,20 @@ class VisionLLMTagger:
         self.last_usage = {}
         for attempt in range(3):
             try:
-                payload = self._post(body)
+                payload = self._call(body, f"clip {clip.index}", clip.duration)
                 self._account(payload, clip)
                 events = self.parse_response(payload, clip)
                 if not events and self.is_collapsed(payload) and self.response_format == "json_schema":
                     # Strict schema often makes the model bail out with {"events":[]} in ~5 tokens.
                     log.info("tagger clip %s: empty-output collapse, retrying with json_object", clip.index)
-                    retry = self._post(build("json_object"))
+                    retry = self._call(build("json_object"), f"clip {clip.index} json retry", clip.duration)
                     self._account(retry, clip)
                     events = self.parse_response(retry, clip)
                 if self.input_mode == "frames":
                     return suppress_repetition(events, frame_times)
                 return events
+            except JobStopped:
+                raise
             except Exception as exc:  # noqa: BLE001 - retry transport and parse errors
                 last = exc
                 log.warning("tagger clip %s attempt %s failed: %s", clip.index, attempt + 1, exc)
@@ -683,6 +708,7 @@ def _relook_goal(self: "VisionLLMTagger", video_path: str | Path, start: float, 
     intro += lineup_text(context, t0, t0 + duration)
     body = {
         "model": self.model, "temperature": 0, "usage": {"include": True},
+        **({"max_tokens": min(self.max_tokens, 2000)} if self.max_tokens > 0 else {}),
         "messages": [
             {"role": "system", "content": "\n".join(GOAL_RELOOK_PROMPT)},
             {"role": "user", "content": [
@@ -695,7 +721,7 @@ def _relook_goal(self: "VisionLLMTagger", video_path: str | Path, start: float, 
         body["response_format"] = {"type": "json_schema", "json_schema": {
             "name": "statman_goal", "strict": True, "schema": goal_relook_schema()}}
     self.last_usage = {}
-    payload = self._post(body)
+    payload = self._call(body, "goal re-look", duration)
     self._account(payload, Clip(-1, start, start + duration, t0, 1))
     return parse_relook(payload, scale)
 
@@ -817,6 +843,9 @@ def tagger_status() -> dict[str, Any]:
             "video_bitrate": llm.video_bitrate,
             "video_fps": llm.video_fps,
             "video_stretch": llm.video_stretch,
+            "max_tokens": llm.max_tokens,
+            "estimate_per_60s_clip": estimate_call(60.0, llm.video_fps, llm.video_stretch,
+                                                   completion_tokens=min(5000, llm.max_tokens or 5000)),
             "frames_seen_per_clip_second": llm.video_fps if llm.input_mode == "video" and llm.video_stretch
             else (1.0 if llm.input_mode == "video" else None),
             "frames_per_clip": llm.frames if llm.input_mode == "frames" else None,

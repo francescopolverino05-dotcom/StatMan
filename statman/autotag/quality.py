@@ -6,8 +6,13 @@ impossible coordinates, duplicates, silent stretches without a GAP marker,
 keeper catches logged as SAVE, a team missing entirely, invented cards/corners.
 
 ``check_clip`` returns ``{"score", "passed", "hard", "soft", "stats"}``. Hard
-issues fail the clip (-> automatic re-tag, then review flagging); soft issues
-are only reported. Thresholds come from env (see ``thresholds``).
+issues fail the clip; soft issues are only reported (warnings). Every issue
+carries ``fixable``: a re-tag with a corrective prompt can plausibly fix it
+(cadence, even spacing, coordinates, bad JSON, too few passes, ...). Issues that
+depend on what the camera shows (a team never in shot, shirt numbers too small
+to read) are not fixable: the clip goes straight to review with the reason and
+no money is spent re-tagging it. Missing shirt numbers are a warning only.
+Thresholds come from env (see ``thresholds``).
 """
 
 from __future__ import annotations
@@ -33,10 +38,15 @@ DEFAULTS: dict[str, float] = {
     "STATMAN_QA_EVEN_GAP_SHARE": 0.75,    # share of inter-event gaps with the same length (0.1 s) above this ...
     "STATMAN_QA_EVEN_MIN_EVENTS": 12,     # ... once a clip has at least this many timed events ...
     "STATMAN_QA_EVEN_MIN_RATE": 0.4,      # ... and at least this many events per second
-    "STATMAN_QA_SHIRT_MIN_EVENTS": 10,    # with a lineup given, zero shirt numbers in >= this many events = hard
+    "STATMAN_QA_SHIRT_MIN_EVENTS": 10,    # with a lineup given, zero shirt numbers in >= this many events = warning
 }
-RETAG_MAX_DEFAULT = 2
+RETAG_MAX_DEFAULT = 1
 JOB_MAX_COST_DEFAULT = 4.0
+# Hard issues a corrective re-tag can fix vs ones that depend on the footage (camera, resolution).
+FIXABLE = {"parse_failure", "fixed_cadence", "even_spacing", "coords_out_of_range", "too_few_passes",
+           "no_failed_passes", "missing_end_points", "missing_coordinates", "clock_outside_clip", "duplicates",
+           "silent_stretch", "save_without_shot"}
+NOT_FIXABLE = {"no_shirt_numbers", "team_missing"}
 
 
 def _env_float(name: str, default: float) -> float:
@@ -92,8 +102,21 @@ def _t(e: dict[str, Any]) -> float | None:
     return _num(e.get("t_clip_seconds"))
 
 
-def _issue(code: str, message: str, hint: str) -> dict[str, str]:
-    return {"code": code, "message": message, "hint": hint}
+def _issue(code: str, message: str, hint: str) -> dict[str, Any]:
+    return {"code": code, "message": message, "hint": hint, "fixable": code not in NOT_FIXABLE}
+
+
+def fixable_issues(q: dict[str, Any]) -> list[dict[str, Any]]:
+    return [i for i in q.get("hard") or [] if i.get("fixable", i.get("code") not in NOT_FIXABLE)]
+
+
+def unfixable_issues(q: dict[str, Any]) -> list[dict[str, Any]]:
+    return [i for i in q.get("hard") or [] if not i.get("fixable", i.get("code") not in NOT_FIXABLE)]
+
+
+def retag_worthwhile(q: dict[str, Any]) -> bool:
+    """Re-tag only when the clip fails and at least one hard issue is retag-fixable."""
+    return not q.get("passed") and bool(fixable_issues(q))
 
 
 def cadence_stats(events: list[dict[str, Any]], open_secs: float) -> dict[str, Any]:
@@ -158,7 +181,7 @@ def check_clip(events: list[dict[str, Any]] | None, duration: float, *, error: s
     shirts = sum(1 for e in play if e.get("shirt") not in (None, ""))
     stats["shirts"] = shirts
     if lineup_given and len(play) >= th["STATMAN_QA_SHIRT_MIN_EVENTS"] and shirts == 0:
-        hard.append(_issue(
+        soft.append(_issue(
             "no_shirt_numbers", f"0 shirt numbers in {len(play)} events although the lineup was given",
             "you gave no shirt number at all although the lineup is provided: read the numbers on the shirts (and in "
             "close-ups/replays) and set shirt for every event where it is readable; null only when it is not"))
@@ -237,7 +260,7 @@ def check_clip(events: list[dict[str, Any]] | None, duration: float, *, error: s
     if len(play) >= th["STATMAN_QA_TEAM_MIN_EVENTS"]:
         for side in ("home", "away"):
             if side not in teams:
-                hard.append(_issue("team_missing", f"no events for {side} in {len(play)} events",
+                hard.append(_issue("team_missing", f"no events for {side} in {len(play)} events (camera?)",
                                    f"your answer had no events for the {side} team: log both teams' actions"))
     cards = [e for e in play if _code(e) == "CARD"]
     if cards:
@@ -257,10 +280,16 @@ def rank(q: dict[str, Any]) -> tuple:
 
 def corrective_text(q: dict[str, Any], attempt: int) -> str:
     lines = [f"CORRECTION (re-tag attempt {attempt}): your previous answer for this clip failed quality checks."]
-    lines += [f"- {i['hint']}." for i in q["hard"] + q["soft"]]
+    issues = fixable_issues(q) + [i for i in q["soft"] if i.get("fixable", True)]
+    lines += [f"- {i['hint']}." for i in issues]
     lines.append("Watch the whole clip again and return the complete event list, not a summary.")
     return "\n".join(lines)
 
 
 def issue_summary(q: dict[str, Any]) -> str:
-    return "; ".join(i["message"] for i in q["hard"])
+    parts = [i["message"] + ("" if i.get("fixable", True) else " [not retag-fixable]") for i in q["hard"]]
+    return "; ".join(parts)
+
+
+def warning_summary(q: dict[str, Any]) -> str:
+    return "; ".join(i["message"] for i in q.get("soft") or [])

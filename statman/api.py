@@ -180,6 +180,7 @@ def api_root() -> dict[str, Any]:
             "autotag_tagger": "/api/autotag/tagger",
             "autotag_run": "POST /api/autotag/matches/{match_id}/run",
             "autotag_job": "/api/autotag/matches/{match_id}",
+            "autotag_clips": "/api/autotag/matches/{match_id}/clips?include_tags=1 (+ /clips/{index})",
             "autotag_settings": "GET|PUT /api/autotag/matches/{match_id}/settings",
             "autotag_events": "/api/autotag/matches/{match_id}/events",
             "autotag_review_queue": "/api/autotag/matches/{match_id}/review-queue",
@@ -974,7 +975,9 @@ async def api_autotag_run(match_id: str, request: Request) -> dict[str, Any]:
     default 5), segments [{video_start, match_start}], teams {home, away},
     settings {home_name, away_name, home_kit, away_kit,
     home_attacks_first_half: left|right} (saved as the match settings),
-    tagger ("vision_llm" | "fixture").
+    tagger ("vision_llm" | "fixture"), max_cost (USD hard cap for this run;
+    default STATMAN_TEST_MAX_COST $0.40 for videos under 10 min, else
+    STATMAN_JOB_MAX_COST $4). The cap is checked before every model call.
     """
     from statman.autotag import start_autotag
 
@@ -995,6 +998,7 @@ async def api_autotag_run(match_id: str, request: Request) -> dict[str, Any]:
             teams=body.get("teams") or None,
             tagger=body.get("tagger") or None,
             settings=body.get("settings") if isinstance(body.get("settings"), dict) else None,
+            max_cost=float(body["max_cost"]) if body.get("max_cost") is not None else None,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1036,11 +1040,22 @@ def api_autotag_video(match_id: str) -> FileResponse:
 
 
 @app.get("/api/autotag/matches/{match_id}/clips")
-def api_autotag_clips(match_id: str) -> dict[str, Any]:
-    from statman.autotag.store import read_doc
+def api_autotag_clips(match_id: str, include_tags: bool = Query(False)) -> dict[str, Any]:
+    """Per clip: window, cached tags (``include_tags``), events count, quality record + reasons, spend."""
+    from statman.autotag.jobs import clip_details
 
-    clips = read_doc(_autotag_match(match_id), "clips", [])
+    clips = clip_details(_autotag_match(match_id), include_tags=include_tags)
     return {"count": len(clips), "clips": clips}
+
+
+@app.get("/api/autotag/matches/{match_id}/clips/{index}")
+def api_autotag_clip(match_id: str, index: int) -> dict[str, Any]:
+    from statman.autotag.jobs import clip_details
+
+    for c in clip_details(_autotag_match(match_id), include_tags=True):
+        if c.get("index") == index:
+            return c
+    raise HTTPException(status_code=404, detail=f"No clip {index} for {match_id}")
 
 
 @app.get("/api/autotag/matches/{match_id}/events")

@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from statman.autotag import store
-from statman.autotag import quality, scorebug
+from statman.autotag import budget, quality, scorebug
+from statman.autotag.budget import BudgetExceeded, JobCancelled, JobGuard, JobStopped
 from statman.autotag.clips import (
     Clip, clips_dir, cut_clip, env_clip_seconds, env_overlap_seconds, plan_clips, video_to_match,
 )
@@ -31,7 +32,7 @@ log = logging.getLogger("statman.autotag")
 _QUEUE: "queue.Queue[str]" = queue.Queue()
 _WORKER: dict[str, threading.Thread | None] = {"thread": None}
 _WORKER_LOCK = threading.Lock()
-TERMINAL = {"done", "error", "cancelled", "tagger_disabled"}
+TERMINAL = {"done", "error", "cancelled", "tagger_disabled", "budget_stopped"}
 
 
 def _update(mid: str, /, **fields: Any) -> dict[str, Any]:
@@ -64,8 +65,13 @@ def create_job(
     tagger: str | None = None,
     duration: float | None = None,
     settings: dict[str, Any] | None = None,
+    max_cost: float | None = None,
 ) -> dict[str, Any]:
     store.check_match_id(match_id)
+    if max_cost is not None:
+        max_cost = float(max_cost)
+        if not (0 < max_cost <= 100):
+            raise ValueError("max_cost must be between 0 and 100 USD")
     clip_seconds = float(clip_seconds) if clip_seconds else env_clip_seconds()
     overlap_seconds = float(overlap_seconds) if overlap_seconds is not None else env_overlap_seconds()
     if settings:
@@ -89,6 +95,8 @@ def create_job(
         video_path=str(path), duration_sec=duration, clip_seconds=clip_seconds, overlap_seconds=overlap_seconds,
         segments=segments or [], teams=teams or {}, tagger=tagger, clips_total=len(clips), clips_cut=0,
         clips_tagged=0, review_threshold=review_threshold(), created_at=time.time(), usage=None, clip_usage=[],
+        max_cost=max_cost, cost_cap_usd=budget.job_cap(duration, max_cost), stop_reason=None, partial=False,
+        finished_at=None,
     )
 
 
@@ -196,15 +204,15 @@ def _cancelled(match_id: str) -> bool:
     return bool((get_autotag_job(match_id) or {}).get("cancel_requested"))
 
 
-def _run_scorebug(match_id: str, meta: dict[str, Any], src: Path) -> dict[str, Any]:
-    """Once per match (cached in scorebug.json). Never fails the job."""
+def _run_scorebug(match_id: str, meta: dict[str, Any], src: Path, guard: JobGuard | None = None) -> dict[str, Any]:
+    """Once per match (cached in scorebug.json). Never fails the job. LLM crop calls go through ``guard``."""
 
     cached = store.read_doc(match_id, "scorebug")
     if cached and cached.get("video_path") == str(src) and scorebug.mode() != "off":
         return cached
     _update(match_id, status="cutting", stage="reading score bug")
     try:
-        sb = scorebug.analyse(src)
+        sb = scorebug.analyse(src, before_llm_call=guard.before_call if guard else None)
     except Exception as exc:  # noqa: BLE001
         log.warning("scorebug skipped for %s: %s", match_id, exc)
         sb = {"enabled": False, "reason": str(exc)}
@@ -213,7 +221,8 @@ def _run_scorebug(match_id: str, meta: dict[str, Any], src: Path) -> dict[str, A
     if scorebug.mode() != "off":
         store.write_doc(match_id, "scorebug", sb)
     _update(match_id, scorebug={k: sb.get(k) for k in ("enabled", "reason", "goals", "segments", "runtime_s",
-                                                         "cost_usd", "llm_calls")})
+                                                         "cost_usd", "llm_calls", "llm_errors",
+                                                         "llm_last_error", "llm_stopped")})
     return sb
 
 
@@ -234,13 +243,31 @@ def _usage_total(clip_usage: list[dict[str, Any]]) -> dict[str, Any]:
     return tot
 
 
+def _estimate(tagger: Tagger, duration: float) -> float | None:
+    est = getattr(tagger, "estimate", None)
+    try:
+        return float(est(duration)) if callable(est) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _default_guard(clip_usage: list[dict[str, Any]], match_id: str | None = None) -> JobGuard:
+    meta = (get_autotag_job(match_id) or {}) if match_id else {}
+    return JobGuard(budget.job_cap(meta.get("duration_sec"), meta.get("max_cost")),
+                    spent=lambda: budget.usage_cost(clip_usage))
+
+
 def _tag_once(tagger: Tagger, clip: Clip, ctx: dict[str, Any], clip_usage: list[dict[str, Any]],
-              attempt: int) -> tuple[list[dict[str, Any]] | None, str | None]:
+              attempt: int, guard: JobGuard | None = None) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """One tag call (plus the tagger's own internal retries). Raises JobStopped before any call it blocks."""
+
     if hasattr(tagger, "last_usage"):
         tagger.last_usage = {}
+    if guard is not None:
+        guard.before_call(f"clip {clip.index} attempt {attempt}", _estimate(tagger, clip.duration))
     try:
         return tagger.tag_clip(clip, ctx), None
-    except TaggerUnavailable:
+    except (TaggerUnavailable, JobStopped):
         raise
     except Exception as exc:  # noqa: BLE001 - recorded as a failed attempt
         return None, str(exc)
@@ -248,21 +275,29 @@ def _tag_once(tagger: Tagger, clip: Clip, ctx: dict[str, Any], clip_usage: list[
         last = getattr(tagger, "last_usage", None)
         if last:
             clip_usage.append({"clip": clip.index, "attempt": attempt, **last})
+            tagger.last_usage = {}  # now counted in clip_usage; the guard must not count it twice
+            if guard is not None:
+                guard.note_call_cost(last.get("cost_usd"))
 
 
 def _tag_with_quality(match_id: str, tagger: Tagger, clip: Clip, ctx: dict[str, Any],
-                      clip_usage: list[dict[str, Any]]):
+                      clip_usage: list[dict[str, Any]], guard: JobGuard | None = None):
     """Tag a clip, quality-check it, and re-tag with a corrective prompt while it fails.
 
-    Returns (best events or None, quality record or None, last error). Stops after
-    ``STATMAN_RETAG_MAX`` re-tags or once job cost exceeds ``STATMAN_JOB_MAX_COST``.
+    Returns (best events or None, quality record or None, last error). Re-tags only for
+    retag-fixable failures (``quality.FIXABLE``), at most ``STATMAN_RETAG_MAX`` (default 1) times,
+    and never past the job cost cap. A cancel / budget stop *during* the re-tags keeps the best
+    attempt so far; the stop is stored on ``guard.stop`` for the caller. A stop before the first
+    call raises ``JobStopped``.
     """
 
-    events, err = _tag_once(tagger, clip, ctx, clip_usage, 0)
+    if guard is None:
+        guard = _default_guard(clip_usage, match_id)
+    events, err = _tag_once(tagger, clip, ctx, clip_usage, 0, guard)
     if not quality.enabled():
         return events, None, err
     th = quality.thresholds()
-    max_retag, max_cost = quality.retag_max(), quality.job_max_cost()
+    max_retag = quality.retag_max()
     lineup_given = has_lineup(ctx)
     q = quality.check_clip(events, clip.duration, error=err, th=th, lineup_given=lineup_given)
     attempts = [{"attempt": 0, "score": q["score"], "passed": q["passed"], "issues": q["hard"] + q["soft"],
@@ -271,14 +306,20 @@ def _tag_with_quality(match_id: str, tagger: Tagger, clip: Clip, ctx: dict[str, 
     stop_reason = None
     n = 0
     while not best[0]["passed"] and n < max_retag:
-        if _usage_total(clip_usage)["cost_usd"] >= max_cost:
-            stop_reason = f"job cost budget ${max_cost:.2f} reached"
-            log.warning("auto-tag %s clip %s: %s, not re-tagging", match_id, clip.index, stop_reason)
+        if not quality.retag_worthwhile(best[0]):
+            stop_reason = "not retag-fixable: " + "; ".join(i["message"] for i in quality.unfixable_issues(best[0]))
+            log.info("auto-tag %s clip %s: %s, sent to review", match_id, clip.index, stop_reason)
+            break
+        corrective = quality.corrective_text(best[0], n + 1)
+        try:
+            _update(match_id, stage=f"re-tagging clip {clip.index} (attempt {n + 1}/{max_retag})")
+            ev2, err2 = _tag_once(tagger, clip, {**ctx, "corrective": corrective}, clip_usage, n + 1, guard)
+        except JobStopped as exc:
+            stop_reason = str(exc)
+            guard.stop = exc
+            log.warning("auto-tag %s clip %s: %s, keeping best attempt", match_id, clip.index, stop_reason)
             break
         n += 1
-        _update(match_id, stage=f"re-tagging clip {clip.index} (attempt {n}/{max_retag})")
-        corrective = quality.corrective_text(q, n)
-        ev2, err2 = _tag_once(tagger, clip, {**ctx, "corrective": corrective}, clip_usage, n)
         q = quality.check_clip(ev2, clip.duration, error=err2, th=th, lineup_given=lineup_given)
         attempts.append({"attempt": n, "score": q["score"], "passed": q["passed"], "issues": q["hard"] + q["soft"],
                          "stats": q["stats"], "error": err2, "corrective_prompt": corrective})
@@ -291,6 +332,9 @@ def _tag_with_quality(match_id: str, tagger: Tagger, clip: Clip, ctx: dict[str, 
         "clip": clip.index, "attempts": attempts, "chosen_attempt": chosen, "retags": n,
         "score": bq["score"], "passed": bq["passed"], "flagged": not bq["passed"] and bev is not None,
         "issues": bq["hard"] + bq["soft"], "reason": quality.issue_summary(bq), "stop_reason": stop_reason,
+        "warnings": quality.warning_summary(bq), "retag_fixable": quality.retag_worthwhile(bq),
+        "review_reason": (None if bq["passed"] else
+                          f"{quality.issue_summary(bq)}" + (f" ({stop_reason})" if stop_reason else "")),
     }
     return bev, record, (None if bev is not None else err)
 
@@ -311,18 +355,21 @@ def _player_name(lineup_doc: dict[str, Any] | None, team: str | None, shirt: Any
 
 
 def relook_goals(match_id: str, tagger: Tagger, events: list[dict[str, Any]], sb: dict[str, Any], src: Path,
-                 ctx: dict[str, Any], clip_usage: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict]]:
+                 ctx: dict[str, Any], clip_usage: list[dict[str, Any]],
+                 guard: JobGuard | None = None) -> tuple[list[dict[str, Any]], list[dict]]:
     """Second, focused look at each score-bug-confirmed goal: ~20 s before to 5 s after the score change.
 
     Fills scorer / assist shirt numbers (and names from the lineup). The goal time is anchored to the
     score-bug change; the model's exact moment is used only if it falls inside the window.
-    Skipped once the job cost reaches ``STATMAN_JOB_MAX_COST``.
+    Each call goes through the job guard: skipped once the job cost cap would be passed;
+    a cancel raises ``JobCancelled``.
     """
 
     log_rows: list[dict[str, Any]] = []
     if not (goal_relook_enabled() and sb.get("enabled") and hasattr(tagger, "relook_goal")):
         return events, log_rows
-    max_cost = quality.job_max_cost()
+    if guard is None:
+        guard = _default_guard(clip_usage, match_id)
     out = list(events)
     for g in sb.get("goals") or []:
         anchor = g.get("score_change_video_s", g.get("video_ts_seconds"))
@@ -333,11 +380,15 @@ def relook_goals(match_id: str, tagger: Tagger, events: list[dict[str, Any]], sb
                    None)
         if idx is None:
             continue
-        if _usage_total(clip_usage)["cost_usd"] >= max_cost:
-            log_rows.append({"anchor_video_s": anchor, "skipped": f"job cost budget ${max_cost:.2f} reached"})
-            continue
         start = max(0.0, float(anchor) - RELOOK_BEFORE_S)
         duration = float(anchor) + RELOOK_AFTER_S - start
+        if hasattr(tagger, "last_usage"):
+            tagger.last_usage = {}
+        try:
+            guard.before_call("goal re-look", _estimate(tagger, duration))
+        except BudgetExceeded as exc:
+            log_rows.append({"anchor_video_s": anchor, "skipped": str(exc)})
+            continue
         ev = out[idx]
         t_match0 = (ev.get("t_match_seconds") or 0) - (ev["video_ts_seconds"] - start)
         gctx = {**ctx, "goal_team": (ctx.get("teams") or {}).get(g["team"]) or g["team"], "match_start": max(0.0, t_match0)}
@@ -347,6 +398,11 @@ def relook_goals(match_id: str, tagger: Tagger, events: list[dict[str, Any]], sb
             ans = tagger.relook_goal(src, start, duration, gctx)
         except TaggerUnavailable:
             raise
+        except JobCancelled:
+            raise
+        except BudgetExceeded as exc:
+            log_rows.append({"anchor_video_s": anchor, "skipped": str(exc)})
+            continue
         except Exception as exc:  # noqa: BLE001 - a failed re-look keeps the goal as it was
             ans, err = None, str(exc)
         else:
@@ -354,6 +410,8 @@ def relook_goals(match_id: str, tagger: Tagger, events: list[dict[str, Any]], sb
         last = getattr(tagger, "last_usage", None)
         if last:
             clip_usage.append({"clip": "goal_relook", "attempt": 0, "anchor_video_s": anchor, **last})
+            tagger.last_usage = {}
+            guard.note_call_cost(last.get("cost_usd"))
         row = {"anchor_video_s": anchor, "start": start, "duration": duration, "answer": ans, "error": err}
         log_rows.append(row)
         if not ans or not ans.get("goal_seen"):
@@ -383,16 +441,19 @@ def relook_goals(match_id: str, tagger: Tagger, events: list[dict[str, Any]], sb
     return out, log_rows
 
 
-def quality_summary(clip_quality: dict[str, Any]) -> dict[str, Any]:
+def quality_summary(clip_quality: dict[str, Any], cap: float | None = None) -> dict[str, Any]:
     recs = list(clip_quality.values())
     return {
-        "enabled": quality.enabled(), "retag_max": quality.retag_max(), "job_max_cost_usd": quality.job_max_cost(),
+        "enabled": quality.enabled(), "retag_max": quality.retag_max(),
+        "job_max_cost_usd": cap if cap is not None else quality.job_max_cost(),
+        "clips_not_fixable": sum(1 for r in recs if not r.get("passed") and r.get("retag_fixable") is False),
+        "clips_with_warnings": sum(1 for r in recs if r.get("warnings")),
         "clips_checked": len(recs),
         "clips_passed": sum(1 for r in recs if r.get("passed") and not r.get("retags")),
         "clips_retagged": sum(1 for r in recs if r.get("passed") and r.get("retags")),
         "clips_flagged": sum(1 for r in recs if r.get("flagged")),
         "retags": sum(int(r.get("retags") or 0) for r in recs),
-        "budget_stops": sum(1 for r in recs if r.get("stop_reason")),
+        "budget_stops": sum(1 for r in recs if "budget" in str(r.get("stop_reason") or "")),
     }
 
 
@@ -410,12 +471,55 @@ def flag_failed_clips(events: list[dict[str, Any]], clip_quality: dict[str, Any]
     return route_for_review(events, threshold)
 
 
+def _finalize(match_id: str, meta: dict[str, Any], tagger: Tagger, cut: list[Clip], raw: dict[str, list],
+              clip_quality: dict[str, Any], sb: dict[str, Any], src: Path, context: dict[str, Any],
+              clip_usage: list[dict[str, Any]], guard: JobGuard, repo: EventRepo | None, *,
+              relook: bool) -> dict[str, Any]:
+    """Merge whatever clips are tagged, route to review and save AI events + quality records."""
+
+    threshold = review_threshold()
+    results = [(c, raw[str(c.index)]) for c in cut if str(c.index) in raw]
+    events = build_timeline(results, threshold=threshold) if results else []
+    if sb.get("enabled") and results:
+        # (b) confirmed goals in, (c) unbacked AI goals -> low-confidence shot candidates.
+        events = route_for_review(scorebug.reconcile_goals(events, sb), threshold)
+        if relook:
+            _update(match_id, stage="re-looking at goals")
+            try:
+                events, relook_log = relook_goals(match_id, tagger, events, sb, src, context, clip_usage, guard)
+            except JobCancelled as exc:
+                guard.stop = exc
+                relook_log = [{"skipped": str(exc)}]
+            if relook_log:
+                store.write_doc(match_id, "goal_relook", relook_log)
+    events = flag_failed_clips(events, clip_quality, threshold)
+    store.write_doc(match_id, "quality", clip_quality)
+    saved = (repo or get_repo()).replace_ai_events(match_id, events)
+    return {"review_threshold": threshold, "events_total": len(saved),
+            "events_pending": sum(1 for e in saved if e["review_status"] == "pending"),
+            "clips_with_tags": len(results), "usage": _usage_total(clip_usage), "clip_usage": clip_usage,
+            "quality": quality_summary(clip_quality, guard.cap), "clip_quality": clip_quality}
+
+
 def process_job(match_id: str, *, tagger: Tagger | None = None, repo: EventRepo | None = None) -> dict[str, Any]:
-    """Run a queued job to completion in this thread (the worker calls this)."""
+    """Run a queued job to completion in this thread (the worker calls this).
+
+    Cancel and the job spend cap are checked before *every* model call (``JobGuard``). On cancel,
+    budget stop or an unexpected error, events from the clips tagged so far are still merged and
+    saved (review queue included) together with the per-clip quality records.
+    """
 
     meta = get_autotag_job(match_id)
     if meta is None:
         raise FileNotFoundError(match_id)
+    clip_usage: list[dict[str, Any]] = list(meta.get("clip_usage") or [])
+    extra = {"scorebug": 0.0}
+    cap = budget.job_cap(meta.get("duration_sec"), meta.get("max_cost"))
+    guard = JobGuard(cap, cancelled=lambda: _cancelled(match_id),
+                     spent=lambda: budget.usage_cost(clip_usage) + extra["scorebug"]
+                     + float((getattr(tagger, "last_usage", None) or {}).get("cost_usd") or 0.0))
+    state: dict[str, Any] = {}
+    _update(match_id, cost_cap_usd=cap)
     try:
         if meta.get("cancel_requested"):
             return _update(match_id, status="cancelled", stage="cancelled")
@@ -425,7 +529,10 @@ def process_job(match_id: str, *, tagger: Tagger | None = None, repo: EventRepo 
         src = Path(meta["video_path"])
         out_dir = clips_dir(match_id)
 
-        sb = _run_scorebug(match_id, meta, src)
+        cached_sb = store.read_doc(match_id, "scorebug")
+        sb = _run_scorebug(match_id, meta, src, guard)
+        if sb is not cached_sb:
+            extra["scorebug"] = float(sb.get("cost_usd") or 0.0)
         if sb.get("enabled") and not meta.get("segments"):
             # (a) clock from the score bug: same video windows, corrected match clock / period.
             segs = scorebug.clip_segments(sb)
@@ -450,54 +557,113 @@ def process_job(match_id: str, *, tagger: Tagger | None = None, repo: EventRepo 
                            error="Set TAGGER_API_URL and TAGGER_MODEL to enable automatic tagging")
 
         _update(match_id, status="tagging", stage=f"tagging with {tagger.name}", tagger_backend=tagger.name)
+        if hasattr(tagger, "before_call"):
+            tagger.before_call = guard.before_call  # covers the tagger's internal retries too
         raw: dict[str, list] = store.read_doc(match_id, "raw_tags", {}) or {}
         context = tagger_context(match_id, meta)
         failures: list[str] = []
-        clip_usage: list[dict[str, Any]] = list((get_autotag_job(match_id) or {}).get("clip_usage") or [])
         clip_quality: dict[str, Any] = store.read_doc(match_id, "quality", {}) or {}
         if not any(str(c.index) in raw for c in cut):
             clip_quality = {}
+        state.update(cut=cut, raw=raw, clip_quality=clip_quality, sb=sb, src=src, context=context)
+
+        def progress(n: int) -> None:
+            _update(match_id, clips_tagged=n, clip_failures=failures, usage=_usage_total(clip_usage),
+                    clip_usage=clip_usage, quality=quality_summary(clip_quality, cap))
+
         for i, clip in enumerate(cut):
+            if guard.stop is not None:
+                raise guard.stop
             if _cancelled(match_id):
-                return _update(match_id, status="cancelled", stage="cancelled")
+                raise JobCancelled("cancelled between clips")
             if str(clip.index) not in raw:
                 clip_ctx = {**context, "home_attacks": home_attacks(context["settings"], clip.period)}
-                events, record, err = _tag_with_quality(match_id, tagger, clip, clip_ctx, clip_usage)
+                events, record, err = _tag_with_quality(match_id, tagger, clip, clip_ctx, clip_usage, guard)
                 if record is not None:
                     clip_quality[str(clip.index)] = record
                     store.write_doc(match_id, "quality", clip_quality)
                 if events is None:
                     failures.append(f"clip {clip.index}: {err}")
-                    _update(match_id, clips_tagged=i + 1, clip_failures=failures, usage=_usage_total(clip_usage),
-                            clip_usage=clip_usage, quality=quality_summary(clip_quality))
+                    progress(i + 1)
                     continue
                 raw[str(clip.index)] = events
                 store.write_doc(match_id, "raw_tags", raw)
-            _update(match_id, clips_tagged=i + 1, clip_failures=failures, usage=_usage_total(clip_usage),
-                    clip_usage=clip_usage, quality=quality_summary(clip_quality))
+            progress(i + 1)
 
         _update(match_id, status="merging", stage="merging overlapping clips")
-        results = [(c, raw.get(str(c.index), [])) for c in cut]
-        threshold = review_threshold()
-        events = build_timeline(results, threshold=threshold)
-        if sb.get("enabled"):
-            # (b) confirmed goals in, (c) unbacked AI goals -> low-confidence shot candidates.
-            events = route_for_review(scorebug.reconcile_goals(events, sb), threshold)
-            _update(match_id, stage="re-looking at goals")
-            events, relook_log = relook_goals(match_id, tagger, events, sb, src, context, clip_usage)
-            if relook_log:
-                store.write_doc(match_id, "goal_relook", relook_log)
-                _update(match_id, usage=_usage_total(clip_usage), clip_usage=clip_usage)
-        events = flag_failed_clips(events, clip_quality, threshold)
-        saved = (repo or get_repo()).replace_ai_events(match_id, events)
-        pending = sum(1 for e in saved if e["review_status"] == "pending")
-        return _update(
-            match_id, status="done", stage="done", review_threshold=threshold, events_total=len(saved),
-            events_pending=pending, clip_failures=failures, finished_at=time.time(),
-            quality=quality_summary(clip_quality), clip_quality=clip_quality,
-        )
+        done = _finalize(match_id, meta, tagger, cut, raw, clip_quality, sb, src, context, clip_usage, guard, repo,
+                         relook=True)
+        status, stage = "done", "done"
+        if isinstance(guard.stop, JobCancelled):
+            status, stage = "cancelled", "cancelled during goal re-look; partial results saved"
+        return _update(match_id, status=status, stage=stage, clip_failures=failures, finished_at=time.time(),
+                       stop_reason=str(guard.stop) if guard.stop else None, partial=False, **done)
     except TaggerUnavailable as exc:
         return _update(match_id, status="tagger_disabled", stage="tagger not configured", error=str(exc))
+    except JobStopped as exc:
+        cancelled = isinstance(exc, JobCancelled)
+        log.warning("auto-tag job %s stopped: %s", match_id, exc)
+        part = _save_partial(match_id, meta, tagger, state, clip_usage, guard, repo)
+        return _update(match_id, status="cancelled" if cancelled else "budget_stopped",
+                       stage=("cancelled" if cancelled else "stopped: job cost cap") + "; partial results saved",
+                       stop_reason=str(exc), partial=True, finished_at=time.time(), **part)
     except Exception as exc:  # noqa: BLE001
         log.exception("auto-tag job %s failed", match_id)
-        return _update(match_id, status="error", stage="error", error=str(exc), traceback=traceback.format_exc()[-2000:])
+        part = _save_partial(match_id, meta, tagger, state, clip_usage, guard, repo)
+        return _update(match_id, status="error", stage="error", error=str(exc), partial=bool(part),
+                       traceback=traceback.format_exc()[-2000:], finished_at=time.time(), **part)
+
+
+def _save_partial(match_id: str, meta: dict[str, Any], tagger: Tagger | None, state: dict[str, Any],
+                  clip_usage: list[dict[str, Any]], guard: JobGuard, repo: EventRepo | None) -> dict[str, Any]:
+    if not state:
+        return {"usage": _usage_total(clip_usage), "clip_usage": clip_usage}
+    try:
+        return _finalize(match_id, meta, tagger, state["cut"], state["raw"], state["clip_quality"], state["sb"],
+                         state["src"], state["context"], clip_usage, guard, repo, relook=False)
+    except Exception:  # noqa: BLE001 - never mask the original stop / error
+        log.exception("auto-tag job %s: saving partial results failed", match_id)
+        store.write_doc(match_id, "quality", state.get("clip_quality") or {})
+        return {"usage": _usage_total(clip_usage), "clip_usage": clip_usage,
+                "clip_quality": state.get("clip_quality") or {}}
+
+
+def clip_details(match_id: str, include_tags: bool = True) -> list[dict[str, Any]]:
+    """Per-clip view of the cached tagger output, quality record and spend (read-only, no model calls)."""
+
+    store.check_match_id(match_id)
+    clips = store.read_doc(match_id, "clips", []) or []
+    raw = store.read_doc(match_id, "raw_tags", {}) or {}
+    qual = store.read_doc(match_id, "quality", {}) or {}
+    meta = get_autotag_job(match_id) or {}
+    usage = meta.get("clip_usage") or []
+    failures = meta.get("clip_failures") or []
+    out = []
+    for c in clips:
+        idx = c.get("index")
+        key = str(idx)
+        rec = qual.get(key)
+        rows = [u for u in usage if u.get("clip") == idx]
+        item: dict[str, Any] = {
+            **c, "tagged": key in raw, "events_count": len(raw.get(key) or []),
+            "calls": len(rows), "cost_usd": round(budget.usage_cost(rows), 6),
+            "prompt_tokens": sum(int(u.get("prompt_tokens") or 0) for u in rows),
+            "completion_tokens": sum(int(u.get("completion_tokens") or 0) for u in rows),
+            "error": next((f.split(": ", 1)[1] for f in failures if f.startswith(f"clip {idx}: ")), None),
+            "quality": None,
+        }
+        if rec:
+            def classify(issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
+                return [{**i, "fixable": i.get("code") in quality.FIXABLE} for i in issues or []]
+
+            item["quality"] = {
+                **{k: rec.get(k) for k in ("score", "passed", "flagged", "retags", "chosen_attempt", "reason",
+                                           "stop_reason", "warnings", "review_reason")},
+                "issues": classify(rec.get("issues")),
+                "attempts": [{**{k: a.get(k) for k in ("attempt", "score", "passed", "error", "stats")},
+                              "issues": classify(a.get("issues"))} for a in rec.get("attempts") or []],
+            }
+        if include_tags:
+            item["tags"] = raw.get(key)
+        out.append(item)
+    return out

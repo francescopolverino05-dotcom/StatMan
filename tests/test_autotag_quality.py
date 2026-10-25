@@ -16,7 +16,7 @@ from statman.autotag.tagger import VisionLLMTagger, clip_context_text
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch, tmp_path):
-    for k in list(quality.DEFAULTS) + ["STATMAN_RETAG_MAX", "STATMAN_JOB_MAX_COST", "STATMAN_QUALITY",
+    for k in list(quality.DEFAULTS) + ["STATMAN_RETAG_MAX", "STATMAN_JOB_MAX_COST", "STATMAN_TEST_MAX_COST", "STATMAN_QUALITY",
                                        "STATMAN_REVIEW_THRESHOLD", "DATABASE_URL", "TAGGER_API_KEY"]:
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("STATMAN_SCOREBUG", "off")
@@ -165,6 +165,7 @@ def test_retry_triggers_with_corrective_prompt_and_picks_good(video_60s):
 
 def test_best_attempt_kept_max_retries_and_flagging(video_60s, monkeypatch):
     monkeypatch.setenv("STATMAN_REVIEW_THRESHOLD", "0.5")
+    monkeypatch.setenv("STATMAN_RETAG_MAX", "2")  # default is now 1
     t = ScriptedTagger([CONDENSED, ALL_SUCCESS, BAD_COORD, GOOD])
     meta = _run(video_60s, t)
     assert len(t.contexts) == 3  # 1 + STATMAN_RETAG_MAX (2)

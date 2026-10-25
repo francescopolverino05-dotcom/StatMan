@@ -176,10 +176,30 @@ def parse(clock_txt: str, score_txt: str) -> dict[str, Any]:
     return out
 
 
-def read_crop_llm(path: Path, api_key: str, model: str = FALLBACK_MODEL) -> tuple[dict[str, Any] | None, float]:
+def llm_endpoint() -> str:
+    """Same URL rule as the tagger: TAGGER_API_URL may be the API base (…/api/v1) or the full endpoint.
+
+    The fallback used to POST to the raw TAGGER_API_URL, which in production is the OpenRouter base
+    URL, so every crop got an HTTP 4xx (HTTPStatusError) in ~0.1 s and no reading.
+    """
+    url = (os.environ.get("TAGGER_API_URL") or "https://openrouter.ai/api/v1").strip().rstrip("/")
+    return url if url.endswith("/chat/completions") else url + "/chat/completions"
+
+
+def llm_max_calls_default() -> int:
+    try:
+        return max(0, int(os.environ.get("STATMAN_SCOREBUG_LLM_MAX_CALLS", "20")))
+    except ValueError:
+        return 20
+
+
+def read_crop_llm(path: Path, api_key: str, model: str | None = None,
+                  client: Any = None) -> tuple[dict[str, Any] | None, float]:
     """Vision fallback on the crop only. Returns (reading, cost_usd)."""
 
     import httpx
+
+    model = model or os.environ.get("STATMAN_SCOREBUG_LLM_MODEL") or FALLBACK_MODEL
 
     b64 = base64.b64encode(Path(path).read_bytes()).decode()
     body = {"model": model, "max_tokens": 60, "temperature": 0, "usage": {"include": True},
@@ -187,8 +207,9 @@ def read_crop_llm(path: Path, api_key: str, model: str = FALLBACK_MODEL) -> tupl
                 {"type": "text", "text": 'Football score bug. Reply only JSON {"clock":"MM:SS","home":int,"away":int} '
                                          'or {"none":true} if no scoreboard is visible.'},
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}]}]}
-    r = httpx.post(os.environ.get("TAGGER_API_URL", "https://openrouter.ai/api/v1/chat/completions"),
-                   headers={"Authorization": f"Bearer {api_key}"}, json=body, timeout=60)
+    poster = client.post if client is not None else httpx.post
+    kwargs = {} if client is not None else {"timeout": 60}
+    r = poster(llm_endpoint(), headers={"Authorization": f"Bearer {api_key}"}, json=body, **kwargs)
     r.raise_for_status()
     j = r.json()
     cost = float((j.get("usage") or {}).get("cost") or 0.0)
@@ -285,12 +306,22 @@ def video_to_clock(video_s: float, segments: list[dict[str, Any]]) -> tuple[int,
 
 def analyse(video: str | Path, *, step: float = 5.0, work_dir: str | Path | None = None,
             reader: Callable[[Any], dict[str, Any] | None] | None = None,
-            llm_fallback: bool | None = None, llm_max_calls: int = 200) -> dict[str, Any]:
-    """Full pass over one match video. Never raises for missing tools/overlay."""
+            llm_fallback: bool | None = None, llm_max_calls: int | None = None,
+            before_llm_call: Callable[[str, float], None] | None = None,
+            llm_client: Any = None) -> dict[str, Any]:
+    """Full pass over one match video. Never raises for missing tools/overlay.
+
+    LLM crop fallback: at most ``llm_max_calls`` (STATMAN_SCOREBUG_LLM_MAX_CALLS, default 20) attempts,
+    stops after 3 consecutive HTTP errors, and ``before_llm_call(kind, estimate)`` (the job guard) runs
+    before each call so the job cost cap and cancel apply; when it raises, the fallback just stops.
+    """
+
+    if llm_max_calls is None:
+        llm_max_calls = llm_max_calls_default()
 
     t0 = time.time()
     res: dict[str, Any] = {"enabled": False, "reason": None, "segments": [], "goals": [], "score_timeline": [],
-                           "samples": 0, "readable": 0, "llm_calls": 0, "cost_usd": 0.0}
+                           "samples": 0, "readable": 0, "llm_calls": 0, "llm_errors": 0, "cost_usd": 0.0}
     if mode() == "off":
         res["reason"] = "STATMAN_SCOREBUG=off"
         return res
@@ -324,19 +355,36 @@ def analyse(video: str | Path, *, step: float = 5.0, work_dir: str | Path | None
         with ThreadPoolExecutor(workers) as ex:
             raw = list(ex.map(_one, crops))
         readings = []
+        consecutive_errors = 0
         for vs, f, r in raw:
             # Vision fallback only where a bug exists but OCR could not parse it.
             if llm_fallback and r is not None and (r["clock"] is None or r["score"] is None) \
-                    and res["llm_calls"] < llm_max_calls:
+                    and res["llm_calls"] + res["llm_errors"] < llm_max_calls:
                 try:
-                    r2, cost = read_crop_llm(f, api_key)
-                    res["llm_calls"] += 1
-                    res["cost_usd"] += cost
-                    if r2:
-                        r = {"clock": r["clock"] if r["clock"] is not None else r2["clock"],
-                             "score": r["score"] if r["score"] is not None else r2["score"], "llm": True}
-                except Exception as exc:  # noqa: BLE001 - never log the key / response body
-                    log.warning("scorebug llm fallback failed: %s", type(exc).__name__)
+                    if before_llm_call is not None:
+                        before_llm_call("scorebug crop", 0.0005)
+                except Exception as exc:  # noqa: BLE001 - cap reached / cancelled: no more fallback calls
+                    res["llm_stopped"] = str(exc)
+                    llm_fallback = False
+                else:
+                    try:
+                        r2, cost = read_crop_llm(f, api_key, client=llm_client)
+                        res["llm_calls"] += 1
+                        res["cost_usd"] += cost
+                        consecutive_errors = 0
+                        if r2:
+                            r = {"clock": r["clock"] if r["clock"] is not None else r2["clock"],
+                                 "score": r["score"] if r["score"] is not None else r2["score"], "llm": True}
+                    except Exception as exc:  # noqa: BLE001 - never log the key / response body
+                        res["llm_errors"] += 1
+                        consecutive_errors += 1
+                        status = getattr(getattr(exc, "response", None), "status_code", None)
+                        res["llm_last_error"] = f"{type(exc).__name__}" + (f" HTTP {status}" if status else "")
+                        log.warning("scorebug llm fallback failed: %s", res["llm_last_error"])
+                        if consecutive_errors >= 3:
+                            res["llm_stopped"] = f"3 consecutive errors ({res['llm_last_error']})"
+                            log.warning("scorebug llm fallback disabled for this run: %s", res["llm_stopped"])
+                            llm_fallback = False
             readings.append({"video_s": vs, **(r or {"clock": None, "score": None})})
         res.update(summarise(readings))
     except Exception as exc:  # noqa: BLE001
