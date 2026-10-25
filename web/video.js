@@ -114,11 +114,19 @@ async function refreshJobs() {
       <td>${j.status}${j.approximate ? " · film" : ""}</td>
       <td>${j.event_count ?? "—"}</td>
       <td>${j.status === "running" || j.status === "queued" || j.status === "uploading" ? fmtEta(j.eta_sec) : "—"}</td>
+      <td>${j.status === "uploading" ? "—" : `<button type="button" class="btn btn--primary btn--sm autotag-row-btn" data-job="${j.job_id}">Run auto-tag</button>`}</td>
     </tr>`
     )
     .join("");
   for (const row of jobsBody.querySelectorAll(".job-row")) {
     row.addEventListener("click", () => openJob(row.dataset.job));
+  }
+  for (const btn of jobsBody.querySelectorAll(".autotag-row-btn")) {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await openJob(btn.dataset.job);
+      runAutotag(btn.dataset.job);
+    });
   }
 }
 
@@ -218,6 +226,7 @@ function setCancelVisible(show) {
 
 async function openJob(jobId) {
   activeJobId = jobId;
+  showAutotagPanel(jobId);
   setStatus(`Loading job ${jobId}…`, { loading: true });
   try {
     const job = await fetchJson(`/api/video/jobs/${jobId}`);
@@ -494,6 +503,144 @@ form.addEventListener("submit", async (e) => {
   results.hidden = true;
   await uploadFileChunked(file, fps);
 });
+
+// --- Auto-tag (Phase 2 Tagger pipeline) ------------------------------------
+
+const atPanel = document.getElementById("autotag-panel");
+const atJobEl = document.getElementById("autotag-job");
+const atTaggerEl = document.getElementById("autotag-tagger");
+const atBtn = document.getElementById("autotag-btn");
+const atCancelBtn = document.getElementById("autotag-cancel-btn");
+const atStatus = document.getElementById("autotag-status");
+const atProgressWrap = document.getElementById("autotag-progress-wrap");
+const atProgressFill = document.getElementById("autotag-progress-fill");
+const atProgressText = document.getElementById("autotag-progress-text");
+const atLinks = document.getElementById("autotag-links");
+const AT_ACTIVE = new Set(["queued", "cutting", "tagging", "merging"]);
+let atMatch = null;
+let atTimer = null;
+
+function atUrl(mid) {
+  return `/api/autotag/matches/${encodeURIComponent(mid)}`;
+}
+
+function setAtStatus(text, { error = false, loading = false } = {}) {
+  atStatus.textContent = text;
+  atStatus.classList.toggle("is-error", error);
+  atStatus.classList.toggle("is-loading", loading);
+}
+
+function renderAutotag(job) {
+  const mid = atMatch;
+  const active = AT_ACTIVE.has(job.status);
+  atBtn.disabled = active;
+  atBtn.textContent = job.status ? "Re-run auto-tag" : "Run auto-tag";
+  atCancelBtn.hidden = !active;
+  const total = job.clips_total || 0;
+  if (total && job.status) {
+    const done = job.status === "cutting" ? job.clips_cut || 0 : job.clips_tagged || 0;
+    const pct = job.status === "done" ? 100 : Math.round((100 * done) / total);
+    atProgressWrap.hidden = false;
+    atProgressFill.style.width = `${pct}%`;
+    atProgressText.textContent = `${job.stage || job.status} · ${done}/${total} clips (${pct}%)`;
+  } else {
+    atProgressWrap.hidden = true;
+  }
+  if (job.status === "done") {
+    setAtStatus(`Auto-tag done: ${job.events_total ?? 0} events, ${job.events_pending ?? 0} pending review.`);
+  } else if (job.status === "error") {
+    setAtStatus(`Auto-tag failed: ${job.error || "unknown error"}`, { error: true });
+  } else if (job.status === "tagger_disabled") {
+    setAtStatus(`Clips ready, but the Tagger is not configured: ${job.error || ""}`, { error: true });
+  } else if (job.status === "cancelled") {
+    setAtStatus("Auto-tag cancelled.");
+  } else if (active) {
+    setAtStatus(`Auto-tagging… (${job.stage || job.status})`, { loading: true });
+  } else {
+    setAtStatus("No auto-tag run yet for this video.");
+  }
+  const showLinks = job.status === "done" || job.status === "tagger_disabled";
+  atLinks.hidden = !showLinks;
+  if (showLinks) {
+    document.getElementById("autotag-review-link").href = `/review?match=${encodeURIComponent(mid)}`;
+    document.getElementById("autotag-stats-link").href = `${atUrl(mid)}/stats`;
+    document.getElementById("autotag-team-csv").href = `${atUrl(mid)}/stats/team.csv`;
+    document.getElementById("autotag-player-csv").href = `${atUrl(mid)}/stats/players.csv`;
+  }
+  if (active) startAtPoll();
+  else stopAtPoll();
+}
+
+async function refreshAutotag() {
+  if (!atMatch) return;
+  const mid = atMatch;
+  const res = await fetch(atUrl(mid));
+  if (mid !== atMatch) return;
+  if (res.status === 404) {
+    renderAutotag({});
+    return;
+  }
+  if (!res.ok) throw new Error(`auto-tag status ${res.status}`);
+  renderAutotag(await res.json());
+}
+
+function startAtPoll() {
+  if (atTimer) return;
+  atTimer = setInterval(() => refreshAutotag().catch((err) => setAtStatus(err.message, { error: true })), 4000);
+}
+
+function stopAtPoll() {
+  if (atTimer) clearInterval(atTimer);
+  atTimer = null;
+}
+
+function showAutotagPanel(jobId) {
+  if (atMatch !== jobId) stopAtPoll();
+  atMatch = jobId;
+  atPanel.hidden = false;
+  atJobEl.textContent = jobId;
+  refreshAutotag().catch((err) => setAtStatus(err.message, { error: true }));
+}
+
+async function runAutotag(jobId = atMatch) {
+  if (!jobId) return;
+  showAutotagPanel(jobId);
+  atBtn.disabled = true;
+  setAtStatus("Starting auto-tag…", { loading: true });
+  try {
+    const job = await fetchJson(`${atUrl(jobId)}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_job_id: jobId }),
+    });
+    renderAutotag(job);
+    startAtPoll();
+    atPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    atBtn.disabled = false;
+    setAtStatus(err.message, { error: true });
+  }
+}
+
+atBtn.addEventListener("click", () => runAutotag());
+atCancelBtn.addEventListener("click", async () => {
+  try {
+    await fetchJson(`${atUrl(atMatch)}/cancel`, { method: "POST" });
+    await refreshAutotag();
+  } catch (err) {
+    setAtStatus(err.message, { error: true });
+  }
+});
+
+fetchJson("/api/autotag/tagger")
+  .then((t) => {
+    const llm = t.vision_llm || {};
+    atTaggerEl.textContent =
+      t.selected === "vision_llm" ? (llm.enabled ? `vision_llm · ${llm.model || "ready"}` : "vision_llm · not configured") : t.selected || "unknown";
+  })
+  .catch(() => {
+    atTaggerEl.textContent = "unknown";
+  });
 
 refreshDetector();
 refreshJobs().catch((err) => setStatus(err.message, { error: true }));

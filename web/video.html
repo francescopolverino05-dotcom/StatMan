@@ -79,6 +79,32 @@
         </div>
       </section>
 
+      <section id="autotag-panel" class="section" hidden>
+        <div class="section__head">
+          <h2>Auto-tag this match</h2>
+          <p>
+            Cuts the uploaded video <code id="autotag-job">—</code> into overlapping clips, tags each
+            with the Tagger, merges them and routes low-confidence events to review.
+            Tagger: <code id="autotag-tagger">checking…</code>
+          </p>
+        </div>
+        <div class="match-bar">
+          <button id="autotag-btn" class="btn btn--primary" type="button">Run auto-tag</button>
+          <button id="autotag-cancel-btn" class="btn btn--ghost" type="button" hidden>Cancel auto-tag</button>
+        </div>
+        <p id="autotag-status" class="status" role="status" aria-live="polite"></p>
+        <div id="autotag-progress-wrap" class="progress-wrap" hidden>
+          <div class="progress-bar"><div id="autotag-progress-fill" class="progress-bar__fill"></div></div>
+          <p id="autotag-progress-text" class="progress-text"></p>
+        </div>
+        <div id="autotag-links" class="film-sheet-cta" hidden>
+          <a id="autotag-review-link" class="btn btn--primary" href="#">Open review</a>
+          <a id="autotag-stats-link" class="btn btn--ghost" href="#" target="_blank" rel="noopener">Stats (JSON)</a>
+          <a id="autotag-team-csv" class="btn btn--ghost" href="#">Team CSV</a>
+          <a id="autotag-player-csv" class="btn btn--ghost" href="#">Players CSV</a>
+        </div>
+      </section>
+
       <section id="results" class="section" hidden>
         <div class="section__head">
           <h2 id="result-title">Film tags</h2>
@@ -139,6 +165,7 @@
                 <th>Status</th>
                 <th>Events</th>
                 <th>ETA</th>
+                <th>Auto-tag</th>
               </tr>
             </thead>
             <tbody></tbody>

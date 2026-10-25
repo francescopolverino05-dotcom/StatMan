@@ -362,6 +362,23 @@ def test_api_review_flow(autotag_root):
         assert client.post("/api/autotag/matches/nope/run", json={}).status_code == 404
 
 
+def test_video_page_has_run_autotag_button(autotag_root):
+    from fastapi.testclient import TestClient
+
+    from statman.api import app
+
+    with TestClient(app) as client:
+        page = client.get("/video")
+        assert page.status_code == 200
+        assert 'id="autotag-btn"' in page.text and "Run auto-tag" in page.text
+        js = client.get("/static/video.js")
+        assert js.status_code == 200
+        assert "/run" in js.text and "video_job_id" in js.text and "/review?match=" in js.text
+        # run endpoint the button posts to: unknown video job -> 404, bad id -> 400/404
+        assert client.post("/api/autotag/matches/nojob1/run", json={"video_job_id": "nojob1"}).status_code == 404
+        assert client.get("/api/autotag/matches/nojob1").status_code == 404
+
+
 # --- Postgres repository (runs when STATMAN_TEST_DATABASE_URL is set) -------
 
 PG_URL = os.environ.get("STATMAN_TEST_DATABASE_URL", "").strip()

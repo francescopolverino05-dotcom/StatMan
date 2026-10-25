@@ -1234,3 +1234,8 @@ tbody tr:hover {
 @media (max-width: 800px) {
   .review-layout { grid-template-columns: 1fr; }
 }
+
+.btn--sm {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+}
