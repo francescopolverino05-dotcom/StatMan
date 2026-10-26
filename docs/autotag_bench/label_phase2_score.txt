@@ -1,0 +1,18 @@
+labelled 80 events kept 65 no-event 15
+±1s matched 46 recall 0.582 (chance 0.519) precision 0.708 (chance 0.631)
+ real {'team': ('19/45', 0.42), 'type': ('23/46', 0.5), 'outcome': ('40/46', 0.87), 'shirt_answered': ('0/1', 0.0), 'shirt_all': ('0/46', 0.0)}
+ label-shuffle chance {'team': 0.46, 'type': 0.54, 'outcome': 0.87, 'shirt_answered': 0.05, 'shirt_all': 0.0}
+ team majority 0.64
+ type majority(pass) 0.85
+ outcome majority(success) 0.87
+±2s matched 50 recall 0.633 (chance 0.583) precision 0.769 (chance 0.708)
+ real {'team': ('22/49', 0.45), 'type': ('24/50', 0.48), 'outcome': ('48/50', 0.96), 'shirt_answered': ('0/1', 0.0), 'shirt_all': ('0/50', 0.0)}
+ label-shuffle chance {'team': 0.47, 'type': 0.49, 'outcome': 0.96, 'shirt_answered': 0.06, 'shirt_all': 0.0}
+ team majority 0.63
+ type majority(pass) 0.76
+ outcome majority(success) 0.96
+poss changes hand 13 pred 28
+ ±1s matched 3 chance 3.9
+ ±2s matched 5 chance 6.0
+ ±3s matched 5 chance 7.4
+Counter({'pass': 41, 'no event': 15, 'dribble': 10, 'throw-in': 9, 'interception': 4, 'tackle': 1}) Counter({'away': 44, 'home': 23, 'unknown': 10, 'no event': 3}) [('unknown', 78), ('1', 1), ('8', 1)]
