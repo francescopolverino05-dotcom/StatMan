@@ -1,0 +1,118 @@
+{
+ "clip": "Napoli-Spezia ns_1600_1900.mp4 (match 16:00-18:59, match_t = clip_t + 960)",
+ "hand_tags": 79,
+ "config": {
+  "weights": "uisikdag/yolo-v8-football-players-detection best.pt (not committed)",
+  "imgsz": 1280,
+  "fps": 8,
+  "ball": "viterbi",
+  "pan": "camera.pan_events(smooth=3,min_change=10,min_sep=0.5)",
+  "DetectConfig": "defaults"
+ },
+ "runtime": {
+  "detect_s_for_180s": 167,
+  "pan_s_for_180s": 3,
+  "post_s": 0.5,
+  "cpu": "8 vCPU box"
+ },
+ "moments_u8_1280": {
+  "hand_events": 79,
+  "candidates": 80,
+  "candidates_per_min": 26.7,
+  "hand_per_min": 26.3,
+  "w1": {
+   "matched": 58,
+   "recall": 0.734,
+   "precision": 0.725,
+   "chance_recall": 0.591,
+   "chance_precision": 0.583
+  },
+  "w2": {
+   "matched": 62,
+   "recall": 0.785,
+   "precision": 0.775,
+   "chance_recall": 0.664,
+   "chance_precision": 0.656
+  },
+  "team": {
+   "pairs": 62,
+   "with_team": 34,
+   "agree": 18,
+   "accuracy": 0.529,
+   "majority_baseline": 0.647
+  },
+  "possession": {
+   "w1": {
+    "matched": 1,
+    "recall": 0.077,
+    "precision": 0.062,
+    "chance_matched": 2.2
+   },
+   "w2": {
+    "matched": 2,
+    "recall": 0.154,
+    "precision": 0.125,
+    "chance_matched": 3.5
+   },
+   "w3": {
+    "matched": 4,
+    "recall": 0.308,
+    "precision": 0.25,
+    "chance_matched": 4.4
+   },
+   "hand_changes": 13,
+   "flags": 16,
+   "team_in_possession_agree": "33/78"
+  }
+ },
+ "moments_u8_1920": {
+  "hand_events": 79,
+  "candidates": 69,
+  "candidates_per_min": 23.0,
+  "hand_per_min": 26.3,
+  "w1": {
+   "matched": 51,
+   "recall": 0.646,
+   "precision": 0.739,
+   "chance_recall": 0.535,
+   "chance_precision": 0.613
+  },
+  "w2": {
+   "matched": 55,
+   "recall": 0.696,
+   "precision": 0.797,
+   "chance_recall": 0.597,
+   "chance_precision": 0.683
+  },
+  "team": {
+   "pairs": 55,
+   "with_team": 31,
+   "agree": 18,
+   "accuracy": 0.581,
+   "majority_baseline": 0.581
+  },
+  "possession": {
+   "w1": {
+    "matched": 3,
+    "recall": 0.231,
+    "precision": 0.158,
+    "chance_matched": 2.5
+   },
+   "w2": {
+    "matched": 4,
+    "recall": 0.308,
+    "precision": 0.211,
+    "chance_matched": 3.8
+   },
+   "w3": {
+    "matched": 4,
+    "recall": 0.308,
+    "precision": 0.211,
+    "chance_matched": 4.6
+   },
+   "hand_changes": 13,
+   "flags": 19,
+   "team_in_possession_agree": "47/77"
+  }
+ }
+}
