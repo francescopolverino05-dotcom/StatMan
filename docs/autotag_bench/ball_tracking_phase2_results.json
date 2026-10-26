@@ -1,0 +1,7 @@
+{"clip":"ns_1600_1900.mp4 (offset 960)","paid_api_calls":0,
+ "team_in_possession_at_hand_events":{
+  "viterbi_ball_nearest_player":{"n":29,"acc":0.38,"majority":0.62,"shift_chance":0.49},
+  "camera_centre_nearest_player":{"n":60,"acc":0.48,"majority":0.58,"shift_chance":0.51},
+  "pan_direction_label_free_attack_dir_2s":{"n":28,"acc":0.46,"majority":0.54,"shift_chance":0.54}},
+ "sahi_tiled_ball_320px_tiles_at_640":{"frames_checked":9,"frames_with_hit":3,"hits_eyeballed":"1 likely match ball, 1 ball lying near touchline, 1 spare ball on the running track","sec_per_frame":0.65},
+ "conclusion":"At 1280x720 wide-angle the ball is ~3-5 px; free football YOLO weights (whole frame or tiled) rarely see it. No tested free method beat chance for team in possession; not adopted."}
