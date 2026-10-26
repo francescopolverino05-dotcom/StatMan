@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StatMan — semi-automatic tagging</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/assets/favicon-32.png" />
+    <style>
+      .tag-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 1rem; align-items: start; }
+      .tag-layout video { width: 100%; background: #000; border-radius: 10px; }
+      .tag-track { position: relative; height: 22px; background: #eef2ee; border-radius: 6px; margin: .4rem 0; cursor: pointer; }
+      .tag-track i { position: absolute; top: 3px; width: 3px; height: 16px; background: #999; }
+      .tag-track i.done { background: #1d7a46; } .tag-track i.cur { background: #d33; width: 5px; } .tag-track i.deleted { display: none; }
+      .tag-track b { position: absolute; top: 0; width: 2px; height: 22px; background: #000; }
+      .tag-card { border: 1px solid #ccd; border-radius: 10px; padding: .7rem; background: #fff; }
+      .tag-card .row { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; margin: .25rem 0; }
+      .chip { border: 1px solid #bbb; border-radius: 999px; padding: .1rem .55rem; font-size: .85rem; background: #f6f6f6; cursor: pointer; }
+      .chip.on { background: #1d3557; color: #fff; border-color: #1d3557; }
+      .chip.home.on { background: #5aaee0; border-color: #5aaee0; } .chip.away.on { background: #222; }
+      .sugg { color: #a05a00; font-style: italic; }
+      .tag-pitch { width: 100%; aspect-ratio: 105/68; display: block; background: #2f8f4e; border-radius: 6px; cursor: crosshair; }
+      .tag-list { max-height: 38vh; overflow: auto; font-size: .85rem; padding-left: 1.2rem; }
+      .tag-list li { cursor: pointer; } .tag-list li.cur { font-weight: 700; } .tag-list li.deleted { text-decoration: line-through; color: #999; }
+      .tag-list li.todo { color: #a05a00; }
+      .keys { font-size: .8rem; columns: 2; } .keys kbd { background: #eee; border: 1px solid #ccc; border-radius: 3px; padding: 0 .25rem; }
+      .tag-bar { display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: end; }
+      .tag-bar .field { margin: 0; } .tag-bar input:not([type=checkbox]) { min-width: 8rem; }
+      a.chip { text-decoration: none; color: inherit; }
+      #save-state.err { color: #c00; }
+    </style>
+  </head>
+  <body class="page">
+    <div id="app-nav"></div>
+    <header class="page-hero">
+      <p class="eyebrow">Auto-tag · semi-automatic</p>
+      <h1>Tag a match</h1>
+      <p class="lede">Open the video from your computer (it is not uploaded), import detector moments (optional), then
+        confirm or fix each one with the keyboard. Every change autosaves; confirmed events are the match's tags.</p>
+    </header>
+    <main>
+      <section class="section">
+        <form id="match-form" class="tag-bar">
+          <label class="field"><span>Match id</span><input id="match-id" required placeholder="e.g. napoli-spezia" /></label>
+          <button class="btn btn--primary" type="submit">Load</button>
+          <label class="field"><span>Video (local file)</span><input id="video-file" type="file" accept="video/*" /></label>
+          <button class="chip" type="button" id="server-video" title="Use a video already uploaded for this match">Server video</button>
+          <label class="field"><span>Detector moments (.json)</span><input id="moments-file" type="file" accept=".json,application/json" /></label>
+        </form>
+        <p class="status" id="status"></p>
+      </section>
+      <section class="section" id="settings" hidden>
+        <form class="tag-bar" id="settings-form">
+          <label class="field"><span>Home name</span><input id="s-home" /></label>
+          <label class="field"><span>Away name</span><input id="s-away" /></label>
+          <label class="field"><span>Video→match (video_s:match_s, …)</span><input id="s-seg" placeholder="0:0, 2900:2700" /></label>
+          <label class="field"><span><input type="checkbox" id="s-dir" /> Home attacks → (right) in 1st half</span></label>
+          <label class="field"><span>Lead-in s</span><input id="s-lead" type="number" step="0.5" value="2" style="width:4rem" /></label>
+          <label class="field"><span>At moment</span><select id="s-mode"><option value="loop">loop</option><option value="pause">pause</option><option value="play">keep playing</option></select></label>
+          <a class="chip" id="csv-events" href="#">Events CSV</a>
+          <a class="chip" id="csv-team" href="#">Team stats CSV</a>
+          <a class="chip" id="csv-players" href="#">Player CSV</a>
+          <a class="chip" id="stats-link" href="#" target="_blank">Stats JSON</a>
+        </form>
+      </section>
+      <section class="section tag-layout" id="work" hidden>
+        <div>
+          <video id="video" controls preload="auto" muted></video>
+          <div class="tag-track" id="track"></div>
+          <div class="row" style="display:flex;gap:1rem;font-size:.85rem">
+            <span id="clock"></span><span id="save-state"></span><span id="counts"></span>
+          </div>
+          <details open><summary>Keys</summary>
+            <div class="keys" id="keys"></div>
+          </details>
+        </div>
+        <div>
+          <div class="tag-card" id="card"></div>
+          <p style="margin:.4rem 0 .2rem;font-size:.85rem">Pitch as seen on camera: click <b>start</b>, then <b>end</b> (passes). <kbd>Esc</kbd> clears.</p>
+          <svg class="tag-pitch" id="pitch" viewBox="0 0 105 68"></svg>
+          <ol class="tag-list" id="list"></ol>
+        </div>
+      </section>
+    </main>
+    <script src="/static/tag.js" type="module"></script>
+    <script type="module">
+      import { mountAppNav } from "/static/app-shell.js";
+      mountAppNav({ active: "tag" });
+    </script>
+  </body>
+</html>

@@ -1289,6 +1289,67 @@ def api_autotag_player_csv(match_id: str, confirmed_only: bool = Query(False)) -
     )
 
 
+# --- Semi-automatic tagging (analyst confirms detector moments) ---------------
+
+
+@app.get("/tag")
+def ui_semi_tag() -> FileResponse:
+    """Semi-automatic tagging: local video + detector moments + keyboard confirm (?match=ID)."""
+    return _page("tag.html")
+
+
+@app.get("/api/semi/{match_id}")
+def api_semi_get(match_id: str) -> dict[str, Any]:
+    from statman.autotag.semi import UI_CODES, get_session
+
+    return {**get_session(_autotag_match(match_id)), "codes": UI_CODES}
+
+
+@app.put("/api/semi/{match_id}")
+async def api_semi_put(match_id: str, request: Request) -> dict[str, Any]:
+    """Autosave: {settings?, items?}. Confirmed (status=done) items become authoritative confirmed events."""
+    from statman.autotag.semi import save_session
+
+    _autotag_match(match_id)
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body must be a JSON object")
+    try:
+        doc = await run_in_threadpool(save_session, match_id, body)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "updated_at": doc["updated_at"], "confirmed": doc["confirmed"]}
+
+
+@app.post("/api/semi/{match_id}/moments")
+async def api_semi_moments(match_id: str, request: Request) -> dict[str, Any]:
+    """Import detector moments (``python -m statman.detect.cli`` output JSON) as items to review."""
+    from statman.autotag.semi import import_moments
+
+    _autotag_match(match_id)
+    try:
+        doc = await run_in_threadpool(import_moments, match_id, await request.json())
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "moments": len(doc["moments"]), "items": len(doc["items"])}
+
+
+@app.get("/api/semi/{match_id}/events.csv")
+def api_semi_csv(match_id: str) -> Response:
+    from statman.autotag.semi import export_csv
+
+    return Response(export_csv(_autotag_match(match_id)), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{match_id}_events.csv"'})
+
+
+@app.get("/api/semi/{match_id}/tags.txt")
+def api_semi_tags(match_id: str) -> Response:
+    """Confirmed events in the analyst hand-tag line format (CLOCK|TEAM|CODE|...)."""
+    from statman.autotag.semi import export_tags
+
+    return Response(export_tags(_autotag_match(match_id)), media_type="text/plain")
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon() -> FileResponse:
     return FileResponse(WEB_DIR / "assets" / "favicon.ico", media_type="image/x-icon")

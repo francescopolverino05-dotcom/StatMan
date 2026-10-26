@@ -14,6 +14,7 @@ Events crossing this module use one dict shape::
 from __future__ import annotations
 
 import copy
+import json
 import os
 import time
 from typing import Any, Protocol
@@ -33,6 +34,8 @@ class EventRepo(Protocol):
     def replace_ai_events(self, match_id: str, events: list[dict[str, Any]]) -> list[dict[str, Any]]: ...
 
     def add_event(self, match_id: str, event: dict[str, Any]) -> dict[str, Any]: ...
+
+    def replace_marked_events(self, match_id: str, mark: str, events: list[dict[str, Any]]) -> list[dict[str, Any]]: ...
 
     def update_event(self, match_id: str, event_id: int, fields: dict[str, Any]) -> dict[str, Any]: ...
 
@@ -68,6 +71,14 @@ def _clean(event: dict[str, Any], match_id: str) -> dict[str, Any]:
     }
 
 
+def _marked(ev: dict[str, Any], mark: str) -> bool:
+    return ev.get("source") == "human" and mark in (ev.get("review_reason") or [])
+
+
+def _mark(ev: dict[str, Any], mark: str) -> dict[str, Any]:
+    return {**ev, "source": "human", "review_reason": [mark, *[r for r in ev.get("review_reason") or [] if r != mark]]}
+
+
 class FileEventRepo:
     name = "files"
 
@@ -95,6 +106,21 @@ class FileEventRepo:
                 row = {**_clean(ev, match_id), "id": doc["next_id"], "updated_at": time.time()}
                 doc["next_id"] += 1
                 kept.append(row)
+            doc["events"] = kept
+            self._save(match_id, doc)
+            return self.list_events(match_id)
+
+    def replace_marked_events(self, match_id: str, mark: str, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Drop every human event whose review_reason contains ``mark`` and insert ``events`` (human, marked).
+
+        Used by the semi-automatic tagger (mark ``semi``); the DB only allows source ai|human.
+        """
+        with store.LOCK:
+            doc = self._load(match_id)
+            kept = [e for e in doc["events"] if not _marked(e, mark)]
+            for ev in events:
+                kept.append({**_clean(_mark(ev, mark), match_id), "id": doc["next_id"], "updated_at": time.time()})
+                doc["next_id"] += 1
             doc["events"] = kept
             self._save(match_id, doc)
             return self.list_events(match_id)
@@ -217,6 +243,15 @@ class PostgresEventRepo:
             )
             for ev in events:
                 conn.execute(self._INSERT, (match_id, *self._params(_clean(ev, match_id))))
+        return self.list_events(match_id)
+
+    def replace_marked_events(self, match_id: str, mark: str, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            self._ensure_match(conn, match_id)
+            conn.execute("DELETE FROM events WHERE match_id = %s AND source = 'human' "
+                         "AND COALESCE(meta->'review_reason', '[]'::jsonb) @> %s::jsonb", (match_id, json.dumps([mark])))
+            for ev in events:
+                conn.execute(self._INSERT, (match_id, *self._params(_clean(_mark(ev, mark), match_id))))
         return self.list_events(match_id)
 
     def add_event(self, match_id: str, event: dict[str, Any]) -> dict[str, Any]:
