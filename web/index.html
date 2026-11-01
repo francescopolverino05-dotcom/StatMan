@@ -5,12 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1f6b3a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="description"
-      content="StatMan — turn your match film and facts into a full stats board."
-    />
+    <meta name="description" content="StatMan — load a match stats package, view it, export it." />
     <link rel="manifest" href="/static/manifest.webmanifest" />
-    <title>StatMan — your matches</title>
+    <title>StatMan — stats viewer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -22,45 +19,103 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/static/assets/favicon-16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/static/assets/apple-touch-icon.png" />
   </head>
-  <body class="page page--home">
+  <body class="page page--viewer">
     <div id="app-nav"></div>
 
-    <header class="app-hero">
-      <div class="app-hero__atmosphere" aria-hidden="true"></div>
-      <div class="app-hero__inner">
-        <p class="brand">StatMan</p>
-        <h1>Your matches, from film.</h1>
-        <p class="lede">
-          Upload video and match facts — one run fills the board. Approximate, but built for
-          your games, not a paid provider feed.
-        </p>
-        <div class="cta">
-          <a class="btn btn--primary" href="/match#new">New match</a>
-        </div>
-      </div>
+    <header class="page-hero">
+      <p class="eyebrow">Stats viewer &amp; exporter</p>
+      <h1>Load a match stats package</h1>
+      <p class="lede">
+        Drop the files you were given — <strong>team CSV</strong>, <strong>players CSV</strong>, and
+        optionally the <strong>HTML stats page</strong> and <strong>shots CSV</strong>. StatMan shows the
+        team and player stats and lets you export them. It does not tag or detect anything.
+      </p>
     </header>
 
-    <main class="app-main">
-      <section class="section" id="matches">
+    <main>
+      <section class="section" id="load">
         <div class="section__head">
-          <h2>Matches</h2>
-          <p>Open a pack to keep working, or start a new one above.</p>
+          <h2>Load</h2>
+          <p>Select all the files of one match together (they are told apart by name and header).</p>
         </div>
-        <p id="home-status" class="status" role="status" aria-live="polite"></p>
-        <ul id="match-list" class="match-list" hidden></ul>
-        <p id="match-empty" class="hint" hidden>
-          No packs yet. Hit <a href="/match#new">New match</a> to create one.
-        </p>
+        <form id="load-form" class="upload-form">
+          <label class="file-drop" id="drop" for="files-input">
+            <input id="files-input" type="file" multiple accept=".csv,.tsv,.txt,.html,.htm,.json" />
+            <span id="files-label">Choose files or drop them here… (e.g. Monopoli-Napoli_team.csv, _players.csv, _stats.html)</span>
+          </label>
+          <div class="match-bar match-bar--stack">
+            <label class="field">
+              <span>Title (optional)</span>
+              <input id="title-input" type="text" placeholder="e.g. Monopoli 0-0 Napoli" />
+            </label>
+          </div>
+          <button class="btn btn--primary" type="submit">Load &amp; view</button>
+        </form>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+
+        <div id="saved" hidden>
+          <h3 class="viewer-sub">Loaded packages</h3>
+          <ul id="saved-list" class="match-list"></ul>
+        </div>
+      </section>
+
+      <section id="result" class="section" hidden>
+        <div class="section__head">
+          <h2 id="result-title">Match</h2>
+          <p id="result-summary"></p>
+        </div>
+
+        <div class="viewer-export" id="export-bar" aria-label="Export"></div>
+
+        <div id="notes-wrap" class="banner banner--warn" hidden>
+          <strong>Notes from the report</strong>
+          <ul id="notes"></ul>
+        </div>
+
+        <div id="team-block" hidden>
+          <h3 class="viewer-sub">Key team stats</h3>
+          <div id="highlights" class="viewer-highlights"></div>
+
+          <h3 class="viewer-sub">All team stats</h3>
+          <div class="table-wrap">
+            <table id="team-table" class="viewer-table"></table>
+          </div>
+        </div>
+
+        <div id="players-block" hidden>
+          <h3 class="viewer-sub">Players</h3>
+          <div class="viewer-controls">
+            <label class="field"><span>Team</span><select id="player-team"></select></label>
+            <label class="field"><span>Search</span><input id="player-search" type="search" placeholder="name…" /></label>
+            <label class="viewer-check"><input id="player-hide-zero" type="checkbox" /> hide rows with no activity</label>
+            <button id="player-export" class="btn btn--ghost" type="button">Export this view (CSV)</button>
+          </div>
+          <div class="table-wrap table-wrap--wide">
+            <table id="player-table" class="viewer-table viewer-table--players"></table>
+          </div>
+        </div>
+
+        <div id="shots-block" hidden>
+          <h3 class="viewer-sub">Shots</h3>
+          <div class="table-wrap table-wrap--wide">
+            <table id="shots-table" class="viewer-table"></table>
+          </div>
+        </div>
+
+        <details id="report-block" class="viewer-report" hidden>
+          <summary>Original HTML report</summary>
+          <iframe id="report-frame" title="Stats report" sandbox="" loading="lazy"></iframe>
+        </details>
       </section>
     </main>
 
     <footer class="footer">
       <p>
-        Staff-style match workspace on this repo. World Cup open-data still lives under
-        <a href="/demo">Labs → Open-data demo</a> as the gold-standard catalog shape.
+        StatMan is a viewer and exporter. Looking for StatsBomb event data? See
+        <a href="/import">Import events</a> and the <a href="/demo">open-data demo</a>.
       </p>
     </footer>
 
-    <script src="/static/home.js" type="module"></script>
+    <script src="/static/viewer.js" type="module"></script>
   </body>
 </html>

@@ -1,7 +1,7 @@
 """Import StatsBomb or Opta event JSON and compute StatMan SPADL stats.
 
 This is the path for provider-grade match stats from a game you already have
-as event data. Video spotting stays approximate and separate.
+as event data.
 """
 
 from __future__ import annotations

@@ -1239,3 +1239,38 @@ tbody tr:hover {
   padding: 0.3rem 0.7rem;
   font-size: 0.85rem;
 }
+
+/* ---- Stats viewer (package loader) ---- */
+.viewer-sub { font-family: var(--font-display); margin: 1.6rem 0 0.6rem; }
+.viewer-export { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0 0 1rem; }
+.viewer-export__label { font-weight: 700; margin-right: 0.25rem; }
+.viewer-export .btn { text-decoration: none; }
+.viewer-highlights { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 0.9rem; }
+.viewer-card { background: var(--chalk); border: 1px solid var(--line); border-radius: 14px; padding: 0.8rem 1rem; }
+.viewer-card h4 { margin: 0 0 0.4rem; font-family: var(--font-display); }
+.viewer-card__teams { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+.viewer-card ul { list-style: none; margin: 0.3rem 0 0; padding: 0; }
+.viewer-card li { display: grid; grid-template-columns: 4.2rem 1fr 4.2rem; grid-template-areas: "h b a" "h l a"; align-items: center; column-gap: 0.5rem; padding: 0.3rem 0; border-top: 1px solid var(--line); }
+.viewer-card .v { font-weight: 700; font-variant-numeric: tabular-nums; grid-row: 1 / span 2; }
+.viewer-card .v--home { grid-area: h; text-align: left; }
+.viewer-card .v--away { grid-area: a; text-align: right; }
+.viewer-card .l { grid-area: l; text-align: center; font-size: 0.8rem; color: var(--muted); }
+.viewer-card .vbar { grid-area: b; display: block; height: 6px; border-radius: 3px; background: rgba(20, 32, 24, 0.14); overflow: hidden; }
+.viewer-card .vbar i { display: block; height: 100%; background: var(--turf); }
+.viewer-table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.viewer-table th, .viewer-table td { padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.viewer-table th:first-child, .viewer-table td:first-child { text-align: left; white-space: normal; }
+.viewer-table thead th { position: sticky; top: 0; background: var(--paper-deep); }
+.viewer-table .viewer-section th { background: var(--paper-deep); text-align: left; font-family: var(--font-display); }
+.viewer-table .viewer-note { text-align: left; white-space: normal; color: var(--muted); font-size: 0.85rem; }
+.viewer-table--players th.is-sortable { cursor: pointer; user-select: none; }
+.viewer-table--players td:nth-child(2) { text-align: left; }
+.viewer-controls { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: end; margin-bottom: 0.7rem; }
+.viewer-check { display: flex; gap: 0.4rem; align-items: center; }
+.viewer-report iframe { width: 100%; height: 70vh; border: 1px solid var(--line); border-radius: 10px; background: #fff; margin-top: 0.6rem; }
+.viewer-saved { display: flex; gap: 0.5rem; align-items: stretch; }
+.viewer-saved .match-list__row { flex: 1; }
+.file-drop.is-over { outline: 3px dashed var(--turf); }
+@media print {
+  .topnav, #app-nav, #load, .viewer-export, .viewer-controls, .footer, .viewer-report { display: none !important; }
+}

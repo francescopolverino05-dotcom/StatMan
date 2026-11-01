@@ -1,18 +1,13 @@
-/** Shared StatMan app chrome — Matches-first nav (EnjoyFootball-style shell). */
+/** Shared StatMan app chrome — viewer-first nav. */
 
 const PRIMARY = [
-  { href: "/", id: "home", label: "Matches" },
-  { href: "/match", id: "match", label: "Workspace" },
+  { href: "/", id: "home", label: "Stats viewer" },
+  { href: "/import", id: "import", label: "Import events" },
 ];
 
 const LABS = [
   { href: "/demo", id: "demo", label: "Open-data demo" },
   { href: "/season", id: "season", label: "Season" },
-  { href: "/video", id: "video", label: "Film tags" },
-  { href: "/tag", id: "tag", label: "Tag (semi-auto)" },
-  { href: "/review", id: "review", label: "Review" },
-  { href: "/matchsheet", id: "matchsheet", label: "Match sheet" },
-  { href: "/import", id: "import", label: "Import" },
   { href: "/api/docs", id: "api", label: "API" },
 ];
 
@@ -39,7 +34,7 @@ export function mountAppNav({ active = "home" } = {}) {
       <a class="topnav__brand" href="/"><img class="topnav__logo" src="/static/assets/statman-logo.png" alt="" width="32" height="32" />StatMan</a>
       <div class="topnav__links">${primary}</div>
       <details class="topnav__labs">
-        <summary>Labs</summary>
+        <summary>More</summary>
         <div class="topnav__labs-menu">${labs}</div>
       </details>
     </nav>

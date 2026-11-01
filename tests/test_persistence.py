@@ -22,14 +22,12 @@ needs_pg = pytest.mark.skipif(not PG_URL, reason="STATMAN_TEST_DATABASE_URL not 
 def roots(tmp_path, monkeypatch):
     """Point every store at tmp dirs; restore the cached backend afterwards."""
     import statman.event_import as ei
-    import statman.match_pack.store as mp
+    import statman.packages as pk
     import statman.store as ss
-    import statman.video.store as vs
 
-    monkeypatch.setattr(mp, "ROOT", tmp_path / "match_packs")
+    monkeypatch.setattr(pk, "ROOT", tmp_path / "packages")
     monkeypatch.setattr(ei, "ROOT", tmp_path / "imports")
     monkeypatch.setattr(ss, "ROOT", tmp_path / "seasons")
-    monkeypatch.setattr(vs, "ROOT", tmp_path / "videos")
     mirror.reset_state()
     backend_mod.reset_backend()
     yield tmp_path
@@ -67,12 +65,12 @@ def test_file_backend_roundtrip_preserves_text(roots, monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     b = persistence.get_backend()
     text = '{\n  "b": 1,\n  "a": 2\n}'
-    b.put_text("match_packs", "abc/pack.json", text)
-    assert (roots / "match_packs" / "abc" / "pack.json").read_text() == text
-    assert b.get_text("match_packs", "abc/pack.json") == text
-    assert [e.key for e in b.list_entries("match_packs")] == ["abc/pack.json"]
-    b.delete_prefix("match_packs", "abc/")
-    assert b.get_text("match_packs", "abc/pack.json") is None
+    b.put_text("packages", "abc/pack.json", text)
+    assert (roots / "packages" / "abc" / "pack.json").read_text() == text
+    assert b.get_text("packages", "abc/pack.json") == text
+    assert [e.key for e in b.list_entries("packages")] == ["abc/pack.json"]
+    b.delete_prefix("packages", "abc/")
+    assert b.get_text("packages", "abc/pack.json") is None
 
 
 def test_keys_cannot_escape_root(roots, monkeypatch):
@@ -80,28 +78,18 @@ def test_keys_cannot_escape_root(roots, monkeypatch):
     b = persistence.get_backend()
     for bad in ("../x.json", "/etc/passwd", "a/../../x.json", ""):
         with pytest.raises(ValueError):
-            b.put_text("match_packs", bad, "{}")
+            b.put_text("packages", bad, "{}")
 
 
-def test_match_pack_store_unchanged_in_file_mode(roots, monkeypatch):
+def test_package_store_in_file_mode(roots, monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    from statman.match_pack import store
+    from statman import packages
 
-    store.write_meta("p1", {"pack_id": "p1", "x": 1})
-    assert store.read_meta("p1")["x"] == 1
-    assert [m["pack_id"] for m in store.list_meta()] == ["p1"]
-
-
-def test_video_dir_env(roots, tmp_path, monkeypatch):
-    from statman.video import store as vs
-
-    monkeypatch.delenv("STATMAN_VIDEO_DIR", raising=False)
-    assert vs.upload_path("j1", "a b.mp4") == roots / "videos" / "uploads" / "j1_a_b.mp4"
-    monkeypatch.setenv("STATMAN_VIDEO_DIR", str(tmp_path / "vol"))
-    assert vs.upload_path("j1", "a.mp4") == tmp_path / "vol" / "uploads" / "j1_a.mp4"
-    from statman.match_pack.pipeline import _pack_video_path
-
-    assert _pack_video_path("p9", "m.mp4") == tmp_path / "vol" / "match_packs" / "p9" / "video_m.mp4"
+    pkg = packages.create_package(
+        [("A-B_team.csv", b"metric,A,B\nShots,3,4\n"), ("A-B_players.csv", b"team,player,shots\nA,x,3\n")]
+    )
+    assert packages.get_package(pkg["package_id"])["team"]["teams"] == ["A", "B"]
+    assert [m["package_id"] for m in packages.list_packages()] == [pkg["package_id"]]
 
 
 def test_split_sql_handles_migration_file():
@@ -160,28 +148,25 @@ def test_migrations_create_phase2_tables_idempotently(pg):
 def test_pg_backend_roundtrip(pg):
     b = persistence.get_backend()
     assert b.name == "postgres"
-    b.put_text("match_packs", "a/pack.json", '{"x": NaN, "y": [1, 2]}')
-    assert json.loads(b.get_text("match_packs", "a/pack.json")) == {"x": None, "y": [1, 2]}
-    b.put_text("match_packs", "a/raw.json", "not json")
-    assert b.get_text("match_packs", "a/raw.json") == "not json"
-    assert sorted(e.key for e in b.list_entries("match_packs", "a/")) == ["a/pack.json", "a/raw.json"]
-    b.delete_prefix("match_packs", "a/")
-    assert b.list_entries("match_packs") == []
+    b.put_text("packages", "a/pack.json", '{"x": NaN, "y": [1, 2]}')
+    assert json.loads(b.get_text("packages", "a/pack.json")) == {"x": None, "y": [1, 2]}
+    b.put_text("packages", "a/raw.json", "not json")
+    assert b.get_text("packages", "a/raw.json") == "not json"
+    assert sorted(e.key for e in b.list_entries("packages", "a/")) == ["a/pack.json", "a/raw.json"]
+    b.delete_prefix("packages", "a/")
+    assert b.list_entries("packages") == []
 
 
 @needs_pg
 def test_redeploy_survives_via_restore(pg):
     """Write through the normal stores, wipe the disk, restore from Postgres."""
-    from statman import event_import, store as season_store
-    from statman.match_pack import store
-    from statman.video import store as vs
+    from statman import event_import, packages, store as season_store
 
     persistence.bootstrap(background=False)
-    store.write_meta("p1", {"pack_id": "p1", "facts": {"home": "A"}})
-    (store.pack_dir("p1") / "film_events.json").write_text('[{"t": 1}]')
-    (store.pack_dir("p1") / "video_m.mp4").write_bytes(b"\x00binary")
-    vs.write_job("j1", {"id": "j1", "status": "done"})
-    vs.upload_path("j1", "m.mp4").write_bytes(b"\x00")
+    pkg = packages.create_package(
+        [("A-B_team.csv", b"metric,A,B\nShots,3,4\n"), ("A-B_stats.html", b"<h1>A 1-0 B</h1>")]
+    )
+    pid = pkg["package_id"]
     work = event_import.import_dir("i1")
     (work / "stats.json").write_text('{"xg": 1.2}')
     (work / "meta.json").write_text('{"import_id": "i1"}')
@@ -192,8 +177,6 @@ def test_redeploy_survives_via_restore(pg):
     persistence.sync_all()
     keys = {e.key for e in persistence.get_backend().list_entries("imports")}
     assert keys == {"i1/stats.json", "i1/meta.json"}
-    assert {e.key for e in persistence.get_backend().list_entries("videos")} == {"jobs/j1/job.json"}
-    assert "p1/video_m.mp4" not in {e.key for e in persistence.get_backend().list_entries("match_packs")}
 
     # "Redeploy": container disk is gone.
     shutil.rmtree(pg)
@@ -201,24 +184,22 @@ def test_redeploy_survives_via_restore(pg):
     backend_mod.reset_backend()
     persistence.bootstrap(background=False)
 
-    assert store.read_meta("p1")["facts"] == {"home": "A"}
-    assert [m["pack_id"] for m in store.list_meta()] == ["p1"]
-    assert json.loads((store.pack_dir("p1") / "film_events.json").read_text()) == [{"t": 1}]
-    assert vs.read_job("j1")["status"] == "done"
+    assert packages.get_package(pid)["title"] == "A 1-0 B"
+    assert [m["package_id"] for m in packages.list_packages()] == [pid]
     assert json.loads((event_import.import_dir("i1") / "stats.json").read_text()) == {"xg": 1.2}
     assert season_store.load_match_stats(43, 3, 9) == {"g": 1}
 
 
 @needs_pg
 def test_deleting_a_file_deletes_the_document(pg):
-    from statman.match_pack import store
+    from statman import packages
 
     persistence.bootstrap(background=False)
-    store.write_meta("p2", {"pack_id": "p2"})
+    pkg = packages.create_package([("A-B_team.csv", b"metric,A,B\nShots,3,4\n")])
     persistence.sync_all()
-    shutil.rmtree(store.pack_dir("p2"))
-    assert mirror.sync("match_packs") == (0, 1)
-    assert persistence.get_backend().list_entries("match_packs") == []
+    assert packages.delete_package(pkg["package_id"])
+    assert mirror.sync("packages")[1] == 2
+    assert persistence.get_backend().list_entries("packages") == []
 
 
 @needs_pg
@@ -226,11 +207,10 @@ def test_api_lifespan_and_write_sync(pg):
     from fastapi.testclient import TestClient
 
     from statman.api import app
-    from statman.match_pack import store
 
     with TestClient(app) as client:
         assert client.get("/api/storage").json()["storage"] == "postgres"
-        store.write_meta("p3", {"pack_id": "p3"})
-        client.post("/api/does-not-exist")  # any write request triggers a sync
-        keys = {e.key for e in persistence.get_backend().list_entries("match_packs")}
-        assert "p3/pack.json" in keys
+        r = client.post("/api/packages", files=[("files", ("A-B_team.csv", b"metric,A,B\nShots,3,4\n", "text/csv"))])
+        assert r.status_code == 200
+        keys = {e.key for e in persistence.get_backend().list_entries("packages")}
+        assert f"{r.json()['package_id']}/package.json" in keys

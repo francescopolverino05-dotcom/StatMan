@@ -1,0 +1,16 @@
+clock,half,team,player,shirt,outcome,area,xG_estimated,detail,confidence,clip
+07:01,1,Napoli,,,ON,out,0.02,"right foot, outside box, xG=0.02",H,H1_02
+13:22,1,Monopoli,,,OFF,out,0.03,"right foot, out of box, xG=0.03",L,H1_04
+28:44,1,Napoli,,,ON,in,0.2,"right foot, box center, xG=0.20",L,H1_10
+51:09,2,Napoli,,,OFF,out,0.01,"right foot, outside box, xG=0.01",M,H2_19
+56:06,2,Napoli,,,OFF,out,0.02,"right foot, outside box, xG=0.02",L,H2_20
+59:17,2,Napoli,,,OFF,in,0.03,"head, center of box, xG=0.03",L,H2_22
+60:58,2,Napoli,,,OFF,out,0.03,"left foot, outside box, xG=0.03",L,H2_22
+63:58,2,Monopoli,,,OFF,out,0.01,"right foot, midfield, xG=0.01",L,H2_23
+64:37,2,Monopoli,,,ON,in,0.15,"right foot, center box, xG=0.15",L,H2_23
+65:18,2,Napoli,,,BLOCKED,out,0.03,right foot volley central outside box xG=0.03,L,H2_24
+65:49,2,Napoli,,,OFF,in,0.1,right foot right six yard box xG=0.10,L,H2_24
+67:38,2,Monopoli,,,ON,out,0.06,right foot left penalty area xG=0.06,L,H2_24
+67:41,2,Napoli,,,ON,out,0.03,"right foot, outside box, xG=0.03",H,H2_25
+81:50,2,Napoli,,,OFF,in,0.03,"right foot, right side of box, xG=0.03",L,H2_30
+88:46,2,Napoli,,,BLOCKED,out,0.03,"right foot, outside box, xG=0.03",L,H2_32

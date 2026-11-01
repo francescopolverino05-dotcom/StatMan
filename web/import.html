@@ -30,7 +30,8 @@
 
     <main>
       <p class="banner banner--ok">
-        StatsBomb JSON recommended. This is the provider path for real match stats — not video spotting.
+        StatsBomb JSON recommended. This is the provider path for real match stats.
+        Got a stats package (team CSV + players CSV) instead? Load it in the <a href="/">Stats viewer</a>.
       </p>
       <p class="banner banner--warn">
         Opta / StatsPerform F24 is accepted but limited: many sheet fields stay empty because the
@@ -82,6 +83,10 @@
         <div class="section__head" style="margin-top: 2rem">
           <h2>Player sheet</h2>
           <p>Individual stats — sorted by xG, then passing volume.</p>
+          <p class="viewer-export">
+            <button id="export-team" class="btn btn--ghost" type="button">Export team stats (CSV)</button>
+            <button id="export-players" class="btn btn--ghost" type="button">Export players (CSV)</button>
+          </p>
         </div>
         <div class="table-wrap table-wrap--wide">
           <table id="player-table" class="player-sheet">
@@ -138,8 +143,7 @@
 
     <footer class="footer">
       <p>
-        This page is the match sheet. Film action tags from a broadcast live on
-        <a href="/video">Film tags</a> — they do not replace StatsBomb xG, PPDA, or aerials.
+        StatMan is a viewer and exporter: it reads provider event data and stats packages, it does not tag matches.
       </p>
     </footer>
 

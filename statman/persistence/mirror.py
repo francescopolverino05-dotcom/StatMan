@@ -5,7 +5,7 @@ calculation code changes). Each store registers its root as a *collection*.
 When Postgres is enabled:
 
 * ``restore_all()`` (startup) writes every stored document back to disk, so a
-  fresh container sees all match packs, imports, video jobs and seasons.
+  fresh container sees all stats packages, imports and seasons.
 * ``sync_all()`` uploads new/changed ``*.json`` files and deletes documents
   whose files were removed. It runs after every API request, on a background
   timer (for pipeline threads), and on shutdown.

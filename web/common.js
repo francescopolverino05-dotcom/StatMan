@@ -220,3 +220,46 @@ export function renderTeamCatalogHtml(team, sideLabel, options = {}) {
     </div>
   `;
 }
+
+/* ---- CSV export (team board + player sheet) ---- */
+
+function csvCell(v) {
+  const s = v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+  return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function csvText(header, rows) {
+  return [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n") + "\n";
+}
+
+/** metric,home,away rows from the same catalog the team board shows. */
+export function teamsToCsv(home, away) {
+  const a = catalogSections(home);
+  const b = away ? catalogSections(away) : [];
+  const rows = [];
+  a.forEach((sec, i) => {
+    sec.rows.forEach(([label, value], j) => {
+      const other = b[i]?.rows[j]?.[1];
+      rows.push([`${sec.title}: ${label}`, value === "—" ? "" : value, other === undefined || other === "—" ? "" : other]);
+    });
+  });
+  return csvText(["metric", home.team_name, away?.team_name ?? ""], rows);
+}
+
+/** Every field of every player object, one column per key. */
+export function playersToCsv(players) {
+  const cols = [];
+  for (const p of players) for (const k of Object.keys(p)) if (!cols.includes(k)) cols.push(k);
+  return csvText(cols, players.map((p) => cols.map((c) => p[c])));
+}
+
+export function downloadCsv(filename, text) {
+  const blob = new Blob(["\ufeff", text], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}

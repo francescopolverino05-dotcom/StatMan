@@ -1,4 +1,4 @@
-import { fetchJson, fmt, renderTeamCatalogHtml } from "./common.js";
+import { fetchJson, fmt, renderTeamCatalogHtml, teamsToCsv, playersToCsv, downloadCsv } from "./common.js";
 
 const form = document.getElementById("import-form");
 const eventsInput = document.getElementById("events-input");
@@ -24,6 +24,15 @@ function setStatus(text, { error = false, loading = false } = {}) {
 eventsInput.addEventListener("change", () => {
   const file = eventsInput.files?.[0];
   eventsLabel.textContent = file ? file.name : "Choose events JSON…";
+});
+
+let lastExport = null;
+
+document.getElementById("export-team")?.addEventListener("click", () => {
+  if (lastExport) downloadCsv(`${lastExport.name}_team.csv`, teamsToCsv(lastExport.home, lastExport.away));
+});
+document.getElementById("export-players")?.addEventListener("click", () => {
+  if (lastExport) downloadCsv(`${lastExport.name}_players.csv`, playersToCsv(lastExport.players));
 });
 
 function renderStats(payload) {
@@ -58,6 +67,12 @@ function renderStats(payload) {
   const teams = stats.teams || [];
   const home = teams.find((t) => t.team_id === match.home_team_id) || teams[0];
   const away = teams.find((t) => t.team_id === match.away_team_id) || teams[1];
+  lastExport = {
+    home,
+    away,
+    players: stats.players || [],
+    name: `${match.home_team || "home"}-${match.away_team || "away"}`.replace(/[^A-Za-z0-9._-]+/g, "_"),
+  };
   teamGrid.className = "team-board";
   teamGrid.innerHTML = `
     ${home ? renderTeamCatalogHtml(home, "Home") : ""}

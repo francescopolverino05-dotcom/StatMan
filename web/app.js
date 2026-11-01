@@ -1,4 +1,4 @@
-import { fetchJson, fmt, renderTeamCatalogHtml } from "./common.js";
+import { fetchJson, fmt, renderTeamCatalogHtml, teamsToCsv, playersToCsv, downloadCsv } from "./common.js";
 
 const select = document.getElementById("game-select");
 const loadBtn = document.getElementById("load-btn");
@@ -20,6 +20,14 @@ const mapDef = document.getElementById("map-defence");
 
 const DEFAULT_GAME_ID = 8657;
 let currentGameId = DEFAULT_GAME_ID;
+let lastExport = null;
+
+document.getElementById("export-team")?.addEventListener("click", () => {
+  if (lastExport) downloadCsv(`${lastExport.name}_team.csv`, teamsToCsv(lastExport.home, lastExport.away));
+});
+document.getElementById("export-players")?.addEventListener("click", () => {
+  if (lastExport) downloadCsv(`${lastExport.name}_players.csv`, playersToCsv(lastExport.players));
+});
 
 function setStatus(text, { error = false, loading = false } = {}) {
   statusEl.textContent = text;
@@ -51,6 +59,7 @@ function renderMatch(data) {
   const { match, teams, players, definitions, source } = data;
   const home = teams.find((t) => t.team_id === match.home_team_id) || teams[0];
   const away = teams.find((t) => t.team_id === match.away_team_id) || teams[1];
+  lastExport = { home, away, players, name: `${match.home_team}-${match.away_team}`.replace(/[^A-Za-z0-9._-]+/g, "_") };
 
   scoreline.textContent = `${match.home_team} ${match.home_score}–${match.away_score} ${match.away_team}`;
   matchMeta.textContent = `${match.competition} ${match.season} · ${match.game_date} · ${source.schema}`;

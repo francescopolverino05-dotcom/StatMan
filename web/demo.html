@@ -29,8 +29,7 @@
         </p>
         <div class="cta">
           <a class="btn btn--primary" href="#match">Load demo match</a>
-          <a class="btn btn--ghost" href="/">Back to Matches</a>
-          <a class="btn btn--ghost" href="/match">Match workspace</a>
+          <a class="btn btn--ghost" href="/">Stats viewer</a>
         </div>
       </div>
     </header>
@@ -119,6 +118,10 @@
         <div class="section__head">
           <h2>Player sheet</h2>
           <p>Individual match stats — sorted by xG, then passing volume.</p>
+          <p class="viewer-export">
+            <button id="export-team" class="btn btn--ghost" type="button">Export team stats (CSV)</button>
+            <button id="export-players" class="btn btn--ghost" type="button">Export players (CSV)</button>
+          </p>
         </div>
         <div class="table-wrap table-wrap--wide">
           <table id="player-table" class="player-sheet">
@@ -165,7 +168,7 @@
       <p>
         Event data from
         <a href="https://github.com/statsbomb/open-data">StatsBomb open data</a>.
-        Actions tagged with
+        Actions converted with
         <a href="https://github.com/ML-KULeuven/socceraction">socceraction / SPADL</a>.
       </p>
     </footer>

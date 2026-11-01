@@ -1,23 +1,10 @@
-# StatMan on Railway — need OpenCV system libs (libGL) for cv2 / ultralytics.
+# StatMan (stats viewer + exporter) on Railway. Pure-Python stack: no system libs needed.
 FROM python:3.12-slim-bookworm
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    libgomp1 \
-    ffmpeg \
-    tesseract-ocr \
-    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip uninstall -y opencv-python || true \
-    && pip install --no-cache-dir --force-reinstall "opencv-python-headless>=4.8,<5" "numpy<2"
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
