@@ -76,29 +76,36 @@ Definitions ship on every `/api/matches/{id}/stats` response (`catalog_version`,
 
 Upload a complete broadcast (not a highlight clip). The spotter samples the **entire** timeline (default 0.5&nbsp;fps, capped at 150&nbsp;minutes), detects people/ball with **YOLO** (`yolov8n`, OpenCV HOG fallback), and tags SoccerNet-style ball actions. Progress includes an ETA; jobs can be cancelled. Treat counts as approximate — not Opta/StatsBomb.
 
-Jobs and uploads live under `.data/videos/`. YOLO weights cache under `.data/models/`.
+Job JSON lives with the other document stores (`.data/videos/jobs/` on disk, Postgres when `DATABASE_URL` is set). Video bytes stay on disk under `.data/videos/uploads/` unless `STATMAN_VIDEO_DIR` points at a volume. YOLO weights cache under `.data/models/`.
 
 ### Event-data import (provider path)
 
-For a game you already have as StatsBomb open-data JSON or Opta F24 JSON, use `/import` (or `POST /api/imports`). That path converts to SPADL and returns the same possession / xG / PPDA / progressive-pass stats as the open-data match view. Imports live under `.data/imports/`.
+For a game you already have as StatsBomb open-data JSON or Opta F24 JSON, use `/import` (or `POST /api/imports`). That path converts to SPADL and returns the same possession / xG / PPDA / progressive-pass stats as the open-data match view. The saved stats and meta live in the document store (`.data/imports/` locally, Postgres when `DATABASE_URL` is set).
 
 Data is from [StatsBomb open data](https://github.com/statsbomb/open-data) for the event path. Attribute StatsBomb if you publish analysis based on it, and read their licence before putting numbers on a public product site.
 
 ## Persistent storage (Phase 1)
 
-All JSON stores (match packs, event imports, video jobs, season caches) go
-through `statman/persistence`:
+Match packs, event imports, video-job JSON, and season caches all go through `statman/persistence`:
 
-- `DATABASE_URL` unset: unchanged `.data/` JSON files.
-- `DATABASE_URL` set: Postgres. On startup migrations run
-  (`statman/persistence/migrations/`), then every stored JSON document is
-  restored to `.data/`. New/changed JSON files are synced to Postgres after
-  each write request, every `STATMAN_SYNC_INTERVAL_S` seconds (default 5, for
-  background pipeline threads) and on shutdown.
-- Video binaries never go to Postgres. Set `STATMAN_VIDEO_DIR` to a mounted
-  volume (e.g. `/data/videos`) so they survive redeploys.
-- Phase 2 tables (`matches`, `squads`, `players`, `lineups`, `events`,
-  `corrections`, view `event_review_queue`) are created but not used yet.
+- `DATABASE_URL` unset: the same `.data/` JSON files as before (local dev and pytest).
+- `DATABASE_URL` set: Postgres. On startup the process applies `statman/persistence/migrations/`, then writes every stored document back under `.data/` so the existing readers keep working. Changed JSON is copied to Postgres after each write request, every `STATMAN_SYNC_INTERVAL_S` seconds (default 5, so background film threads are covered), and again on shutdown.
+- Video binaries are never rows. Set `STATMAN_VIDEO_DIR` to a directory on a mounted volume. Job uploads go to `$STATMAN_VIDEO_DIR/uploads/` and match-pack videos to `$STATMAN_VIDEO_DIR/match_packs/<pack_id>/`.
+- Phase 2 tables are created now and unused: `matches`, `squads`, `players`, `lineups`, `events` (one row per tagged action, including `match_clock_ms`, `video_ts_ms`, confidence, review status, source), `corrections`, and the `event_review_queue` view.
 
-Postgres tests: `STATMAN_TEST_DATABASE_URL=postgresql://... pytest tests/test_persistence.py`
-(they drop and recreate the `public` schema of that database).
+`GET /api/health` reports `"storage": "postgres"` or `"files"`, and `"video_dir"` (null when the volume path is not set).
+
+### Railway
+
+The `statman` service in project StatMan redeploys onto an empty disk. Do this once:
+
+1. In the StatMan project, **New → Database → PostgreSQL**. Leave the service name as `Postgres` unless you rename it.
+2. Open the **statman** service → **Variables** → **New variable** → **Add reference**. Set `DATABASE_URL` to `${{Postgres.DATABASE_URL}}`. Use that reference (the private URL). Do not paste the public proxy URL.
+3. Deploy **statman**. The container runs migrations before it serves. Check `GET /api/health` for `"storage": "postgres"`.
+4. Optional, for video files: **statman** → **Volumes** → add a volume mounted at `/data`. Add variable `STATMAN_VIDEO_DIR=/data/videos`. Redeploy. Without this volume, JSON still survives and the video bytes do not (`"video_dir": null`).
+
+Leave `DATABASE_URL` unset on a laptop. Pytest uses the file backend. Postgres tests need a disposable database and drop its `public` schema:
+
+```bash
+STATMAN_TEST_DATABASE_URL=postgresql:///statman_test pytest tests/test_persistence.py
+```

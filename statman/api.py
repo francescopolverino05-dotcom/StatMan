@@ -3,19 +3,16 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-
-from starlette.concurrency import run_in_threadpool
-
-from statman import persistence
-
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from starlette.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from statman import persistence
 from statman.compute import compute_match_stats
 from statman.event_import import get_import, import_events_auto, list_imports
 from statman.load import (
@@ -138,6 +135,7 @@ def api_root() -> dict[str, Any]:
         "import_ui": "/import",
         "endpoints": {
             "health": "/api/health",
+            "storage": "/api/storage",
             "demo_games": "/api/games/demo",
             "match_stats": f"/api/matches/{{game_id}}/stats  (default game_id={DEFAULT_GAME_ID})",
             "match_maps": "/api/matches/{game_id}/maps",
@@ -185,8 +183,8 @@ def api_root() -> dict[str, Any]:
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, Any]:
+    return {"status": "ok", **persistence.storage_status()}
 
 
 @app.get("/api/games/demo")

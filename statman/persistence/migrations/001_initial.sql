@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS events (
     id BIGSERIAL PRIMARY KEY,
     match_id TEXT NOT NULL REFERENCES matches (id) ON DELETE CASCADE,
     period INTEGER,
-    clock_ms BIGINT,
+    match_clock_ms BIGINT,
     video_ts_ms BIGINT,
     team TEXT,
     player_id TEXT REFERENCES players (id) ON DELETE SET NULL,
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 CREATE INDEX IF NOT EXISTS events_match_clock_idx
-    ON events (match_id, period, clock_ms);
+    ON events (match_id, period, match_clock_ms);
 
 CREATE INDEX IF NOT EXISTS events_review_queue_idx
     ON events (confidence, created_at)
@@ -128,7 +128,7 @@ CREATE INDEX IF NOT EXISTS events_review_queue_idx
 COMMENT ON TABLE events IS
     'Phase 2 tagged actions, one row per event. team is home/away or a team name. headed and line_broken are first-class flags; flags holds any further booleans. confidence is 0..1. review_status pending rows are the human review queue (see event_review_queue). source is ai or human.';
 
-COMMENT ON COLUMN events.clock_ms IS
+COMMENT ON COLUMN events.match_clock_ms IS
     'Milliseconds on the match clock (period clock, not a wall timestamp).';
 
 COMMENT ON COLUMN events.video_ts_ms IS

@@ -16,6 +16,18 @@ from statman.season import build_season, player_leaderboard, tournament_table
 
 
 def main(argv: list[str] | None = None) -> int:
+    from statman.persistence import bootstrap, shutdown
+
+    # Season builds and other CLI writes hit the same JSON files as the API.
+    # Flush them on the way out when DATABASE_URL is set.
+    bootstrap(background=False)
+    try:
+        return _main(argv)
+    finally:
+        shutdown()
+
+
+def _main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if args and args[0] == "season":
         return _season_cli(args[1:])

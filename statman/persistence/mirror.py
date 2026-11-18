@@ -15,8 +15,10 @@ With ``DATABASE_URL`` unset everything here is a no-op: files are the store.
 
 from __future__ import annotations
 
+import atexit
 import logging
 import os
+import sys
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -72,10 +74,19 @@ def restore(name: str) -> int:
     root = Path(_COLLECTIONS[name][0]())
     written = 0
     with _SYNC_LOCK:
+        # Local files newer than Postgres still need an upload, so they stay
+        # out of _SEEN. Older or missing files are replaced from Postgres.
+        local_newer: set[str] = set()
         for entry in backend.list_entries(name):
             path = root / entry.key
             if path.exists():
-                continue
+                try:
+                    newer = path.stat().st_mtime > entry.updated_at + 1
+                except OSError:
+                    newer = False
+                if newer:
+                    local_newer.add(entry.key)
+                    continue
             text = backend.get_text(name, entry.key)
             if text is None:
                 continue
@@ -87,7 +98,11 @@ def restore(name: str) -> int:
                 pass
             written += 1
         stored = {e.key for e in backend.list_entries(name)}
-        _SEEN[name] = {k: v for k, v in _scan(name).items() if k in stored}
+        _SEEN[name] = {
+            k: v
+            for k, v in _scan(name).items()
+            if k in stored and k not in local_newer
+        }
     return written
 
 
@@ -159,3 +174,22 @@ def stop_background_sync() -> None:
 def reset_state() -> None:
     """Tests: forget what has been synced."""
     _SEEN.clear()
+
+
+def _flush_on_exit() -> None:
+    """Last sync for CLI and for a process that exits outside the API lifespan.
+
+    Pytest imports this module; flushing then could write the real ``.data``
+    tree at whatever ``DATABASE_URL`` the developer shell had. Tests sync
+    explicitly instead.
+    """
+
+    if "pytest" in sys.modules or not postgres_enabled() or not _COLLECTIONS:
+        return
+    try:
+        sync_all()
+    except Exception:  # noqa: BLE001 - exit flush must not mask the real error
+        log.exception("persistence flush on exit failed")
+
+
+atexit.register(_flush_on_exit)

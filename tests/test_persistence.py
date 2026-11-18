@@ -38,7 +38,7 @@ def roots(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def pg(roots, monkeypatch):
+def pg(roots, monkeypatch, _file_storage_by_default):
     if not PG_URL:
         pytest.skip("STATMAN_TEST_DATABASE_URL not set")
     import psycopg
@@ -137,7 +137,7 @@ def test_migrations_create_phase2_tables_idempotently(pg):
                 "SELECT column_name FROM information_schema.columns WHERE table_name='events'"
             )
         }
-        assert {"match_id", "period", "clock_ms", "video_ts_ms", "team", "player_id", "type",
+        assert {"match_id", "period", "match_clock_ms", "video_ts_ms", "team", "player_id", "type",
                 "outcome", "x", "y", "end_x", "end_y", "body_part", "headed", "line_broken",
                 "flags", "confidence", "review_status", "source", "created_at",
                 "updated_at"} <= cols
@@ -146,8 +146,10 @@ def test_migrations_create_phase2_tables_idempotently(pg):
         conn.execute("INSERT INTO lineups (match_id, player_id, team_side, role, on_clock_ms) "
                      "VALUES ('m1', 'p1', 'home', 'sub', 3600000)")
         eid = conn.execute(
-            "INSERT INTO events (match_id, type, player_id, confidence) "
-            "VALUES ('m1', 'pass', 'p1', 0.4) RETURNING id").fetchone()[0]
+            "INSERT INTO events (match_id, period, match_clock_ms, video_ts_ms, team, type, "
+            "player_id, confidence, headed, line_broken, source, review_status) "
+            "VALUES ('m1', 1, 12000, 34000, 'home', 'pass', 'p1', 0.4, false, true, 'ai', 'pending') "
+            "RETURNING id").fetchone()[0]
         conn.execute("INSERT INTO corrections (event_id, match_id, before, after) "
                      "VALUES (%s, 'm1', '{}', '{\"type\":\"shot\"}')", (eid,))
         assert conn.execute("SELECT count(*) FROM event_review_queue").fetchone()[0] == 1
