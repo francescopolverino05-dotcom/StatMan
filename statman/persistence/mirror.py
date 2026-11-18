@@ -67,7 +67,7 @@ def _scan(name: str) -> dict[str, tuple[int, int]]:
 
 
 def restore(name: str) -> int:
-    """Write stored documents to disk where the file is missing. Returns count."""
+    """Write stored documents to disk when the file is missing or older. Returns count."""
     if not postgres_enabled():
         return 0
     backend = get_backend()
@@ -81,11 +81,15 @@ def restore(name: str) -> int:
             path = root / entry.key
             if path.exists():
                 try:
-                    newer = path.stat().st_mtime > entry.updated_at + 1
+                    local = path.stat().st_mtime
                 except OSError:
-                    newer = False
-                if newer:
+                    local = 0
+                # A local edit that has not been uploaded yet.
+                if local > entry.updated_at + 1:
                     local_newer.add(entry.key)
+                    continue
+                # Same generation (updated_at was taken from this file's mtime).
+                if abs(local - entry.updated_at) <= 1:
                     continue
             text = backend.get_text(name, entry.key)
             if text is None:
@@ -123,7 +127,7 @@ def sync(name: str) -> tuple[int, int]:
                 text = (root / key).read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
-            backend.put_text(name, key, text)
+            backend.put_text(name, key, text, updated_at=sig[0] / 1_000_000_000)
             seen[key] = sig
             up += 1
         for key in [k for k in seen if k not in current]:

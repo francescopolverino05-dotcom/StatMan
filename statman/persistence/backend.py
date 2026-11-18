@@ -30,7 +30,9 @@ class DocumentStore(Protocol):
 
     def get_text(self, collection: str, key: str) -> str | None: ...
 
-    def put_text(self, collection: str, key: str, text: str) -> None: ...
+    def put_text(
+        self, collection: str, key: str, text: str, *, updated_at: float | None = None
+    ) -> None: ...
 
     def delete(self, collection: str, key: str) -> None: ...
 
@@ -152,12 +154,16 @@ class FileBackend:
             return None
         return path.read_text(encoding="utf-8")
 
-    def put_text(self, collection: str, key: str, text: str) -> None:
+    def put_text(
+        self, collection: str, key: str, text: str, *, updated_at: float | None = None
+    ) -> None:
         path = self._path(collection, key)
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = Path(str(path) + ".tmp")
         tmp.write_text(text, encoding="utf-8")
         tmp.replace(path)
+        if updated_at is not None:
+            os.utime(path, (updated_at, updated_at))
 
     def delete(self, collection: str, key: str) -> None:
         path = self._path(collection, key)
@@ -238,7 +244,9 @@ class PostgresBackend:
 
         return self._run(op)
 
-    def put_text(self, collection: str, key: str, text: str) -> None:
+    def put_text(
+        self, collection: str, key: str, text: str, *, updated_at: float | None = None
+    ) -> None:
         _check_collection(collection)
         key = _check_key(key)
         try:
@@ -251,12 +259,12 @@ class PostgresBackend:
 
             conn.execute(
                 """
-                INSERT INTO documents (collection, doc_key, body)
-                VALUES (%s, %s, %s)
+                INSERT INTO documents (collection, doc_key, body, updated_at)
+                VALUES (%s, %s, %s, COALESCE(to_timestamp(%s), clock_timestamp()))
                 ON CONFLICT (collection, doc_key)
-                DO UPDATE SET body = EXCLUDED.body, updated_at = clock_timestamp()
+                DO UPDATE SET body = EXCLUDED.body, updated_at = EXCLUDED.updated_at
                 """,
-                (collection, key, Jsonb(body)),
+                (collection, key, Jsonb(body), updated_at),
             )
 
         self._run(op)
