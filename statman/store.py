@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent / ".data" / "seasons"
+
+
+from statman.persistence.mirror import register as _register_collection
+
+_register_collection("seasons", lambda: ROOT)
 _LOCK = threading.Lock()
 
 

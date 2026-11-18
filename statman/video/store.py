@@ -11,6 +11,12 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent.parent / ".data" / "videos"
 _LOCK = threading.Lock()
 
+from statman.persistence.mirror import register as _register_collection  # noqa: E402
+from statman.persistence.paths import configured_video_dir  # noqa: E402
+
+# job.json / events.json / stats.json persist; uploads/ binaries never do.
+_register_collection("videos", lambda: ROOT, include=lambda key: key.startswith("jobs/"))
+
 
 def ensure_root() -> Path:
     ROOT.mkdir(parents=True, exist_ok=True)
@@ -43,6 +49,11 @@ def job_stats_path(job_id: str) -> Path:
 
 def upload_path(job_id: str, filename: str) -> Path:
     safe = Path(filename).name.replace(" ", "_")
+    video_dir = configured_video_dir()
+    if video_dir is not None:
+        uploads = video_dir / "uploads"
+        uploads.mkdir(parents=True, exist_ok=True)
+        return uploads / f"{job_id}_{safe}"
     return ensure_root() / "uploads" / f"{job_id}_{safe}"
 
 

@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from starlette.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from statman import persistence
 from statman.compute import compute_match_stats
 from statman.event_import import get_import, import_events_auto, list_imports
 from statman.load import (
@@ -75,6 +78,16 @@ from statman.video.pipeline import DEFAULT_CHUNK_BYTES, DEFAULT_SAMPLE_FPS
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
+
+@asynccontextmanager
+async def _lifespan(_app: Any):
+    # Postgres (DATABASE_URL): run migrations, restore JSON to disk, start sync.
+    persistence.bootstrap()
+    try:
+        yield
+    finally:
+        persistence.shutdown()
+
 app = FastAPI(
     title="StatMan match stats",
     version="0.6.0",
@@ -91,7 +104,21 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
+    lifespan=_lifespan,
 )
+
+
+@app.middleware("http")
+async def _persist_after_request(request: Request, call_next: Any) -> Any:
+    response = await call_next(request)
+    if persistence.postgres_enabled() and request.method not in ("GET", "HEAD", "OPTIONS"):
+        await run_in_threadpool(persistence.sync_all)
+    return response
+
+
+@app.get("/api/storage")
+def api_storage() -> dict[str, Any]:
+    return persistence.storage_status()
 
 
 @app.get("/api")
@@ -108,6 +135,7 @@ def api_root() -> dict[str, Any]:
         "import_ui": "/import",
         "endpoints": {
             "health": "/api/health",
+            "storage": "/api/storage",
             "demo_games": "/api/games/demo",
             "match_stats": f"/api/matches/{{game_id}}/stats  (default game_id={DEFAULT_GAME_ID})",
             "match_maps": "/api/matches/{game_id}/maps",
@@ -155,8 +183,8 @@ def api_root() -> dict[str, Any]:
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, Any]:
+    return {"status": "ok", **persistence.storage_status()}
 
 
 @app.get("/api/games/demo")

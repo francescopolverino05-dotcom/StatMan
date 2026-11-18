@@ -21,3 +21,5 @@ ultralytics>=8.1,<9
 torch>=2.2.0
 # Formation PDF text extract for match-pack Phase 1
 pypdf>=5.0.0
+# Postgres storage when DATABASE_URL is set (statman/persistence)
+psycopg[binary]>=3.1,<4

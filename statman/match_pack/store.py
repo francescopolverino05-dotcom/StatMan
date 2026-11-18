@@ -11,6 +11,11 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent.parent / ".data" / "match_packs"
 
 
+from statman.persistence.mirror import register as _register_collection
+
+_register_collection("match_packs", lambda: ROOT)
+
+
 def ensure_root() -> Path:
     ROOT.mkdir(parents=True, exist_ok=True)
     return ROOT
