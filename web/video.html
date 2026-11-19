@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StatMan — upload a full match</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="page page--video">
+    <nav class="topnav">
+      <a class="topnav__brand" href="/">StatMan</a>
+      <div class="topnav__links">
+        <a href="/">Match</a>
+        <a href="/season">Season</a>
+        <a href="/season/players">Players</a>
+        <a class="is-active" href="/video">Full match video</a>
+        <a href="/api/docs">API</a>
+      </div>
+    </nav>
+
+    <header class="page-hero">
+      <p class="eyebrow">Film ingest</p>
+      <h1>Upload a full match</h1>
+      <p class="lede">
+        Drop a complete 90–120 minute broadcast. StatMan samples the whole timeline
+        and tags SoccerNet-style actions (passes, shots, tackles, headers…).
+        Approximate only — not Opta or StatsBomb.
+      </p>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="section__head">
+          <h2>Full-game file</h2>
+          <p>MP4 / MKV / MOV up to 4&nbsp;GB. Processing runs in the background and can take a while on CPU.</p>
+        </div>
+        <form id="upload-form" class="upload-form">
+          <label class="file-drop" for="file-input">
+            <input id="file-input" name="file" type="file" accept="video/*" required />
+            <span id="file-label">Choose full-match video…</span>
+          </label>
+          <div class="match-bar">
+            <label class="field">
+              <span>Sample rate</span>
+              <select id="sample-fps" name="sample_fps">
+                <option value="0.5" selected>0.5 fps (default, full match)</option>
+                <option value="1">1 fps (slower, denser)</option>
+                <option value="0.25">0.25 fps (faster, coarser)</option>
+              </select>
+            </label>
+            <button id="upload-btn" class="btn btn--primary" type="submit">
+              Upload &amp; spot full match
+            </button>
+          </div>
+        </form>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <div id="progress-wrap" class="progress-wrap" hidden>
+          <div class="progress-bar"><div id="progress-fill" class="progress-bar__fill"></div></div>
+          <p id="progress-text" class="progress-text"></p>
+        </div>
+      </section>
+
+      <section id="results" class="section" hidden>
+        <div class="section__head">
+          <h2 id="result-title">Results</h2>
+          <p id="result-meta"></p>
+        </div>
+        <p id="quality-banner" class="banner banner--warn"></p>
+        <div id="totals" class="stat-grid"></div>
+        <div class="section__head" style="margin-top: 2rem">
+          <h2>Label counts</h2>
+          <p>SoccerNet ball-action classes across the full match.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="label-table">
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>Count</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="section__head" style="margin-top: 2rem">
+          <h2>Timeline (first 80 events)</h2>
+          <p>Timestamps from kickoff of the uploaded file.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="timeline-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Action</th>
+                <th>Confidence</th>
+                <th>People</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section__head">
+          <h2>Recent uploads</h2>
+          <p>Jobs stored on this machine under <code>.data/videos/</code>.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="jobs-table">
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>File</th>
+                <th>Duration</th>
+                <th>Status</th>
+                <th>Events</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Video spotting is approximate. For provider-grade xG, PPDA, aerials and progressive
+        passes, use the StatsBomb / SPADL match and season views.
+      </p>
+    </footer>
+
+    <script src="/static/video.js" type="module"></script>
+  </body>
+</html>

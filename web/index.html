@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StatMan — match stats from the event stream</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero__pitch" aria-hidden="true"></div>
+      <div class="hero__inner">
+        <p class="brand">StatMan</p>
+        <h1>Read the match from the events, not the scoreboard.</h1>
+        <p class="lede">
+          Open StatsBomb data, converted to SPADL — possession, xG, progressive
+          passes, PPDA, and defensive actions in one view.
+        </p>
+        <div class="cta">
+          <a class="btn btn--primary" href="#match">Load demo match</a>
+          <a class="btn btn--ghost" href="/season">Season view</a>
+          <a class="btn btn--ghost" href="/video">Upload full match</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section id="match" class="section section--match">
+        <div class="section__head">
+          <h2>Pick a World Cup 2018 open match</h2>
+          <p>Demo list from StatsBomb open data. Default is Belgium–England.</p>
+        </div>
+        <div class="match-bar">
+          <label class="sr-only" for="game-select">Match</label>
+          <select id="game-select" disabled>
+            <option>Loading matches…</option>
+          </select>
+          <button id="load-btn" class="btn btn--primary" type="button" disabled>
+            Compute stats
+          </button>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="board" class="section section--board" hidden>
+        <div class="section__head">
+          <h2 id="scoreline">Match</h2>
+          <p id="match-meta"></p>
+        </div>
+        <div id="team-board" class="team-board"></div>
+      </section>
+
+      <section id="maps" class="section section--maps" hidden>
+        <div class="section__head">
+          <h2>Pitch maps</h2>
+          <p>
+            SPADL / StatsBomb coordinates via mplsoccer — shots sized by xG,
+            progressive-pass arrows, tackle and interception locations.
+          </p>
+        </div>
+        <div class="map-filters">
+          <label class="sr-only" for="map-team">Team filter</label>
+          <select id="map-team">
+            <option value="">Both teams</option>
+          </select>
+        </div>
+        <div class="map-grid">
+          <figure class="map-card">
+            <figcaption>Shots · xG</figcaption>
+            <img id="map-shots" alt="Shot map with xG" />
+          </figure>
+          <figure class="map-card">
+            <figcaption>Progressive passes</figcaption>
+            <img id="map-progressive" alt="Progressive pass map" />
+          </figure>
+          <figure class="map-card">
+            <figcaption>Tackles &amp; interceptions</figcaption>
+            <img id="map-defence" alt="Defence location map" />
+          </figure>
+        </div>
+      </section>
+
+      <section id="players" class="section section--players" hidden>
+        <div class="section__head">
+          <h2>Player sheet</h2>
+          <p>Sorted by xG, then passing volume.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="player-table">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Team</th>
+                <th>xG</th>
+                <th>Shots</th>
+                <th>Pass %</th>
+                <th>Prog.</th>
+                <th>Tkl</th>
+                <th>Int</th>
+                <th>Aerial</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section section--defs">
+        <div class="section__head">
+          <h2>How the numbers are built</h2>
+          <p>Definitions travel with every API response.</p>
+        </div>
+        <dl id="definitions" class="defs"></dl>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Event data from
+        <a href="https://github.com/statsbomb/open-data">StatsBomb open data</a>.
+        Actions tagged with
+        <a href="https://github.com/ML-KULeuven/socceraction">socceraction / SPADL</a>.
+      </p>
+    </footer>
+
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>
