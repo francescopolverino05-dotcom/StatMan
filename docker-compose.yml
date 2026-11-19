@@ -1,0 +1,83 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: enjoystats-db
+    env_file:
+      - compose.env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-enjoystats}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-enjoystats}
+      POSTGRES_DB: ${POSTGRES_DB:-enjoystats}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./storage/postgres_tables.sql:/docker-entrypoint-initdb.d/01-postgres_tables.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-enjoystats} -d ${POSTGRES_DB:-enjoystats}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: enjoystats-api
+    env_file:
+      - compose.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://enjoystats:enjoystats@db:5432/enjoystats}
+      ENJOYSTATS_HOST: ${ENJOYSTATS_HOST:-0.0.0.0}
+      ENJOYSTATS_PORT: ${ENJOYSTATS_PORT:-8000}
+      ENJOYSTATS_DEBUG: ${ENJOYSTATS_DEBUG:-false}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: enjoystats-dashboard
+    env_file:
+      - compose.env
+    environment:
+      ENJOYSTATS_API_URL: ${ENJOYSTATS_API_URL:-http://api:8000}
+      MPLBACKEND: Agg
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

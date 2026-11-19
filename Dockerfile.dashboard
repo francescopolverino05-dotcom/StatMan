@@ -1,0 +1,63 @@
+# syntax=docker/dockerfile:1
+# Streamlit dashboard — builder installs wheels, runtime ships matplotlib + app.
+
+FROM python:3.11-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /src
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml README.md ./
+COPY config ./config
+COPY data_models ./data_models
+COPY app ./app
+
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install \
+        "pydantic>=2.7,<3" \
+        "pydantic-settings>=2.3,<3" \
+        "httpx>=0.27,<1" \
+        "streamlit>=1.36,<2" \
+        "matplotlib>=3.8,<4" \
+        "seaborn>=0.13,<1"
+
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MPLBACKEND=Agg \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH=/app \
+    ENJOYSTATS_API_URL=http://api:8000
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --create-home --home-dir /home/enjoystats enjoystats
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder --chown=enjoystats:enjoystats /src/config /app/config
+COPY --from=builder --chown=enjoystats:enjoystats /src/data_models /app/data_models
+COPY --from=builder --chown=enjoystats:enjoystats /src/app /app/app
+
+USER enjoystats
+EXPOSE 8501
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=25s --retries=8 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"
+
+CMD ["streamlit", "run", "app/dashboard.py", \
+     "--server.address=0.0.0.0", \
+     "--server.port=8501", \
+     "--server.headless=true", \
+     "--browser.gatherUsageStats=false"]
