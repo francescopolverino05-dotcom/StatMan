@@ -27,13 +27,13 @@ export const site = {
     "Treinador · Licença UEFA Pro · Ex-internacional italiano",
     "Entraîneur · Licence UEFA Pro · Ancien international italien",
   ),
-  /** His own wording, from his CV. The old “looking for a project” line is left out. */
+  /** His own wording, from his CV, including the line about looking for a project. */
   lede: c(
-    "Ex professional player with a UEFA Pro coaching licence.",
-    "Ex calciatore professionista con licenza UEFA Pro.",
-    "Exjugador profesional con licencia UEFA Pro.",
-    "Ex-jogador profissional com licença UEFA Pro.",
-    "Ancien joueur professionnel, titulaire de la licence UEFA Pro.",
+    "Ex professional player with a UEFA Pro coaching licence, looking for a project to continue growing as a coach.",
+    "Ex calciatore professionista con licenza UEFA Pro, in cerca di un progetto per continuare a crescere come allenatore.",
+    "Exjugador profesional con licencia UEFA Pro, en busca de un proyecto para seguir creciendo como entrenador.",
+    "Ex-jogador profissional com licença UEFA Pro, à procura de um projeto para continuar a crescer como treinador.",
+    "Ancien joueur professionnel, titulaire de la licence UEFA Pro, à la recherche d’un projet pour continuer à grandir comme entraîneur.",
   ),
   /** Leave a field empty to hide it. With every field empty the contact block says details are on their way. */
   contact: {
