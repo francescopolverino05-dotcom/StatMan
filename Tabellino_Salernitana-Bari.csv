@@ -1,0 +1,128 @@
+﻿side,jersey,name,sezione,squadra,numero_maglia,calciatore,anno_nascita,portiere,capitano,vice_capitano,rosa,minuto,etichetta_minuto,entra,esce,tipo,casa,trasferta,gol_casa,gol_trasferta,posizione,testo
+,,,partita,,,,,,,,,,,,,competizione,,,,,,Campionato Primavera 2 Cisalfa Sport
+,,,partita,,,,,,,,,,,,,stagione,,,,,,2026/27
+,,,partita,,,,,,,,,,,,,giornata,,,,,,1
+,,,partita,,,,,,,,,,,,,data,,,,,,2026-09-05
+,,,partita,,,,,,,,,,,,,ora,,,,,,16:00
+,,,partita,,,,,,,,,,,,,stadio,,,,,,Stadio G. Troisi
+,,,partita,,,,,,,,,,,,,citta,,,,,,Giffoni Valle Piana
+,,,partita,,,,,,,,,,,,,provincia,,,,,,SA
+,,,partita,,,,,,,,,,,,,squadra_casa,,,,,,U.S. Salernitana 1919
+,,,partita,,,,,,,,,,,,,squadra_trasferta,,,,,,SSC Bari
+,,,partita,,,,,,,,,,,,,allenatore_casa,,,,,,Antonio FOGLIA MANZILLO
+,,,partita,,,,,,,,,,,,,allenatore_trasferta,,,,,,Paolo DE FRANCESCO
+,,,partita,,,,,,,,,,,,,arbitro,,,,,,Francesco FERMO
+,,,partita,,,,,,,,,,,,,arbitro_sezione,,,,,,Torre Annunziata
+,,,partita,,,,,,,,,,,,,assistente_1,,,,,,Carlo PIPOLA
+,,,partita,,,,,,,,,,,,,assistente_1_sezione,,,,,,Ercolano
+,,,partita,,,,,,,,,,,,,assistente_2,,,,,,Ricordino MAFFIA
+,,,partita,,,,,,,,,,,,,assistente_2_sezione,,,,,,Agropoli
+,,,partita,,,,,,,,,,,,,recupero_primo_tempo,,,,,,2
+,,,partita,,,,,,,,,,,,,recupero_secondo_tempo,,,,,,3
+,,,partita,,,,,,,,,,,,,gol_casa,,,,,,0
+,,,partita,,,,,,,,,,,,,gol_trasferta,,,,,,4
+,,,partita,,,,,,,,,,,,,risultato,,,,,,0-4
+,,,partita,,,,,,,,,,,,,fonte_risultato,,,,,,"Marcatori in tabellino: 4 reti Bari, nessuna rete Salernitana"
+,,,partita,,,,,,,,,,,,,squalificati_casa,,,,,,Nessuno
+,,,partita,,,,,,,,,,,,,squalificati_trasferta,,,,,,Nessuno
+,,,partita,,,,,,,,,,,,,diffidati_casa,,,,,,Nessuno
+,,,partita,,,,,,,,,,,,,diffidati_trasferta,,,,,,Nessuno
+,,,partita,,,,,,,,,,,,,indisponibili_casa,,,,,,Nessuno
+,,,partita,,,,,,,,,,,,,indisponibili_trasferta,,,,,,Nessuno
+,,,partita,,,,,,,,,,,,,calci_angolo,,,,,,non compilato
+,,,partita,,,,,,,,,,,,,fuorigioco,,,,,,non compilato
+home,1,Mattia CATALDO,formazione,Salernitana,1,Mattia CATALDO,2009,si,no,no,titolare,,,,,,,,,,,
+home,2,Rodolfo CARPENTIERI,formazione,Salernitana,2,Rodolfo CARPENTIERI,2009,no,no,no,titolare,,,,,,,,,,,
+home,3,Mattia RUSSO,formazione,Salernitana,3,Mattia RUSSO,2008,no,si,no,titolare,,,,,,,,,,,
+home,4,Giuseppe VALENTINO,formazione,Salernitana,4,Giuseppe VALENTINO,2009,no,no,no,titolare,,,,,,,,,,,
+home,5,Modestino SORBINO,formazione,Salernitana,5,Modestino SORBINO,2008,no,no,no,titolare,,,,,,,,,,,
+home,6,Giorgio GRANATA,formazione,Salernitana,6,Giorgio GRANATA,2009,no,no,no,titolare,,,,,,,,,,,
+home,7,Michele PAOLILLO,formazione,Salernitana,7,Michele PAOLILLO,2009,no,no,no,titolare,,,,,,,,,,,
+home,8,Francesco FERRARESE,formazione,Salernitana,8,Francesco FERRARESE,2009,no,no,no,titolare,,,,,,,,,,,
+home,9,Mario LEOTTA,formazione,Salernitana,9,Mario LEOTTA,2008,no,no,si,titolare,,,,,,,,,,,
+home,10,Thomas RUSSANO,formazione,Salernitana,10,Thomas RUSSANO,2010,no,no,no,titolare,,,,,,,,,,,
+home,11,Lamine TAYEYE,formazione,Salernitana,11,Lamine TAYEYE,2008,no,no,no,titolare,,,,,,,,,,,
+home,12,Giuseppe SIANO,formazione,Salernitana,12,Giuseppe SIANO,2010,si,no,no,panchina,,,,,,,,,,,
+home,22,Giovanni MILIONE,formazione,Salernitana,22,Giovanni MILIONE,2010,si,no,no,panchina,,,,,,,,,,,
+home,13,Flavio CANTERINO,formazione,Salernitana,13,Flavio CANTERINO,2010,no,no,no,panchina,,,,,,,,,,,
+home,14,Giuseppe GRAUS,formazione,Salernitana,14,Giuseppe GRAUS,2009,no,no,no,panchina,,,,,,,,,,,
+home,15,Cristian COLURCIELLO,formazione,Salernitana,15,Cristian COLURCIELLO,2008,no,no,no,panchina,,,,,,,,,,,
+home,16,Ivan GARIANI,formazione,Salernitana,16,Ivan GARIANI,2009,no,no,no,panchina,,,,,,,,,,,
+home,17,Giovanni MARTINELLO,formazione,Salernitana,17,Giovanni MARTINELLO,2008,no,no,no,panchina,,,,,,,,,,,
+home,18,Francesco MARGIORE,formazione,Salernitana,18,Francesco MARGIORE,2008,no,no,no,panchina,,,,,,,,,,,
+home,19,Pierfrancesco SEVERINO,formazione,Salernitana,19,Pierfrancesco SEVERINO,2009,no,no,no,panchina,,,,,,,,,,,
+home,20,Nicholas CUOMO,formazione,Salernitana,20,Nicholas CUOMO,2009,no,no,no,panchina,,,,,,,,,,,
+home,21,Alessandro PAUDICE,formazione,Salernitana,21,Alessandro PAUDICE,2008,no,no,no,panchina,,,,,,,,,,,
+home,23,Manuel DI MARTINO,formazione,Salernitana,23,Manuel DI MARTINO,2009,no,no,no,panchina,,,,,,,,,,,
+away,1,Francesco CIPOLLA,formazione,Bari,1,Francesco CIPOLLA,2009,si,no,no,titolare,,,,,,,,,,,
+away,2,Gianmarco EMILIANO,formazione,Bari,2,Gianmarco EMILIANO,2008,no,no,no,titolare,,,,,,,,,,,
+away,3,Umberto LEGROTTAGLIE,formazione,Bari,3,Umberto LEGROTTAGLIE,2008,no,no,no,titolare,,,,,,,,,,,
+away,4,Nicola MUNDO,formazione,Bari,4,Nicola MUNDO,2008,no,no,no,titolare,,,,,,,,,,,
+away,5,Paolo DIMONTE,formazione,Bari,5,Paolo DIMONTE,2008,no,no,si,titolare,,,,,,,,,,,
+away,6,Mattia DE LUCIA,formazione,Bari,6,Mattia DE LUCIA,2008,no,si,no,titolare,,,,,,,,,,,
+away,7,Cristian VALOROSO,formazione,Bari,7,Cristian VALOROSO,2009,no,no,no,titolare,,,,,,,,,,,
+away,8,Giuseppe SCARANO,formazione,Bari,8,Giuseppe SCARANO,2008,no,no,no,titolare,,,,,,,,,,,
+away,9,Cristian SCIFONI,formazione,Bari,9,Cristian SCIFONI,2008,no,no,no,titolare,,,,,,,,,,,
+away,10,Leonardo Alonso CAMPAGNA,formazione,Bari,10,Leonardo Alonso CAMPAGNA,2008,no,no,no,titolare,,,,,,,,,,,
+away,11,Matteo ITALIA,formazione,Bari,11,Matteo ITALIA,2008,no,no,no,titolare,,,,,,,,,,,
+away,12,Giovanni SCATTARELLI,formazione,Bari,12,Giovanni SCATTARELLI,2009,si,no,no,panchina,,,,,,,,,,,
+away,22,Francesco FALBO,formazione,Bari,22,Francesco FALBO,2009,si,no,no,panchina,,,,,,,,,,,
+away,13,Leonardo CAPUTO,formazione,Bari,13,Leonardo CAPUTO,2009,no,no,no,panchina,,,,,,,,,,,
+away,14,Francesco NAPOLEONE,formazione,Bari,14,Francesco NAPOLEONE,2009,no,no,no,panchina,,,,,,,,,,,
+away,15,Karlis VILUMS,formazione,Bari,15,Karlis VILUMS,2009,no,no,no,panchina,,,,,,,,,,,
+away,16,Vincenzo GRIMALDI,formazione,Bari,16,Vincenzo GRIMALDI,2009,no,no,no,panchina,,,,,,,,,,,
+away,17,Alessandro PIETRANIELLO,formazione,Bari,17,Alessandro PIETRANIELLO,2009,no,no,no,panchina,,,,,,,,,,,
+away,18,Riccardo VITALE,formazione,Bari,18,Riccardo VITALE,2009,no,no,no,panchina,,,,,,,,,,,
+away,19,Benedetto PIZZO,formazione,Bari,19,Benedetto PIZZO,2008,no,no,no,panchina,,,,,,,,,,,
+away,20,Gaetano LEONE,formazione,Bari,20,Gaetano LEONE,2009,no,no,no,panchina,,,,,,,,,,,
+away,21,Giuseppe FELICE,formazione,Bari,21,Giuseppe FELICE,2009,no,no,no,panchina,,,,,,,,,,,
+away,23,Amara Kader SANOGO,formazione,Bari,23,Amara Kader SANOGO,2010,no,no,no,panchina,,,,,,,,,,,
+home,,,sostituzione,Salernitana,,,,,,,,46,1' S.T.,Flavio CANTERINO,Modestino SORBINO,,,,,,,
+home,,,sostituzione,Salernitana,,,,,,,,56,56',Alessandro PAUDICE,Lamine TAYEYE,,,,,,,
+home,,,sostituzione,Salernitana,,,,,,,,67,67',Giuseppe GRAUS,Mattia RUSSO,,,,,,,
+home,,,sostituzione,Salernitana,,,,,,,,67,67',Nicholas CUOMO,Giuseppe VALENTINO,,,,,,,
+home,,,sostituzione,Salernitana,,,,,,,,78,78',Cristian COLURCIELLO,Giorgio GRANATA,,,,,,,
+away,,,sostituzione,Bari,,,,,,,,59,59',Vincenzo GRIMALDI,Giuseppe SCARANO,,,,,,,
+away,,,sostituzione,Bari,,,,,,,,59,59',Gaetano LEONE,Cristian SCIFONI,,,,,,,
+away,,,sostituzione,Bari,,,,,,,,70,70',Alessandro PIETRANIELLO,Leonardo Alonso CAMPAGNA,,,,,,,
+away,,,sostituzione,Bari,,,,,,,,70,70',Giuseppe FELICE,Matteo ITALIA,,,,,,,
+away,,,sostituzione,Bari,,,,,,,,82,82',Riccardo VITALE,Cristian VALOROSO,,,,,,,
+away,,Paolo DIMONTE,marcatore,Bari,,Paolo DIMONTE,,,,,,33,33',,,,,,,,1,
+away,,Matteo ITALIA,marcatore,Bari,,Matteo ITALIA,,,,,,44,44',,,,,,,,2,
+away,,Leonardo Alonso CAMPAGNA,marcatore,Bari,,Leonardo Alonso CAMPAGNA,,,,,,52,52',,,,,,,,3,
+away,,Vincenzo GRIMALDI,marcatore,Bari,,Vincenzo GRIMALDI,,,,,,69,69',,,,,,,,4,
+home,3,Mattia RUSSO,provvedimento,Salernitana,3,Mattia RUSSO,,,,,,46,46',,,ammonizione,,,,,,
+away,18,Riccardo VITALE,provvedimento,Bari,18,Riccardo VITALE,,,,,,87,87',,,ammonizione,,,,,,
+away,3,Umberto LEGROTTAGLIE,provvedimento,Bari,3,Umberto LEGROTTAGLIE,,,,,,90,90',,,espulsione,,,,,,
+,,,risultato_giornata,,,,,,,,,,,,,1^ giornata,Avellino,Napoli,3,1,1,AVELLINO-NAPOLI:3-1
+,,,risultato_giornata,,,,,,,,,,,,,1^ giornata,Benevento,Frosinone,3,0,2,BENEVENTO-FROSINONE:3-0
+,,,risultato_giornata,,,,,,,,,,,,,1^ giornata,Catanzaro,Latina,2,0,3,CATANZARO-LATINA:2-0
+,,,risultato_giornata,,,,,,,,,,,,,1^ giornata,Monopoli,Cosenza,4,0,4,MONOPOLI-COSENZA.4-0
+,,,risultato_giornata,,,,,,,,,,,,,1^ giornata,Palermo,Pescara,,,5,PALERMO-PESCARA
+,,,risultato_giornata,,,,,,,,,,,,,1^ giornata,Pisa,Perugia,2,3,6,PISA-PERUGIA:2-3
+,,,risultato_giornata,,,,,,,,,,,,,1^ giornata,Salernitana,Bari,,,7,SALERNITANA-BARI
+,,,risultato_giornata,,,,,,,,,,,,,1^ giornata,Ascoli,Spezia,1,1,8,ASCOLI-SPEZIA:1-1
+,,,prossimo_turno,,,,,,,,,,,,,prossimo turno,Bari,Ascoli,,,1,
+,,,prossimo_turno,,,,,,,,,,,,,prossimo turno,Cosenza,Avellino,,,2,
+,,,prossimo_turno,,,,,,,,,,,,,prossimo turno,Frosinone,Pisa,,,3,
+,,,prossimo_turno,,,,,,,,,,,,,prossimo turno,Latina,Salernitana,,,4,
+,,,prossimo_turno,,,,,,,,,,,,,prossimo turno,Napoli,Catanzaro,,,5,
+,,,prossimo_turno,,,,,,,,,,,,,prossimo turno,Perugia,Monopoli,,,6,
+,,,prossimo_turno,,,,,,,,,,,,,prossimo turno,Pescara,Benevento,,,7,
+,,,prossimo_turno,,,,,,,,,,,,,prossimo turno,Spezia,Palermo,,,8,
+,,,classifica,ASCOLI,,,,,,,,,,,,,,,,,1,
+,,,classifica,AVELLINO,,,,,,,,,,,,,,,,,2,
+,,,classifica,BARI,,,,,,,,,,,,,,,,,3,
+,,,classifica,BENEVENTO,,,,,,,,,,,,,,,,,4,
+,,,classifica,CATANZARO,,,,,,,,,,,,,,,,,5,
+,,,classifica,COSENZA,,,,,,,,,,,,,,,,,6,
+,,,classifica,FROSINONE,,,,,,,,,,,,,,,,,7,
+,,,classifica,LATINA,,,,,,,,,,,,,,,,,8,
+,,,classifica,MONOPOLI,,,,,,,,,,,,,,,,,9,
+,,,classifica,NAPOLI,,,,,,,,,,,,,,,,,10,
+,,,classifica,PALERMO,,,,,,,,,,,,,,,,,11,
+,,,classifica,PERUGIA,,,,,,,,,,,,,,,,,12,
+,,,classifica,PESCARA,,,,,,,,,,,,,,,,,13,
+,,,classifica,PISA,,,,,,,,,,,,,,,,,14,
+,,,classifica,SALERNITANA,,,,,,,,,,,,,,,,,15,
+,,,classifica,SPEZIA,,,,,,,,,,,,,,,,,16,

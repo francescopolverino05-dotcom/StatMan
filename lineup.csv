@@ -1,0 +1,47 @@
+﻿side,jersey,name,team,selection,birth_year,goalkeeper,captain,vice_captain
+home,1,Mattia CATALDO,Salernitana,starter,2009,yes,no,no
+home,2,Rodolfo CARPENTIERI,Salernitana,starter,2009,no,no,no
+home,3,Mattia RUSSO,Salernitana,starter,2008,no,yes,no
+home,4,Giuseppe VALENTINO,Salernitana,starter,2009,no,no,no
+home,5,Modestino SORBINO,Salernitana,starter,2008,no,no,no
+home,6,Giorgio GRANATA,Salernitana,starter,2009,no,no,no
+home,7,Michele PAOLILLO,Salernitana,starter,2009,no,no,no
+home,8,Francesco FERRARESE,Salernitana,starter,2009,no,no,no
+home,9,Mario LEOTTA,Salernitana,starter,2008,no,no,yes
+home,10,Thomas RUSSANO,Salernitana,starter,2010,no,no,no
+home,11,Lamine TAYEYE,Salernitana,starter,2008,no,no,no
+home,12,Giuseppe SIANO,Salernitana,bench,2010,yes,no,no
+home,22,Giovanni MILIONE,Salernitana,bench,2010,yes,no,no
+home,13,Flavio CANTERINO,Salernitana,bench,2010,no,no,no
+home,14,Giuseppe GRAUS,Salernitana,bench,2009,no,no,no
+home,15,Cristian COLURCIELLO,Salernitana,bench,2008,no,no,no
+home,16,Ivan GARIANI,Salernitana,bench,2009,no,no,no
+home,17,Giovanni MARTINELLO,Salernitana,bench,2008,no,no,no
+home,18,Francesco MARGIORE,Salernitana,bench,2008,no,no,no
+home,19,Pierfrancesco SEVERINO,Salernitana,bench,2009,no,no,no
+home,20,Nicholas CUOMO,Salernitana,bench,2009,no,no,no
+home,21,Alessandro PAUDICE,Salernitana,bench,2008,no,no,no
+home,23,Manuel DI MARTINO,Salernitana,bench,2009,no,no,no
+away,1,Francesco CIPOLLA,Bari,starter,2009,yes,no,no
+away,2,Gianmarco EMILIANO,Bari,starter,2008,no,no,no
+away,3,Umberto LEGROTTAGLIE,Bari,starter,2008,no,no,no
+away,4,Nicola MUNDO,Bari,starter,2008,no,no,no
+away,5,Paolo DIMONTE,Bari,starter,2008,no,no,yes
+away,6,Mattia DE LUCIA,Bari,starter,2008,no,yes,no
+away,7,Cristian VALOROSO,Bari,starter,2009,no,no,no
+away,8,Giuseppe SCARANO,Bari,starter,2008,no,no,no
+away,9,Cristian SCIFONI,Bari,starter,2008,no,no,no
+away,10,Leonardo Alonso CAMPAGNA,Bari,starter,2008,no,no,no
+away,11,Matteo ITALIA,Bari,starter,2008,no,no,no
+away,12,Giovanni SCATTARELLI,Bari,bench,2009,yes,no,no
+away,22,Francesco FALBO,Bari,bench,2009,yes,no,no
+away,13,Leonardo CAPUTO,Bari,bench,2009,no,no,no
+away,14,Francesco NAPOLEONE,Bari,bench,2009,no,no,no
+away,15,Karlis VILUMS,Bari,bench,2009,no,no,no
+away,16,Vincenzo GRIMALDI,Bari,bench,2009,no,no,no
+away,17,Alessandro PIETRANIELLO,Bari,bench,2009,no,no,no
+away,18,Riccardo VITALE,Bari,bench,2009,no,no,no
+away,19,Benedetto PIZZO,Bari,bench,2008,no,no,no
+away,20,Gaetano LEONE,Bari,bench,2009,no,no,no
+away,21,Giuseppe FELICE,Bari,bench,2009,no,no,no
+away,23,Amara Kader SANOGO,Bari,bench,2010,no,no,no
