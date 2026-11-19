@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, FileText, Mail, Phone } from "lucide-react";
-import { Pending } from "../../components/pending";
 import { SectionHeading } from "../../components/section-heading";
 import { tx, type Locale } from "../../content/i18n";
 import {
@@ -31,7 +30,11 @@ export default async function ProfilePage({ params }: LocaleParams) {
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
           <SectionHeading kicker={tx(profile.kicker, locale)} title={tx(profile.title, locale)} />
           <div className="mt-8 max-w-3xl">
-            <Pending locale={locale} />
+            <div className="space-y-4 text-[15px] leading-relaxed text-muted-foreground">
+              {profile.paragraphs.map((paragraph) => (
+                <p key={paragraph.en}>{tx(paragraph, locale)}</p>
+              ))}
+            </div>
             <dl className="mt-8 grid gap-3 sm:grid-cols-3">
               {profile.facts.map((fact) => (
                 <div key={fact.label.en} className="rounded-lg border border-line bg-card p-4">
@@ -184,7 +187,9 @@ function Hero({ locale }: { locale: Locale }) {
             />
           ) : null}
         </div>
-        <p className="rise rise-3 mt-6 text-sm text-white/55">{tx(ui.textToCome, locale)}</p>
+        <p className="rise rise-3 mt-6 max-w-xl text-[17px] leading-relaxed text-white/80">
+          {tx(site.lede, locale)}
+        </p>
         <div className="rise rise-3 mt-8 flex flex-wrap items-center gap-3">
           <Link
             href={`/${locale}/match-interpretation`}

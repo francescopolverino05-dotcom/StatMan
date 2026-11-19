@@ -27,6 +27,14 @@ export const site = {
     "Treinador · Licença UEFA Pro · Ex-internacional italiano",
     "Entraîneur · Licence UEFA Pro · Ancien international italien",
   ),
+  /** His own wording, from his CV. The old “looking for a project” line is left out. */
+  lede: c(
+    "Ex professional player with a UEFA Pro coaching licence.",
+    "Ex calciatore professionista con licenza UEFA Pro.",
+    "Exjugador profesional con licencia UEFA Pro.",
+    "Ex-jogador profissional com licença UEFA Pro.",
+    "Ancien joueur professionnel, titulaire de la licence UEFA Pro.",
+  ),
   /** Leave a field empty to hide it. With every field empty the contact block says details are on their way. */
   contact: {
     email: "",
@@ -60,8 +68,14 @@ export const heroFacts: { label: Copy; value: Copy }[] = [
     ),
   },
   {
-    label: c("Licence", "Licenza", "Licencia", "Licença", "Licence"),
-    value: c("UEFA Pro", "UEFA Pro", "UEFA Pro", "UEFA Pro", "UEFA Pro"),
+    label: c("Licences", "Licenze", "Licencias", "Licenças", "Licences"),
+    value: c(
+      "UEFA Pro · UEFA A · UEFA B",
+      "UEFA Pro · UEFA A · UEFA B",
+      "UEFA Pro · UEFA A · UEFA B",
+      "UEFA Pro · UEFA A · UEFA B",
+      "UEFA Pro · UEFA A · UEFA B",
+    ),
   },
   {
     label: c(
@@ -94,6 +108,22 @@ export const heroFacts: { label: Copy; value: Copy }[] = [
 export const profile = {
   kicker: c("01 — Profile", "01 — Profilo", "01 — Perfil", "01 — Perfil", "01 — Profil"),
   title: c("Who am I?", "Chi sono?", "¿Quién soy?", "Quem sou?", "Qui suis-je ?"),
+  paragraphs: [
+    c(
+      "Former professional soccer player with over 15 years of experience in top European leagues, including Serie A and Major League Soccer (MLS). Known for versatility as a midfielder, exceptional work rate, and leadership on and off the field.",
+      "Ex calciatore professionista con oltre 15 anni di esperienza nei principali campionati europei, tra cui la Serie A e la Major League Soccer (MLS). Conosciuto per la versatilità da centrocampista, per la grande quantità di lavoro e per la leadership dentro e fuori dal campo.",
+      "Exfutbolista profesional con más de 15 años de experiencia en las principales ligas europeas, incluida la Serie A y la Major League Soccer (MLS). Conocido por su versatilidad como centrocampista, su gran capacidad de trabajo y su liderazgo dentro y fuera del campo.",
+      "Ex-jogador profissional com mais de 15 anos de experiência nas principais ligas europeias, incluindo a Serie A e a Major League Soccer (MLS). Conhecido pela versatilidade como médio, pela grande capacidade de trabalho e pela liderança dentro e fora de campo.",
+      "Ancien joueur professionnel, avec plus de 15 ans d’expérience dans les principaux championnats européens, dont la Serie A et la Major League Soccer (MLS). Reconnu pour sa polyvalence de milieu de terrain, son volume de travail et son leadership sur le terrain comme en dehors.",
+    ),
+    c(
+      "Transitioned to a coaching career, focusing on youth development and tactical training. Skilled in game analysis, team management, and player mentoring.",
+      "Passato alla carriera da allenatore, con un’attenzione allo sviluppo dei giovani e alla preparazione tattica. Competente nell’analisi della gara, nella gestione della squadra e nell’affiancamento dei giocatori.",
+      "Pasó a la carrera de entrenador, centrado en el desarrollo de jóvenes y en el trabajo táctico. Hábil en el análisis del juego, la gestión del equipo y el acompañamiento de los jugadores.",
+      "Passou para a carreira de treinador, com foco no desenvolvimento de jovens e no trabalho tático. Competente na análise do jogo, na gestão da equipa e no acompanhamento dos jogadores.",
+      "Passé à la carrière d’entraîneur, avec une attention portée à la formation des jeunes et au travail tactique. Compétent dans l’analyse du jeu, la gestion de l’équipe et l’accompagnement des joueurs.",
+    ),
+  ],
   facts: [
     {
       label: c("Born", "Nato", "Nacimiento", "Nascimento", "Naissance"),
@@ -106,8 +136,14 @@ export const profile = {
       ),
     },
     {
-      label: c("Licence", "Licenza", "Licencia", "Licença", "Licence"),
-      value: c("UEFA Pro", "UEFA Pro", "UEFA Pro", "UEFA Pro", "UEFA Pro"),
+      label: c("Licences", "Licenze", "Licencias", "Licenças", "Licences"),
+      value: c(
+        "UEFA Pro · UEFA A · UEFA B",
+        "UEFA Pro · UEFA A · UEFA B",
+        "UEFA Pro · UEFA A · UEFA B",
+        "UEFA Pro · UEFA A · UEFA B",
+        "UEFA Pro · UEFA A · UEFA B",
+      ),
     },
     {
       label: c(

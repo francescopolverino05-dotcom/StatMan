@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { Pending } from "../../../components/pending";
 import { PrintButton } from "../../../components/print-button";
 import { tx } from "../../../content/i18n";
 import { career, contact, heroFacts, playing, profile, site } from "../../../content/profile";
@@ -11,7 +10,7 @@ import { readLocale, type LocaleParams } from "../../../lib/params";
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const locale = await readLocale(params);
-  return { title: "CV", description: tx(site.role, locale) };
+  return { title: "CV", description: tx(site.lede, locale) };
 }
 
 export default async function CvPage({ params }: LocaleParams) {
@@ -38,8 +37,11 @@ export default async function CvPage({ params }: LocaleParams) {
         </p>
         <h1 className="mt-2 text-4xl leading-tight sm:text-5xl">{site.name}</h1>
         <p className="mt-1 text-lg text-muted-foreground">{tx(site.role, locale)}</p>
-        <div className="mt-4">
-          <Pending locale={locale} />
+        <p className="mt-4 text-[15px] leading-relaxed">{tx(site.lede, locale)}</p>
+        <div className="mt-3 space-y-3 text-[15px] leading-relaxed text-muted-foreground">
+          {profile.paragraphs.map((paragraph) => (
+            <p key={paragraph.en}>{tx(paragraph, locale)}</p>
+          ))}
         </div>
         {contactLine.length > 0 || linkedin ? (
           <p className="mt-3 text-sm text-muted-foreground">
@@ -63,7 +65,7 @@ export default async function CvPage({ params }: LocaleParams) {
             </div>
           ))}
           {profile.facts
-            .filter((fact) => fact.label.en !== "Licence")
+            .filter((fact) => fact.label.en !== "Licences")
             .map((fact) => (
               <div key={fact.label.en} className="flex gap-2">
                 <dt className="shrink-0 text-muted-foreground">{tx(fact.label, locale)}:</dt>
